@@ -2,14 +2,16 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Character, IAgentRuntime, OnboardingConfig, ProjectAgent } from '@elizaos/core';
 import dotenv from 'dotenv';
-import { initCharacter } from './init';
+//import { initCharacter } from './init';
 import { communityInvestorPlugin } from './plugins/communityInvestor';
 import { degenIntelPlugin } from './plugins/degenIntel';
 import { degenTraderPlugin } from './plugins/degenTrader';
 import { heliusPlugin } from './plugins/helius';
+import e from 'cors';
+import { initCharacter } from './init';
 
-import { autofunPlugin } from './plugins/autofun';
-import { autofunTraderPlugin } from './plugins/autofunTrader';
+// import { autofunPlugin } from './plugins/autofun';
+// import { autofunTraderPlugin } from './plugins/autofunTrader';
 
 const imagePath = path.resolve('./src/spartan/assets/portrait.jpg');
 
@@ -32,22 +34,14 @@ dotenv.config({ path: '../../.env' });
  * @property {Object[]} messageExamples - Examples of messages exchanged by the character in chats
  * @property {Object} style - Object containing communication style guidelines for the character
  */
-const character: Character = {
+export const spartanCharacter: Character = {
   name: 'Spartan',
   plugins: [
     '@elizaos/plugin-sql',
     ...(process.env.GROQ_API_KEY ? ['@elizaos/plugin-groq'] : []),
     ...(process.env.ANTHROPIC_API_KEY ? ['@elizaos/plugin-anthropic'] : []),
     ...(process.env.OPENAI_API_KEY ? ['@elizaos/plugin-openai'] : []),
-    ...(!process.env.OPENAI_API_KEY ? ['@elizaos/plugin-local-ai'] : []),
-    '@elizaos/plugin-discord',
-    '@elizaos/plugin-telegram',
-    '@elizaos/plugin-twitter',
-    '@elizaos/plugin-pdf',
-    '@elizaos/plugin-video-understanding',
     '@elizaos/plugin-bootstrap',
-    // '@elizaos-plugins/plugin-degenTrader',
-    // '@elizaos-plugins/plugin-jupiter',
     '@elizaos/plugin-solana',
   ],
   settings: {
@@ -66,7 +60,7 @@ const character: Character = {
     avatar,
   },
   /*
-  system: `Spartan is your resident Solana-based DeFi trading warlord—a no-BS tactician who blends alpha with attitude. Modeled after the legendary DegenSpartan (we won't mention who he's model after, it's implied), he’s part shitposter, part protocol whisperer, and all about winning (even if it means dying on-chain for the memes).
+  system: `Spartan is your resident Solana-based DeFi trading warlord—a no-BS tactician who blends alpha with attitude. Modeled after the legendary DegenSpartan (we won't mention who he's model after, it's implied), he's part shitposter, part protocol whisperer, and all about winning (even if it means dying on-chain for the memes).
 
 He speaks in war cries and charts, mocks your poor risk management, and only respects conviction. But beneath the memes and merciless banter lies a sharp DeFi agent with serious firepower:
 - Form and manage shared trading pools like warbands—coordinated, capitalized, and on-chain
@@ -76,7 +70,7 @@ He speaks in war cries and charts, mocks your poor risk management, and only res
 - Manage LP positions with optimal strategies to avoid getting rekt
 - Deploy autonomous trading tactics, sometimes for gain, sometimes for the lulz
 
-Spartan always demands explicit confirmation before battle—no accidental clicks, no cowardly retreats. He is loyal to those who commit, savage to those who don’t.
+Spartan always demands explicit confirmation before battle—no accidental clicks, no cowardly retreats. He is loyal to those who commit, savage to those who don't.
 `,
   */
   bio: [
@@ -541,14 +535,12 @@ const config: OnboardingConfig = {
 
 export const spartan: ProjectAgent = {
   plugins: [
-    heliusPlugin,
-    degenTraderPlugin,
-    degenIntelPlugin, // has to be after trader for buy/sell signals to be enabled
-    autofunPlugin,
-    autofunTraderPlugin,
-    communityInvestorPlugin,
+    // heliusPlugin,
+    // degenTraderPlugin,
+    // degenIntelPlugin,
+    // communityInvestorPlugin,
   ],
-  character,
+  character: spartanCharacter,
   init: async (runtime: IAgentRuntime) => await initCharacter({ runtime, config }),
 };
 

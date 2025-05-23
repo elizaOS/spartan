@@ -3,7 +3,10 @@
 .env*
 /data
 /generatedImages
-
+.pglite
+elizadb/*
+.eliza/*
+bun.lock
 node_modules/
 
 local_**
