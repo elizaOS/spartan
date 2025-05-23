@@ -56,6 +56,7 @@ export interface SellSignalMessage {
   walletAddress: string;
   isSimulation: boolean;
   sellRecommenderId: string;
+  slippage: number;
   reason: string;
 }
 

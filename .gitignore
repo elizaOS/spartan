@@ -3,6 +3,9 @@
 .env*
 /data
 /generatedImages
+.pglite
+elizadb/*
+.eliza/*
 
 node_modules/
 

@@ -9,7 +9,7 @@ import { TradeMemoryService } from '../tradeMemoryService';
 import { TokenValidationService } from '../validation/TokenValidationService';
 import { WalletService } from '../walletService';
 
-import { AnchorProvider, BN, Program } from '@coral-xyz/anchor';
+import { AnchorProvider, Program } from '@coral-xyz/anchor';
 import {
   ComputeBudgetProgram,
   Connection,
@@ -20,6 +20,7 @@ import {
 import { executeTrade } from '../../../degenTrader/utils/wallet';
 import IDL from '../../idl/autofun.json';
 import { Autofun } from '../../types/autofun';
+import { BN } from '../../utils/bignumber';
 
 interface IBuySignalOutput {
   recommended_buy: string;
@@ -30,8 +31,8 @@ interface IBuySignalOutput {
 
 interface ConfigAccount {
   teamWallet: PublicKey;
-  platformSellFee: number;
-  platformBuyFee: number;
+  platformSellFee: BN;
+  platformBuyFee: BN;
 }
 
 function convertToBasisPoints(feePercent: number): number {
@@ -62,19 +63,19 @@ function calculateAmountOutBuy(
   const amountBN = new BN(amount);
   console.log('amountBN:', amountBN.toString());
 
-  const adjustedAmount = amountBN.mul(new BN(10000)).sub(feeBasisPoints).div(new BN(10000));
+  const adjustedAmount = amountBN.multipliedBy(new BN(10000)).minus(feeBasisPoints).dividedBy(new BN(10000));
   console.log('adjustedAmount:', adjustedAmount.toString());
 
   const reserveTokenBN = new BN(reserveToken.toString());
   console.log('reserveTokenBN:', reserveTokenBN.toString());
 
-  const numerator = (reserveTokenBN as any).mul(adjustedAmount);
+  const numerator = reserveTokenBN.multipliedBy(adjustedAmount);
   console.log('numerator:', numerator.toString());
 
-  const denominator = new BN(reserveLamport.toString()).add(adjustedAmount);
+  const denominator = new BN(reserveLamport.toString()).plus(adjustedAmount);
   console.log('denominator:', denominator.toString());
 
-  const out = numerator.div(denominator).toNumber();
+  const out = numerator.dividedBy(denominator).toNumber();
   console.log('final output:', out);
   return out;
 }
@@ -99,21 +100,21 @@ export function calculateAmountOutSell(
   const amountBN = new BN(amount);
 
   // Apply fee: adjusted_amount = amount * (10000 - fee_basis_points) / 10000
-  const adjustedAmount = amountBN.mul(new BN(10000 - feeBasisPoints)).div(new BN(10000));
+  const adjustedAmount = amountBN.multipliedBy(new BN(10000).minus(new BN(feeBasisPoints))).dividedBy(new BN(10000));
 
   // For selling tokens: amount_out = reserve_lamport * adjusted_amount / (reserve_token + adjusted_amount)
-  const numerator = new BN(reserveLamport.toString()).mul(adjustedAmount);
-  const denominator = new BN(reserveToken.toString()).add(adjustedAmount);
+  const numerator = new BN(reserveLamport.toString()).multipliedBy(adjustedAmount);
+  const denominator = new BN(reserveToken.toString()).plus(adjustedAmount);
 
   if (denominator.isZero()) throw new Error('Division by zero');
 
-  return numerator.div(denominator).toNumber();
+  return numerator.dividedBy(denominator).toNumber();
 }
 
 const FEE_BASIS_POINTS = 10000;
 
 export const getSwapAmount = async (
-  configAccount,
+  configAccount: ConfigAccount,
   program: Program<any>,
   amount: number,
   style: number,
@@ -125,8 +126,8 @@ export const getSwapAmount = async (
     style,
     reserveToken,
     reserveLamport,
-    platformSellFee: configAccount.platformSellFee,
-    platformBuyFee: configAccount.platformBuyFee,
+    platformSellFee: configAccount.platformSellFee.toNumber(),
+    platformBuyFee: configAccount.platformBuyFee.toNumber(),
   });
   if (amount === undefined || isNaN(amount)) {
     throw new Error('Invalid amount provided to getSwapAmount');
@@ -134,7 +135,7 @@ export const getSwapAmount = async (
 
   // Apply platform fee
   const feePercent =
-    style === 1 ? Number(configAccount.platformSellFee) : Number(configAccount.platformBuyFee);
+    style === 1 ? configAccount.platformSellFee.toNumber() : configAccount.platformBuyFee.toNumber();
   console.log('feePercent:', feePercent);
 
   const adjustedAmount = Math.floor((amount * (FEE_BASIS_POINTS - feePercent)) / FEE_BASIS_POINTS);
@@ -337,13 +338,13 @@ export class BuyService extends BaseTradeService {
       'id, name, symbol, url, twitter, telegram, discord, farcaster, description, liquidity, currentPrice, tokenSupplyUiAmount, holderCount, volume24h, price24hAgo, priceChange24h, curveProgress, status';
     latestTxt += '\n';
     for (const t of data.tokens) {
-      const out = [];
+      const out: string[] = [];
       for (const f of fields) {
         let val = t[f];
         if (val?.replaceAll) {
           val = val.replaceAll('\n', ' ');
         }
-        out.push(val);
+        out.push(val as string);
       }
       latestTxt += out.join(', ') + '\n';
     }
@@ -585,6 +586,15 @@ export class BuyService extends BaseTradeService {
     // Get fresh blockhash with processed commitment for speed
     const latestBlockhash = await connection.getLatestBlockhash('processed');
     versionedTx.message.recentBlockhash = latestBlockhash.blockhash;
+    if (!walletKeypair) {
+      logger.error('Wallet keypair is null, cannot sign transaction.');
+      return {
+        success: false,
+        signature: '',
+        outAmount: '0',
+        swapUsdValue: '0',
+      };
+    }
     versionedTx.sign([walletKeypair]);
 
     // Send transaction
