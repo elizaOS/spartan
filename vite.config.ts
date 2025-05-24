@@ -1,3 +1,4 @@
+/// <reference types="vitest" />
 import react from '@vitejs/plugin-react-swc';
 import { defineConfig } from 'vite';
 
@@ -7,5 +8,9 @@ export default defineConfig({
   base: '/degen-intel/',
   build: {
     emptyOutDir: false,
+  },
+  test: {
+    globals: true,
+    environment: 'jsdom',
   },
 });
