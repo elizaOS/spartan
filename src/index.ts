@@ -2,13 +2,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Character, IAgentRuntime, OnboardingConfig, ProjectAgent } from '@elizaos/core';
 import dotenv from 'dotenv';
-//import { initCharacter } from './init';
 import { communityInvestorPlugin } from './plugins/communityInvestor';
 import { degenIntelPlugin } from './plugins/degenIntel';
 import { degenTraderPlugin } from './plugins/degenTrader';
 import { heliusPlugin } from './plugins/helius';
-import e from 'cors';
 import { initCharacter } from './init';
+
 
 // import { autofunPlugin } from './plugins/autofun';
 // import { autofunTraderPlugin } from './plugins/autofunTrader';

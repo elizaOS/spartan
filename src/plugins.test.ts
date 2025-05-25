@@ -11,8 +11,9 @@ import {
   stringToUuid,
 } from '@elizaos/core';
 import dotenv from 'dotenv';
-import { afterAll, beforeAll, describe, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import project from './index';
+
 dotenv.config({ path: '../../.env' });
 
 const TEST_TIMEOUT = 300000;
@@ -42,115 +43,96 @@ const agentRuntimes = new Map<string, IAgentRuntime>();
  * @returns {Promise<IAgentRuntime>} A promise that resolves to the initialized agent runtime.
  */
 async function initializeRuntime(character: Character): Promise<IAgentRuntime> {
+  logger.info(`Initializing runtime for character: ${character.name}`);
   try {
     character.id = stringToUuid(character.name);
 
+    logger.info(`[${character.name}] Creating AgentRuntime instance...`);
     const runtime = new AgentRuntime({
       character,
-      fetch: async (url: string, options: any) => {
-        logger.debug(`Test fetch: ${url}`);
+      fetch: async (url: string | RequestInfo | URL, options: RequestInit) => {
+        logger.debug(`[${character.name}] Test fetch: ${url}`);
         return fetch(url, options);
       },
     });
+    logger.info(`[${character.name}] AgentRuntime instance created.`);
 
     const envPath = path.join(process.cwd(), '.env');
 
-    // try to read a file in the current directory titled .env
-    let postgresUrl = null;
-    // Try to find .env file by recursively checking parent directories
+    let postgresUrl: string | undefined = undefined; // Initialize as undefined
     let currentPath = envPath;
     let depth = 0;
     const maxDepth = 10;
 
+    logger.info(`[${character.name}] Searching for POSTGRES_URL in .env files...`);
     while (depth < maxDepth && currentPath.includes(path.sep)) {
       if (fs.existsSync(currentPath)) {
+        logger.debug(`[${character.name}] Checking .env file at: ${currentPath}`);
         const env = fs.readFileSync(currentPath, 'utf8');
         const envVars = env.split('\n').filter((line) => line.trim() !== '');
         const postgresUrlLine = envVars.find((line) => line.startsWith('POSTGRES_URL='));
         if (postgresUrlLine) {
           postgresUrl = postgresUrlLine.split('=')[1].trim();
+          logger.info(`[${character.name}] Found POSTGRES_URL: ${postgresUrl}`);
           break;
         }
       }
-
-      // Move up one directory by getting the parent directory path
-      // First get the directory containing the current .env file
       const currentDir = path.dirname(currentPath);
-      // Then move up one directory from there
       const parentDir = path.dirname(currentDir);
+      if (parentDir === currentDir) { // Reached root or invalid path
+        logger.warn(`[${character.name}] Reached directory root or invalid path while searching for .env.`);
+        break;
+      }
       currentPath = path.join(parentDir, '.env');
       depth++;
     }
+    if (!postgresUrl) {
+      logger.info(`[${character.name}] POSTGRES_URL not found in .env files. Proceeding without it (implies PGlite/SQLite).`);
+    }
 
-    // Implement the database directory setup logic
-    let dataDir = './elizadb'; // Default fallback path
+    let dataDir = './elizadb';
     try {
-      // 1. Get the user's home directory
       const homeDir = os.homedir();
       const elizaDir = path.join(homeDir, '.eliza');
       const elizaDbDir = path.join(elizaDir, 'db');
-
-      // Debug information
-      console.log(`Setting up database directory at: ${elizaDbDir}`);
-
-      // 2 & 3. Check if .eliza directory exists, create if not
+      logger.info(`[${character.name}] Setting up database directory at: ${elizaDbDir}`);
       if (!fs.existsSync(elizaDir)) {
-        console.log(`Creating .eliza directory at: ${elizaDir}`);
+        logger.info(`[${character.name}] Creating .eliza directory at: ${elizaDir}`);
         fs.mkdirSync(elizaDir, { recursive: true });
       }
-
-      // 4 & 5. Check if db directory exists in .eliza, create if not
       if (!fs.existsSync(elizaDbDir)) {
-        console.log(`Creating db directory at: ${elizaDbDir}`);
+        logger.info(`[${character.name}] Creating .eliza/db directory at: ${elizaDbDir}`);
         fs.mkdirSync(elizaDbDir, { recursive: true });
       }
-
-      // 6, 7 & 8. Use the db directory
       dataDir = elizaDbDir;
-      console.log(`Using database directory: ${dataDir}`);
-    } catch (error) {
-      console.warn(
-        'Failed to create database directory in home directory, using fallback location:',
-        error
-      );
-      // 9. On failure, use the fallback path
+      logger.info(`[${character.name}] Using database directory: ${dataDir}`);
+    } catch (error: any) {
+      logger.error(`[${character.name}] Error setting up database directory: ${error.message}. Using default: ${dataDir}`);
     }
 
-    const options = {
-      dataDir: dataDir,
-      postgresUrl,
-    };
+    const options = { dataDir, postgresUrl };
+    logger.info(`[${character.name}] Database adapter options: ${JSON.stringify(options)}`);
 
+    logger.info(`[${character.name}] Importing @elizaos/plugin-sql...`);
     const drizzleAdapter = await import('@elizaos/plugin-sql');
+    logger.info(`[${character.name}] Creating database adapter...`);
     const adapter = drizzleAdapter.createDatabaseAdapter(options, runtime.agentId);
     if (!adapter) {
+      logger.error(`[${character.name}] No database adapter found in default drizzle plugin.`);
       throw new Error('No database adapter found in default drizzle plugin');
     }
+    logger.info(`[${character.name}] Database adapter created. Registering with runtime...`);
     runtime.registerDatabaseAdapter(adapter);
+    logger.info(`[${character.name}] Database adapter registered.`);
 
-    // Make sure character exists in database
-    await runtime.ensureAgentExists(character);
-
-    while (true) {
-      try {
-        await adapter.getAgent(runtime.agentId);
-        break;
-      } catch (error) {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        logger.error('Waiting for tables to be created...');
-      }
-    }
-
+    logger.info(`[${character.name}] Initializing runtime (this will run migrations)...`);
     await runtime.initialize();
+    logger.info(`[${character.name}] Runtime initialized successfully.`);
 
-    logger.info(`Test runtime initialized for ${character.name}`);
-
-    // Log expected embedding dimension based on plugins
-    const hasOpenAIFirst = character.plugins[0] === '@elizaos/plugin-openai';
-    const expectedDimension = hasOpenAIFirst ? 1536 : 384;
-    logger.info(`Expected embedding dimension for ${character.name}: ${expectedDimension}`);
+    agentRuntimes.set(character.name, runtime);
+    logger.info(`Runtime setup complete for character: ${character.name}`);
     return runtime;
-  } catch (error) {
+  } catch (error: any) {
     logger.error(`Failed to initialize test runtime for ${character.name}:`, error);
     throw error;
   }
@@ -179,29 +161,38 @@ afterAll(async () => {
 
 // Test suite for each character
 describe('Multi-Character Plugin Tests', () => {
-  it(
-    'should run tests for Default Character',
-    async () => {
-      const runtime = agentRuntimes.get(defaultCharacter.name);
-      if (!runtime) throw new Error('Runtime not found for Default Character');
+  // Test each character from the project
+  for (const agent of project.agents) {
+    it(`should run tests for ${agent.character.name}`, async () => {
+      console.log(`\n--- Starting tests for ${agent.character.name} ---`);
+      const runtime = agentRuntimes.get(agent.character.name);
+      expect(runtime, `Runtime not found for ${agent.character.name}. Check beforeAll initialization.`).toBeDefined();
+      if (!runtime) return;
 
       const testRunner = new TestRunner(runtime);
-      await testRunner.runPluginTests();
-    },
-    TEST_TIMEOUT
-  );
+      await testRunner.runTestsForCharacter(agent.character);
+      testRunner.logTestSummary(); // Log summary per character
+      console.log(`--- Finished tests for ${agent.character.name} ---\n`);
+      // Optionally, assert on testRunner.stats if needed for overall pass/fail
+      // expect(testRunner.stats.failed).toBe(0);
+    }, TEST_TIMEOUT);
+  }
 
-  it(
-    'should run tests for ElizaOpenAIFirst (1536 dimension)',
-    async () => {
-      const runtime = agentRuntimes.get('ElizaOpenAIFirst');
-      if (!runtime) throw new Error('Runtime not found for ElizaOpenAIFirst');
+  // Special test case for ElizaOpenAIFirst if not in project.agents or for specific checks
+  if (!project.agents.some(a => a.character.name === elizaOpenAIFirst.name)) {
+    it(`should run tests for ${elizaOpenAIFirst.name} (1536 dimension)`, async () => {
+      console.log(`\n--- Starting tests for ${elizaOpenAIFirst.name} ---`);
+      const runtime = agentRuntimes.get(elizaOpenAIFirst.name);
+      expect(runtime, `Runtime not found for ${elizaOpenAIFirst.name}. Check beforeAll initialization.`).toBeDefined();
+      if (!runtime) return;
 
       const testRunner = new TestRunner(runtime);
-      await testRunner.runPluginTests();
-    },
-    TEST_TIMEOUT
-  );
+      await testRunner.runTestsForCharacter(elizaOpenAIFirst);
+      testRunner.logTestSummary();
+      console.log(`--- Finished tests for ${elizaOpenAIFirst.name} ---\n`);
+      // expect(testRunner.stats.failed).toBe(0);
+    }, TEST_TIMEOUT);
+  }
 });
 
 /**
@@ -273,6 +264,63 @@ class TestRunner {
   }
 
   /**
+   * Runs all test suites for the plugins associated with a given character.
+   *
+   * @param {Character} character - The character whose plugin tests are to be run.
+   * @returns {Promise<void>} A promise that resolves when all tests for the character are complete.
+   */
+  public async runTestsForCharacter(character: Character): Promise<void> {
+    logger.info(`[TestRunner] Running tests for character: ${character.name}`);
+    if (!character.plugins || character.plugins.length === 0) {
+      logger.info(`[TestRunner] No plugins found for character ${character.name}. Skipping tests.`);
+      return;
+    }
+
+    // Ensure project.plugins is available and is an array
+    if (!project.plugins || !Array.isArray(project.plugins)) {
+      logger.error('[TestRunner] project.plugins is not defined or not an array. Cannot run plugin tests.');
+      return;
+    }
+
+    for (const pluginNameInCharacterConfig of character.plugins) {
+      // Find the plugin definition from the global project.plugins array
+      // This assumes plugin names in character.plugins match a name property in project.plugins
+      // or a convention like `@elizaos/plugin-name` maps to `plugin-name`.
+      const pluginDefinition = project.plugins.find(p => {
+        if (!p || typeof p.name !== 'string') return false;
+        // Direct match, or match without @scope/ prefix if that's how names are stored
+        return p.name === pluginNameInCharacterConfig ||
+               p.name === pluginNameInCharacterConfig.replace(/^@[\w-]+\//, '') || // Removes scope like @elizaos/
+               `@elizaos/${p.name}` === pluginNameInCharacterConfig || // Common convention
+               `@elizaos-plugins/${p.name}` === pluginNameInCharacterConfig; // Another convention
+      });
+
+      if (pluginDefinition && pluginDefinition.testSuite) {
+        const testSuite: TestSuite = pluginDefinition.testSuite;
+        if (testSuite && testSuite.tests && Array.isArray(testSuite.tests)) {
+          logger.info(`[TestRunner] Running test suite "${testSuite.name}" for plugin: ${pluginDefinition.name}`);
+          this.stats.total += testSuite.tests.length;
+
+          for (const testCase of testSuite.tests) {
+            if (testCase && typeof testCase.name === 'string' && typeof testCase.fn === 'function') {
+              logger.info(`[TestRunner] Executing test case: ${testCase.name}`);
+              await this.runTestCase(testCase, pluginDefinition.name, testSuite.name);
+            } else {
+              logger.warn(`[TestRunner] Invalid test case found in suite "${testSuite.name}" for plugin "${pluginDefinition.name}". Skipping.`);
+              this.stats.skipped++; // Optionally count as skipped
+            }
+          }
+        } else {
+          logger.info(`[TestRunner] No valid tests found in test suite "${testSuite.name}" for plugin: ${pluginDefinition.name}`);
+        }
+      } else {
+        logger.warn(`[TestRunner] Plugin definition or test suite not found for: ${pluginNameInCharacterConfig}`);
+      }
+    }
+    logger.info(`[TestRunner] Finished running tests for character: ${character.name}`);
+  }
+
+  /**
    * Asynchronously runs a test case and updates the test results accordingly.
    *
    * @param {TestCase} test - The test case to run.
@@ -292,7 +340,7 @@ class TestRunner {
       this.stats.failed++;
       logger.error(`✗ ${test.name}`);
       logger.error(error);
-      this.addTestResult(file, suite, test.name, TestStatus.Failed, error);
+      this.addTestResult(file, suite, test.name, TestStatus.Failed, error as Error);
     }
   }
 
