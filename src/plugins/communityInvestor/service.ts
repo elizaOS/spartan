@@ -9,6 +9,7 @@ import {
   type Component,
   type Task, // Added for task worker
   asUUID, // Ensure asUUID is imported for creating component IDs
+  createUniqueUuid, // Added for creating unique UUIDs
 } from '@elizaos/core';
 import { v4 as uuidv4 } from 'uuid';
 import { BirdeyeClient, DexscreenerClient, HeliusClient } from './clients';
@@ -20,6 +21,7 @@ import {
   getMarketCapMultiplier,
   getVolumeMultiplier,
 } from './config';
+import { TRUST_LEADERBOARD_WORLD_SEED } from './constants'; // Import the seed
 import { formatFullReport } from './reports';
 import {
   type BuySignalMessage,
@@ -49,6 +51,7 @@ import {
   RecommendationMetric,
   UserTrustProfile,
 } from './types';
+import { ChannelType } from '@elizaos/core';
 
 // Event types
 /**
@@ -105,8 +108,23 @@ export class CommunityInvestorService extends Service implements ICommunityInves
   private readonly USER_TRADE_COOLDOWN_HOURS = 12;
   private readonly METRIC_REFRESH_INTERVAL = 24 * 60 * 60 * 1000; // 1 day to re-evaluate metrics
 
+  // Add this property to the class
+  private userRegistry: Set<UUID> = new Set();
+  private componentWorldId: UUID;
+  private componentRoomId: UUID; // This will be the same as componentWorldId
+
   constructor(protected override runtime: IAgentRuntime) {
     super(runtime);
+
+    // Generate the consistent World ID and Room ID for this plugin's components
+    this.componentWorldId = createUniqueUuid(runtime, TRUST_LEADERBOARD_WORLD_SEED);
+    this.componentRoomId = this.componentWorldId; // Use the same ID for room context of components
+    logger.info(
+      `[CommunityInvestorService] Using Component World/Room ID: ${this.componentWorldId}`
+    );
+
+    // Ensure this world and room exist for the plugin's components
+    this.ensurePluginComponentContext();
 
     // Initialize API clients
     this.birdeyeClient = BirdeyeClient.createFromRuntime(runtime);
@@ -2131,6 +2149,8 @@ ${report.tokenReports.join('\n')}
     logger.info('[CommunityInvestorService] Initializing...');
     this.apiKeys.birdeye = runtime.getSetting('BIRDEYE_API_KEY') as string | undefined;
     this.apiKeys.moralis = runtime.getSetting('MORALIS_API_KEY') as string | undefined;
+    // Load the user registry
+    await this.loadUserRegistry();
     logger.info('[CommunityInvestorService] Initialized.');
   }
 
@@ -2671,32 +2691,40 @@ ${report.tokenReports.join('\n')}
   async calculateUserTrustScore(
     userId: UUID,
     runtime: IAgentRuntime,
-    worldId?: UUID
+    _worldId?: UUID // _worldId from task is no longer needed here for component lookup
   ): Promise<void> {
     logger.info(
-      `[CommunityInvestorService] Calculating trust score for user ${userId}${worldId ? ' in world ' + worldId : ''}`
+      `[CommunityInvestorService] Starting calculateUserTrustScore for user ${userId} (components in world/room: ${this.componentWorldId})`
     );
-    const userProfileWorldId = worldId || (runtime.agentId as UUID);
+    // Always use the plugin-specific consistent worldId for user trust profiles.
+    // const userProfileWorldId = runtime.agentId as UUID; // Old way
+    const userProfileWorldId = this.componentWorldId;
+    const userProfileRoomId = this.componentRoomId; // Consistent room for components
 
-    // Ensure the world exists before creating components
+    this.registerUser(userId);
+
+    // Ensure the plugin's specific world (for storing components) exists
     try {
       await runtime.ensureWorldExists({
         id: userProfileWorldId,
-        name: `Community Investor World ${userProfileWorldId}`,
+        name: `Community Investor Global World (Agent: ${runtime.agentId})`,
         agentId: runtime.agentId,
-        serverId: 'community-investor',
-        metadata: {},
+        serverId: TRUST_LEADERBOARD_WORLD_SEED, // Use the seed as a serverId for uniqueness
+        metadata: { plugin_managed: true },
       });
-    } catch (error) {
       logger.debug(
-        `[CommunityInvestorService] World ${userProfileWorldId} already exists or error ensuring world: ${error}`
+        `[CommunityInvestorService] Ensured plugin component world ${userProfileWorldId} exists.`
+      );
+    } catch (error) {
+      logger.warn(
+        `[CommunityInvestorService] Error ensuring plugin component world ${userProfileWorldId} (continuing operation): ${error}`
       );
     }
 
     const componentResult = await runtime.getComponent(
       userId,
       TRUST_MARKETPLACE_COMPONENT_TYPE,
-      userProfileWorldId,
+      userProfileWorldId, // Use the consistent worldId
       runtime.agentId
     );
     let userProfile: UserTrustProfile;
@@ -2704,6 +2732,9 @@ ${report.tokenReports.join('\n')}
 
     if (componentResult?.data) {
       userProfile = componentResult.data as UserTrustProfile;
+      logger.info(
+        `[CommunityInvestorService] Found existing profile for user ${userId}. Last calculated: ${new Date(userProfile.lastTrustScoreCalculationTimestamp).toISOString()}`
+      );
       if (!Array.isArray(userProfile.recommendations)) {
         logger.warn(
           `[calculateUserTrustScore] User ${userId} profile recommendations was not an array. Initializing.`
@@ -2796,29 +2827,53 @@ ${report.tokenReports.join('\n')}
 
     if (profileActuallyModified) {
       logger.info(
-        `[CommunityInvestorService] User ${userId} trust score updated to: ${userProfile.trustScore.toFixed(2)}`
+        `[CommunityInvestorService] User ${userId} trust score is now: ${userProfile.trustScore.toFixed(2)}. Profile marked for update.`
       );
       if (componentResult && !isNewProfile) {
-        await runtime.updateComponent({ ...componentResult, data: userProfile });
-        logger.debug(
-          `[CommunityInvestorService] Updated UserTrustProfile component ${componentResult.id} for user ${userId}`
-        );
-      } else {
-        const newComponentId = asUUID(uuidv4());
-        await runtime.createComponent({
-          id: newComponentId,
-          entityId: userId,
-          agentId: runtime.agentId,
-          worldId: userProfileWorldId,
-          roomId: 'global' as UUID,
-          sourceEntityId: runtime.agentId,
-          type: TRUST_MARKETPLACE_COMPONENT_TYPE,
-          createdAt: Date.now(),
-          data: userProfile,
-        });
         logger.info(
-          `[CommunityInvestorService] Created UserTrustProfile component ${newComponentId} for user ${userId}`
+          `[CommunityInvestorService] Attempting to UPDATE component ${componentResult.id} for user ${userId} in world/room ${userProfileWorldId}`
         );
+        await runtime
+          .updateComponent({ ...componentResult, data: userProfile })
+          .then(() =>
+            logger.info(
+              `[CommunityInvestorService] Successfully UPDATED component ${componentResult.id} for user ${userId} in world/room ${userProfileWorldId}`
+            )
+          )
+          .catch((err) =>
+            logger.error(
+              `[CommunityInvestorService] FAILED to UPDATE component ${componentResult.id} for user ${userId}:`,
+              err
+            )
+          );
+      } else {
+        const newComponentId = componentResult?.id || asUUID(uuidv4()); // Reuse ID if component was created in this call
+        logger.info(
+          `[CommunityInvestorService] Attempting to CREATE component ${newComponentId} for user ${userId} (isNewProfile: ${isNewProfile}, componentResult existed: ${!!componentResult})`
+        );
+        await runtime
+          .createComponent({
+            id: newComponentId,
+            entityId: userId,
+            agentId: runtime.agentId,
+            worldId: userProfileWorldId, // Consistent worldId
+            roomId: userProfileRoomId, // Consistent roomId for the component
+            sourceEntityId: runtime.agentId,
+            type: TRUST_MARKETPLACE_COMPONENT_TYPE,
+            createdAt: Date.now(),
+            data: userProfile,
+          })
+          .then(() =>
+            logger.info(
+              `[CommunityInvestorService] Successfully CREATED component ${newComponentId} for user ${userId} in world/room ${userProfileWorldId}`
+            )
+          )
+          .catch((err) =>
+            logger.error(
+              `[CommunityInvestorService] FAILED to CREATE component ${newComponentId} for user ${userId}:`,
+              err
+            )
+          );
       }
     } else {
       logger.debug(
@@ -2981,36 +3036,165 @@ ${report.tokenReports.join('\n')}
 
   async getLeaderboardData(runtime: IAgentRuntime): Promise<LeaderboardEntry[]> {
     logger.info('[CommunityInvestorService] getLeaderboardData called');
-    const allEntities = await runtime.getAgents(); // In a real app, this might be all users known to the plugin or in a specific world
     const leaderboardEntries: LeaderboardEntry[] = [];
+    // Use the consistent componentWorldId for fetching profiles
+    const worldIdForComponents = this.componentWorldId;
 
-    for (const entity of allEntities) {
-      if (!entity.id) continue;
-      const component = await runtime.getComponent(
-        entity.id,
-        TRUST_MARKETPLACE_COMPONENT_TYPE,
-        undefined,
-        runtime.agentId
+    // Use the user registry to get all users who have made recommendations
+    logger.info(
+      `[CommunityInvestorService] Preparing leaderboard from world ${worldIdForComponents}. Checking ${this.userRegistry.size} registered users from userRegistry: [${Array.from(this.userRegistry).join(', ')}]`
+    );
+
+    for (const userId of this.userRegistry) {
+      logger.debug(
+        `[CommunityInvestorService] Leaderboard: Processing registered user ${userId} from world ${worldIdForComponents}`
       );
+      try {
+        const component = await runtime.getComponent(
+          userId,
+          TRUST_MARKETPLACE_COMPONENT_TYPE,
+          worldIdForComponents, // Use consistent worldId
+          runtime.agentId
+        );
 
-      if (component?.data) {
-        const profileData = component.data as TrustMarketplaceComponentData;
-        const entityDetails = await runtime.getEntityById(component.entityId);
+        if (component?.data) {
+          const profileData = component.data as TrustMarketplaceComponentData;
+          const entityDetails = await runtime.getEntityById(component.entityId);
 
-        const recommendations = Array.isArray(profileData.recommendations)
-          ? profileData.recommendations
-          : [];
+          const recommendations = Array.isArray(profileData.recommendations)
+            ? profileData.recommendations
+            : [];
 
-        leaderboardEntries.push({
-          userId: component.entityId,
-          username: entityDetails?.names[0] || component.entityId.toString(),
-          trustScore: profileData.trustScore || 0,
-          recommendations: recommendations,
-        });
+          leaderboardEntries.push({
+            userId: component.entityId,
+            username: entityDetails?.names?.[0] || component.entityId.toString(),
+            trustScore: profileData.trustScore || 0,
+            recommendations: recommendations,
+          });
+
+          logger.debug(
+            `[CommunityInvestorService] Added user ${userId} to leaderboard with score ${profileData.trustScore}`
+          );
+        } else {
+          logger.debug(
+            `[CommunityInvestorService] Leaderboard: No profile component found for registered user ${userId}`
+          );
+        }
+      } catch (error) {
+        logger.error(
+          `[CommunityInvestorService] Leaderboard: Error fetching profile component for user ${userId}:`,
+          error
+        );
       }
     }
 
+    logger.info(
+      `[CommunityInvestorService] Leaderboard: Found ${leaderboardEntries.length} users with profiles to include.`
+    );
+
+    // Sort by trust score and add ranks
     leaderboardEntries.sort((a, b) => b.trustScore - a.trustScore);
-    return leaderboardEntries.map((entry, index) => ({ ...entry, rank: index + 1 }));
+    const rankedLeaderboard = leaderboardEntries.map((entry, index) => ({
+      ...entry,
+      rank: index + 1,
+    }));
+    logger.info(
+      `[CommunityInvestorService] Leaderboard generated with ${rankedLeaderboard.length} entries.`
+    );
+    return rankedLeaderboard;
+  }
+
+  // Add this method to register a user when they make a recommendation
+  private registerUser(userId: UUID): void {
+    const originalSize = this.userRegistry.size;
+    this.userRegistry.add(userId);
+    if (this.userRegistry.size > originalSize) {
+      logger.info(
+        `[CommunityInvestorService] User ${userId} ADDED to registry. New size: ${this.userRegistry.size}. Registry now: [${Array.from(this.userRegistry).join(', ')}]`
+      );
+    } else {
+      logger.debug(
+        `[CommunityInvestorService] User ${userId} already in registry. Size: ${this.userRegistry.size}`
+      );
+    }
+    // Persist this to a cache using a key namespaced by the plugin's world ID
+    const registryCacheKey = `community-investor:user-registry:${this.componentWorldId}`;
+    this.runtime
+      .setCache(registryCacheKey, Array.from(this.userRegistry))
+      .then(() =>
+        logger.debug(
+          `[CommunityInvestorService] User registry cache updated for user ${userId} at key ${registryCacheKey}.`
+        )
+      )
+      .catch((err) =>
+        logger.error(
+          `[CommunityInvestorService] FAILED to update user registry cache for ${userId} at key ${registryCacheKey}:`,
+          err
+        )
+      );
+  }
+
+  // Load user registry on initialization
+  private async loadUserRegistry(): Promise<void> {
+    const registryCacheKey = `community-investor:user-registry:${this.componentWorldId}`;
+    try {
+      const cached = await this.runtime.getCache<UUID[]>(registryCacheKey);
+      if (cached && Array.isArray(cached)) {
+        this.userRegistry = new Set(cached);
+        logger.info(
+          `[CommunityInvestorService] Loaded ${this.userRegistry.size} users from registry cache at key ${registryCacheKey}. Users: [${Array.from(this.userRegistry).join(', ')}]`
+        );
+      } else {
+        logger.info(
+          `[CommunityInvestorService] No user registry found in cache at key ${registryCacheKey}, starting fresh.`
+        );
+      }
+    } catch (error) {
+      logger.warn(
+        `[CommunityInvestorService] Failed to load user registry from cache at key ${registryCacheKey}:`,
+        error
+      );
+    }
+  }
+
+  private async ensurePluginComponentContext(): Promise<void> {
+    try {
+      await this.runtime.ensureWorldExists({
+        id: this.componentWorldId,
+        name: `Community Investor Global World (Agent: ${this.runtime.agentId})`,
+        agentId: this.runtime.agentId,
+        serverId: TRUST_LEADERBOARD_WORLD_SEED,
+        metadata: {
+          plugin_managed: true,
+          description: 'World context for CommunityInvestor plugin components',
+        },
+      });
+      logger.info(
+        `[CommunityInvestorService] Ensured plugin component world ${this.componentWorldId} exists.`
+      );
+
+      await this.runtime.ensureRoomExists({
+        id: this.componentRoomId,
+        name: `Community Investor Global Room (Agent: ${this.runtime.agentId})`,
+        worldId: this.componentWorldId,
+        agentId: this.runtime.agentId,
+        channelId: TRUST_LEADERBOARD_WORLD_SEED,
+        source: 'plugin_internal',
+        type: ChannelType.API, // Use API as fallback channel type
+        metadata: {
+          plugin_managed: true,
+          description: 'Room context for CommunityInvestor plugin components',
+        },
+      });
+      logger.info(
+        `[CommunityInvestorService] Ensured plugin component room ${this.componentRoomId} in world ${this.componentWorldId} exists.`
+      );
+    } catch (error) {
+      logger.error(
+        `[CommunityInvestorService] FAILED to ensure plugin component world/room context (ID: ${this.componentWorldId}):`,
+        error
+      );
+      // Depending on the severity, you might want to throw this error or handle it
+    }
   }
 }

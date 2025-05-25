@@ -18,10 +18,10 @@ const processTradeDecisionTaskWorker: TaskWorker = {
   ): Promise<void> => {
     const { recommendationId, userId } = options as unknown as TradeDecisionInput;
     const agentId = runtime.agentId;
-    const taskWorldId = task.worldId;
+    const pluginComponentWorldId = task.worldId as UUID;
 
     logger.info(
-      `[TaskWorker:${PROCESS_TRADE_DECISION_TASK_NAME}] Starting for rec: ${recommendationId}, user: ${userId}, world: ${taskWorldId}`
+      `[TaskWorker:${PROCESS_TRADE_DECISION_TASK_NAME}] Starting for rec: ${recommendationId}, user: ${userId}, components expected in world: ${pluginComponentWorldId}`
     );
 
     if (!recommendationId || !userId) {
@@ -45,7 +45,7 @@ const processTradeDecisionTaskWorker: TaskWorker = {
       const componentResult = await runtime.getComponent(
         userId,
         TRUST_MARKETPLACE_COMPONENT_TYPE,
-        taskWorldId,
+        pluginComponentWorldId,
         agentId
       );
       let userProfile: UserTrustProfile | null = null;
@@ -100,13 +100,13 @@ const processTradeDecisionTaskWorker: TaskWorker = {
       }
 
       // Ensure trust score is up-to-date
-      await service.calculateUserTrustScore(userId, runtime, taskWorldId);
+      await service.calculateUserTrustScore(userId, runtime);
 
       // Fetch the profile again to get the latest score
       const updatedComponentResult = await runtime.getComponent(
         userId,
         TRUST_MARKETPLACE_COMPONENT_TYPE,
-        taskWorldId,
+        pluginComponentWorldId,
         agentId
       );
       let updatedUserProfile: UserTrustProfile | null = null;

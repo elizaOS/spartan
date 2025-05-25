@@ -1,45 +1,21 @@
-import { type IAgentRuntime, type Plugin, type Route } from '@elizaos/core';
-import { events } from './events';
+import type { Plugin, IAgentRuntime, Route, TestCase } from '@elizaos/core';
+import { logger } from '@elizaos/core';
 import { CommunityInvestorService } from './service';
-import { allCommunityInvestorPluginTests } from './tests'; // Import the aggregated test suite
-import { ServiceType } from './types'; // Assuming types.ts exports ServiceType or similar for service key
+import { allCommunityInvestorPluginTests } from './tests';
+import { communityInvestorRoutes } from './routes';
+import { events } from './events';
 
-// Placeholder for the actual handler logic
-async function getLeaderboardHandler(req: any, res: any, runtime: IAgentRuntime) {
-  try {
-    const service = runtime.getService<CommunityInvestorService>(ServiceType.COMMUNITY_INVESTOR);
-    if (!service) {
-      res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'CommunityInvestorService not found' }));
-      return;
-    }
-    const leaderboardData = await service.getLeaderboardData(runtime);
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(leaderboardData));
-  } catch (error) {
-    console.error('Error fetching leaderboard data:', error);
-    res.writeHead(500, { 'Content-Type': 'application/json' });
-    res.end(
-      JSON.stringify({
-        error: 'Failed to fetch leaderboard data',
-        details: (error as Error).message,
-      })
-    );
-  }
+// AgentPanel interface defined locally as before
+export interface AgentPanel {
+  name: string;
+  path: string;
+  component: string;
+  icon?: string;
+  public?: boolean;
 }
 
-const communityInvestorRoutes: Route[] = [
-  {
-    type: 'GET',
-    name: 'getCommunityInvestorLeaderboard',
-    path: '/leaderboard', // This will be prefixed by the plugin name, e.g., /community-investor/leaderboard
-    handler: getLeaderboardHandler,
-    public: true, // Assuming the leaderboard is publicly accessible
-  },
-];
-
-// No longer need individual TestCases defined here as they are in their respective files
-// and aggregated by tests/index.ts
+// Removed getLeaderboardHandler and local communityInvestorRoutes definition from here
+// They are now correctly defined in routes.ts
 
 /**
  * Plugin representing the Community Investor Plugin for Eliza.
@@ -47,9 +23,40 @@ const communityInvestorRoutes: Route[] = [
  */
 export const communityInvestorPlugin: Plugin = {
   name: 'community-investor',
-  description: 'Community Investor Plugin for Eliza',
-  events,
+  description: 'A plugin for community-driven investment alpha and trust scoring.',
+  config: {
+    BIRDEYE_API_KEY: '',
+    DEXSCREENER_API_KEY: '',
+    HELIUS_API_KEY: '',
+    PROCESS_TRADE_DECISION_INTERVAL_HOURS: '1',
+    METRIC_REFRESH_INTERVAL_HOURS: '24',
+    USER_TRADE_COOLDOWN_HOURS: '12',
+    SCAM_PENALTY: '-100',
+    SCAM_CORRECT_CALL_BONUS: '100',
+    MAX_RECOMMENDATIONS_IN_PROFILE: '50',
+  },
+  async init(config: Record<string, string>, runtime?: IAgentRuntime) {
+    logger.info('Community Investor Plugin Initializing...');
+    if (runtime) {
+      logger.info(`Community Investor Plugin initialized for agent: ${runtime.agentId}`);
+    }
+    logger.info('Community Investor Plugin initialized.');
+  },
   services: [CommunityInvestorService],
   routes: communityInvestorRoutes,
-  tests: [allCommunityInvestorPluginTests], // Use the aggregated test suite
+  events,
+  tests: [allCommunityInvestorPluginTests],
 };
+
+export const panels: AgentPanel[] = [
+  {
+    name: 'Trust Marketplace',
+    path: 'display',
+    component: 'LeaderboardPanelPage',
+    icon: 'UsersRound',
+    public: true,
+  },
+];
+
+export default communityInvestorPlugin;
+export * from './types';
