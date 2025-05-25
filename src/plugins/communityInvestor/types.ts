@@ -1,10 +1,4 @@
-import type {
-  Content,
-  Entity as CoreEntity,
-  UUID as CoreUUID,
-  Memory,
-  IAgentRuntime,
-} from '@elizaos/core';
+import type { Content, UUID as CoreUUID, IAgentRuntime, Memory } from '@elizaos/core';
 
 // Re-export UUID type for use in other files
 /**
@@ -1025,4 +1019,15 @@ export interface ICommunityInvestorService {
   getConvictionWeight(conviction: Recommendation['conviction']): number;
   getLeaderboardData(runtime: IAgentRuntime): Promise<LeaderboardEntry[]>;
   // ensureTaskWorkersRegistered(runtime: IAgentRuntime): void; // Task registration is internal to constructor
+}
+
+// Adding MessageReceivedHandlerParams
+export interface MessageReceivedHandlerParams {
+  runtime: IAgentRuntime;
+  message: Memory;
+  callback: (
+    response: string | Record<string, any>,
+    metadata?: Record<string, any>
+  ) => Promise<void>;
+  onComplete?: () => void;
 }

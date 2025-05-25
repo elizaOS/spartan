@@ -1,6 +1,7 @@
-import { type Plugin, type IAgentRuntime, type Route } from '@elizaos/core';
+import { type IAgentRuntime, type Plugin, type Route } from '@elizaos/core';
 import { events } from './events';
 import { CommunityInvestorService } from './service';
+import { allCommunityInvestorPluginTests } from './tests'; // Import the aggregated test suite
 import { ServiceType } from './types'; // Assuming types.ts exports ServiceType or similar for service key
 
 // Placeholder for the actual handler logic
@@ -18,7 +19,12 @@ async function getLeaderboardHandler(req: any, res: any, runtime: IAgentRuntime)
   } catch (error) {
     console.error('Error fetching leaderboard data:', error);
     res.writeHead(500, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: 'Failed to fetch leaderboard data', details: error.message }));
+    res.end(
+      JSON.stringify({
+        error: 'Failed to fetch leaderboard data',
+        details: (error as Error).message,
+      })
+    );
   }
 }
 
@@ -32,6 +38,9 @@ const communityInvestorRoutes: Route[] = [
   },
 ];
 
+// No longer need individual TestCases defined here as they are in their respective files
+// and aggregated by tests/index.ts
+
 /**
  * Plugin representing the Community Investor Plugin for Eliza.
  * Includes evaluators, actions, and services for community investment functionality.
@@ -42,4 +51,5 @@ export const communityInvestorPlugin: Plugin = {
   events,
   services: [CommunityInvestorService],
   routes: communityInvestorRoutes,
+  tests: [allCommunityInvestorPluginTests], // Use the aggregated test suite
 };

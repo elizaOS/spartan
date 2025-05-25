@@ -20,5 +20,5 @@
     "transpileOnly": true,
     "esm": true
   },
-  "include": ["src"]
+  "include": ["src", "tests/unit.test.ts"]
 }

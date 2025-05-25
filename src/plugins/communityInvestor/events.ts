@@ -118,6 +118,21 @@ const messageReceivedHandler = async ({
   // Use the worldId from the message if available, otherwise fallback to agentId as a placeholder for global components
   const componentWorldId = msgWorldId || (runtime.agentId as CoreUUID);
 
+  // Ensure the world exists before creating components
+  try {
+    await runtime.ensureWorldExists({
+      id: componentWorldId,
+      name: `Community Investor World ${componentWorldId}`,
+      agentId: runtime.agentId,
+      serverId: 'community-investor',
+      metadata: {},
+    });
+  } catch (error) {
+    logger.debug(
+      `[CommunityInvestor] World ${componentWorldId} already exists or error ensuring world: ${error}`
+    );
+  }
+
   try {
     logger.debug(
       `[CommunityInvestor] Message from ${currentMessageSenderId} in room ${roomId}. Text: "${content.text?.substring(0, 50)}..."`
@@ -155,19 +170,40 @@ const messageReceivedHandler = async ({
       .replace('{{recentMessagesContext}}', recentMessagesContextString);
     relevancePrompt += '\n\`\`\`json\n';
 
+    // logger.debug(`[CommunityInvestor Handler] Relevance prompt being sent to useModel:\n${relevancePrompt}`);
+
     const relevanceResponseRaw = await runtime.useModel(ModelType.TEXT_SMALL, {
       prompt: relevancePrompt,
     });
-    const relevanceResult = parseJSONObjectFromText(relevanceResponseRaw) as {
-      isRelevant: boolean;
-      reason: string;
-    } | null;
+    logger.debug(
+      `[HANDLER DEBUG] relevanceResponseRaw: '${relevanceResponseRaw}' (type: ${typeof relevanceResponseRaw})`
+    ); // Changed to error for visibility
 
-    if (!relevanceResult?.isRelevant) {
-      logger.debug(`[CommunityInvestor] Message not relevant: ${relevanceResult?.reason || 'N/A'}`);
+    const relevanceResult = parseJSONObjectFromText(relevanceResponseRaw);
+
+    logger.debug(
+      `[HANDLER DEBUG] Parsed relevanceResult: ${JSON.stringify(relevanceResult)} (type: ${typeof relevanceResult})`
+    ); // Changed to error
+
+    let isActuallyRelevant = false; // Default to false
+    if (relevanceResult && relevanceResult.hasOwnProperty('isRelevant')) {
+      if (typeof relevanceResult.isRelevant === 'boolean') {
+        isActuallyRelevant = relevanceResult.isRelevant;
+      } else if (typeof relevanceResult.isRelevant === 'string') {
+        isActuallyRelevant = relevanceResult.isRelevant.toLowerCase() === 'true';
+      }
+    }
+    logger.debug(`[HANDLER DEBUG] isActuallyRelevant determined as: ${isActuallyRelevant}`); // Changed to error
+
+    if (!isActuallyRelevant) {
+      logger.info(
+        `[CommunityInvestor] Message determined NOT relevant. Reason: ${relevanceResult?.reason || 'N/A'}. Returning.`
+      ); // Changed from error to info
+      onComplete?.();
       return;
     }
-    logger.debug(`[CommunityInvestor] Message relevant: ${relevanceResult.reason}`);
+
+    logger.debug(`[CommunityInvestor] Message IS RELEVANT. Proceeding to extraction.`); // Changed to error
 
     let extractionPrompt = RECOMMENDATION_EXTRACTION_TEMPLATE.replace(
       '{{senderName}}',
@@ -234,6 +270,8 @@ const messageReceivedHandler = async ({
         continue;
       }
 
+      logger.debug(`[E2E TRACE] Extracted rec: ${JSON.stringify(extractedRec)}`);
+
       let resolvedToken: { address: string; chain: SupportedChain; ticker?: string } | null = null;
       if (extractedRec.isTicker) {
         resolvedToken = await communityInvestorService.resolveTicker(
@@ -251,19 +289,30 @@ const messageReceivedHandler = async ({
           ticker: undefined,
         }; // Assume address-like strings are on default chain for now
       } else {
-        logger.warn(
+        logger.debug(
           `[CommunityInvestor] Invalid address-like token: ${extractedRec.tokenMentioned}`
         );
+        logger.debug(
+          `[E2E TRACE] Token mention ${extractedRec.tokenMentioned} not considered a valid address format.`
+        );
       }
+      logger.debug(
+        `[E2E TRACE] resolvedToken for "${extractedRec.quote}": ${JSON.stringify(resolvedToken)}`
+      );
+
       if (!resolvedToken) {
         logger.warn(`[CommunityInvestor] Could not resolve token for: "${extractedRec.quote}".`);
+        logger.debug(`[E2E TRACE] Skipping rec due to unresolved token: "${extractedRec.quote}"`);
         continue;
       }
 
-      // Fetch initial price for the recommendation
+      logger.debug(`[E2E TRACE] Attempting to get token API data for ${resolvedToken.address}`);
       const tokenAPIData = await communityInvestorService.getTokenAPIData(
         resolvedToken.address,
         resolvedToken.chain
+      );
+      logger.debug(
+        `[E2E TRACE] tokenAPIData for ${resolvedToken.address}: ${JSON.stringify(tokenAPIData)}`
       );
       const priceAtRecommendation = tokenAPIData?.currentPrice; // Use current price as of message time
 
@@ -274,8 +323,14 @@ const messageReceivedHandler = async ({
           r.recommendationType === (extractedRec.sentiment === 'positive' ? 'BUY' : 'SELL') &&
           recTimestamp - r.timestamp < RECENT_REC_DUPLICATION_TIMEFRAME_MS
       );
+      logger.debug(
+        `[E2E TRACE] Existing recent duplicate check. Target: ${resolvedToken.address}, Type: ${extractedRec.sentiment === 'positive' ? 'BUY' : 'SELL'}`
+      );
       if (existingRecent) {
         logger.debug(`[CommunityInvestor] Skipping duplicate rec for ${resolvedToken.address}`);
+        logger.debug(
+          `[E2E TRACE] Found existing recent duplicate for ${resolvedToken.address}. Skipping.`
+        );
         continue;
       }
 
@@ -296,10 +351,15 @@ const messageReceivedHandler = async ({
         processedForTradeDecision: false,
       };
 
+      logger.debug(`[E2E TRACE] newRecommendation created: ${JSON.stringify(newRecommendation)}`);
+
       userProfile.recommendations.unshift(newRecommendation);
       if (userProfile.recommendations.length > MAX_RECOMMENDATIONS_IN_PROFILE)
         userProfile.recommendations.pop();
       profileUpdated = true;
+      logger.debug(
+        `[E2E TRACE] profileUpdated is now true. Profile recommendation count: ${userProfile.recommendations.length}`
+      );
       logger.info(
         `[CommunityInvestor] Added ${newRecommendation.recommendationType} rec for user ${currentMessageSenderId}, token ${newRecommendation.tokenAddress}`
       );
@@ -317,8 +377,11 @@ const messageReceivedHandler = async ({
         `[CommunityInvestor] Created PROCESS_TRADE_DECISION task for rec ID ${newRecommendation.id}`
       );
     }
+    logger.debug(`[E2E TRACE] After loop, profileUpdated: ${profileUpdated}`);
     if (profileUpdated) {
+      logger.debug(`[E2E TRACE] profileUpdated is true. Checking if userProfileComponent exists.`);
       if (userProfileComponent) {
+        logger.debug(`[E2E TRACE] Attempting to update component ${userProfileComponent.id}`);
         await runtime.updateComponent({
           ...userProfileComponent,
           data: userProfile,
@@ -327,8 +390,10 @@ const messageReceivedHandler = async ({
           `[CommunityInvestor] Updated component ${userProfileComponent.id} for ${currentMessageSenderId}`
         );
       } else {
+        const newComponentId = asUUID(uuidv4());
+        logger.debug(`[E2E TRACE] Attempting to create new component with id ${newComponentId}`);
         await runtime.createComponent({
-          id: asUUID(uuidv4()), // Ensure unique ID for new component
+          id: newComponentId,
           entityId: currentMessageSenderId,
           agentId: agentId,
           worldId: componentWorldId,

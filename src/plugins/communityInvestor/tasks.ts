@@ -1,6 +1,11 @@
 import { type IAgentRuntime, type Task, type TaskWorker, logger, type UUID } from '@elizaos/core';
 import { CommunityInvestorService } from './service';
-import { ServiceType, type UserTrustProfile, type TradeDecisionInput } from './types';
+import {
+  ServiceType,
+  type UserTrustProfile,
+  type TradeDecisionInput,
+  TRUST_MARKETPLACE_COMPONENT_TYPE,
+} from './types';
 
 export const PROCESS_TRADE_DECISION_TASK_NAME = 'PROCESS_TRADE_DECISION';
 
@@ -13,9 +18,10 @@ const processTradeDecisionTaskWorker: TaskWorker = {
   ): Promise<void> => {
     const { recommendationId, userId } = options as unknown as TradeDecisionInput;
     const agentId = runtime.agentId;
+    const taskWorldId = task.worldId;
 
     logger.info(
-      `[TaskWorker:${PROCESS_TRADE_DECISION_TASK_NAME}] Starting for rec: ${recommendationId}, user: ${userId}`
+      `[TaskWorker:${PROCESS_TRADE_DECISION_TASK_NAME}] Starting for rec: ${recommendationId}, user: ${userId}, world: ${taskWorldId}`
     );
 
     if (!recommendationId || !userId) {
@@ -38,8 +44,8 @@ const processTradeDecisionTaskWorker: TaskWorker = {
     try {
       const componentResult = await runtime.getComponent(
         userId,
-        'communityInvestorProfile',
-        undefined,
+        TRUST_MARKETPLACE_COMPONENT_TYPE,
+        taskWorldId,
         agentId
       );
       let userProfile: UserTrustProfile | null = null;
@@ -94,13 +100,13 @@ const processTradeDecisionTaskWorker: TaskWorker = {
       }
 
       // Ensure trust score is up-to-date
-      await service.calculateUserTrustScore(userId, runtime);
+      await service.calculateUserTrustScore(userId, runtime, taskWorldId);
 
       // Fetch the profile again to get the latest score
       const updatedComponentResult = await runtime.getComponent(
         userId,
-        'communityInvestorProfile',
-        undefined,
+        TRUST_MARKETPLACE_COMPONENT_TYPE,
+        taskWorldId,
         agentId
       );
       let updatedUserProfile: UserTrustProfile | null = null;

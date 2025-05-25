@@ -91,9 +91,6 @@ export class CommunityInvestorService extends Service implements ICommunityInves
   // Configuration
   tradingConfig: TradingConfig;
 
-  // Event listeners
-  private eventListeners: Map<string, ((event: TradingEvent) => void)[]> = new Map();
-
   private apiKeys: {
     birdeye?: string;
     moralis?: string;
@@ -142,40 +139,6 @@ export class CommunityInvestorService extends Service implements ICommunityInves
 
   async stop(): Promise<void> {
     return Promise.resolve();
-  }
-
-  /**
-   * Add an event listener for trading events
-   */
-  addEventListener(eventId: string, listener: (event: TradingEvent) => void): void {
-    if (!this.eventListeners.has(eventId)) {
-      this.eventListeners.set(eventId, []);
-    }
-    this.eventListeners.get(eventId).push(listener);
-  }
-
-  /**
-   * Remove an event listener
-   */
-  removeEventListener(eventId: string): void {
-    logger.debug('removing event listener', eventId);
-    this.eventListeners.delete(eventId);
-  }
-
-  /**
-   * Emit a trading event to all listeners
-   */
-  private emitEvent(event: TradingEvent): void {
-    logger.debug('emitting event', event);
-    for (const listeners of this.eventListeners.values()) {
-      for (const listener of listeners) {
-        try {
-          listener(event);
-        } catch (error) {
-          logger.error('Error in event listener:', error);
-        }
-      }
-    }
   }
 
   /**
@@ -248,7 +211,7 @@ export class CommunityInvestorService extends Service implements ICommunityInves
       );
 
       // Emit event
-      this.emitEvent({ type: 'position_opened', position });
+      // this.emitEvent({ type: 'position_opened', position });
 
       return position;
     } catch (error) {
@@ -316,7 +279,7 @@ export class CommunityInvestorService extends Service implements ICommunityInves
       await this.updateRecommenderMetrics(position.entityId, priceChange * 100);
 
       // Emit event
-      this.emitEvent({ type: 'position_closed', position: updatedPosition });
+      // this.emitEvent({ type: 'position_closed', position: updatedPosition });
 
       return true;
     } catch (error) {
@@ -542,36 +505,37 @@ export class CommunityInvestorService extends Service implements ICommunityInves
         // Check recent first
         if (msg.content?.text?.includes(ticker) && msg.content.text.length > ticker.length + 5) {
           // Basic check for potential address patterns
-          const words = msg.content.text.split(/\s+/);
-          for (const word of words) {
-            // Solana addresses are typically 32-44 characters, alphanumeric + some symbols
+          // Split by spaces, parentheses, commas, then iterate and validate
+          const potentialAddressParts = msg.content.text.split(/[\s(),]+/);
+          for (const part of potentialAddressParts) {
+            // Solana addresses: 32-44 alphanumeric characters
             if (
               chain === SupportedChain.SOLANA &&
-              word.length >= 32 &&
-              word.length <= 44 &&
-              word.match(/^[a-zA-Z0-9]+$/)
+              part.length >= 32 &&
+              part.length <= 44 &&
+              /^[a-zA-Z0-9]+$/.test(part)
             ) {
               logger.info(
-                `[CommunityInvestorService] Found potential Solana address ${word} for ticker ${ticker} in context.`
+                `[CommunityInvestorService] Found potential Solana address ${part} for ticker ${ticker} in context.`
               );
               return {
-                address: word,
+                address: part,
                 chain: SupportedChain.SOLANA,
                 ticker: cleanTicker,
               };
             }
-            // Ethereum addresses are 42 characters and start with 0x
+            // Ethereum/Base addresses: 0x followed by 40 hex characters
             if (
               (chain === SupportedChain.ETHEREUM || chain === SupportedChain.BASE) &&
-              word.length === 42 &&
-              word.toLowerCase().startsWith('0x') &&
-              word.match(/^0x[a-fA-F0-9]{40}$/)
+              part.length === 42 &&
+              part.toLowerCase().startsWith('0x') &&
+              /^0x[a-fA-F0-9]{40}$/.test(part)
             ) {
               logger.info(
-                `[CommunityInvestorService] Found potential Ethereum/Base address ${word} for ticker ${ticker} in context.`
+                `[CommunityInvestorService] Found potential Ethereum/Base address ${part} for ticker ${ticker} in context.`
               );
               return {
-                address: word,
+                address: part,
                 chain: chain,
                 ticker: cleanTicker,
               };
@@ -1020,10 +984,10 @@ export class CommunityInvestorService extends Service implements ICommunityInves
       await this.storeTokenPerformance(performance);
 
       // Emit event
-      this.emitEvent({
+      /* this.emitEvent({
         type: 'token_performance_updated',
         performance,
-      });
+      }); */
 
       return performance;
     } catch (error) {
@@ -1243,10 +1207,10 @@ export class CommunityInvestorService extends Service implements ICommunityInves
       await this.storeTokenRecommendation(recommendation);
 
       // Emit event
-      this.emitEvent({
+      /* this.emitEvent({
         type: 'recommendation_added',
         recommendation,
-      });
+      }); */
 
       return recommendation;
     } catch (error) {
@@ -1387,7 +1351,7 @@ export class CommunityInvestorService extends Service implements ICommunityInves
       await this.storeTransaction(transaction);
 
       // Emit event
-      this.emitEvent({ type: 'transaction_added', transaction });
+      // this.emitEvent({ type: 'transaction_added', transaction });
 
       return true;
     } catch (error) {
@@ -1612,7 +1576,7 @@ export class CommunityInvestorService extends Service implements ICommunityInves
       await this.storePosition(position);
 
       // Emit event
-      this.emitEvent({ type: 'position_closed', position });
+      // this.emitEvent({ type: 'position_closed', position });
 
       return true;
     } catch (error) {
@@ -2287,15 +2251,22 @@ ${report.tokenReports.join('\n')}
                 currentPrice: parseFloat(dexPair.priceUsd || '0'),
                 liquidity: dexPair.liquidity?.usd || 0,
                 marketCap: dexPair.marketCap || 0,
-                isKnownScam: false,
+                isKnownScam: false, // Dexscreener doesn't directly provide this
               };
+              // No extensive history from this fallback, but it's better than nothing
+            } else {
+              logger.debug(
+                `[CommunityInvestorService] DexScreener found no pair for ${address} after Birdeye failure.`
+              );
+              // Explicitly return null if DexScreener also fails for Solana
+              return null;
             }
           } catch (fallbackError) {
             logger.error(
               `[CommunityInvestorService] Fallback DexScreener search also failed for ${address}:`,
               fallbackError
             );
-            return null;
+            return null; // Return null on fallback failure too
           }
         }
       } else if (chain === SupportedChain.ETHEREUM || chain === SupportedChain.BASE) {
@@ -2365,18 +2336,36 @@ ${report.tokenReports.join('\n')}
         return null;
       }
 
-      // Set defaults for missing values
-      if (!tokenData.ath && tokenData.currentPrice) {
-        tokenData.ath = tokenData.currentPrice * 1.1; // Assume current price is close to ATH if unknown
-      }
-      if (!tokenData.atl && tokenData.currentPrice) {
-        tokenData.atl = tokenData.currentPrice * 0.9; // Assume current price is close to ATL if unknown
-      }
+      // This check is now effectively handled by returning null in the SOLANA block if all sources fail.
+      // if (chain === SupportedChain.SOLANA && Object.keys(tokenData).length === 0) {
+      //   logger.debug(`[CommunityInvestorService] TokenData for SOLANA token ${address} is empty after all attempts, returning null.`);
+      //   return null;
+      // }
 
-      logger.debug(
-        `[CommunityInvestorService] Successfully fetched token data for ${tokenData.symbol} (${address})`
-      );
-      return tokenData;
+      // Set defaults for missing values if tokenData was populated by non-SOLANA chain logic or partially by SOLANA.
+      if (Object.keys(tokenData).length > 0) {
+        // Ensure tokenData is not empty before defaulting
+        if (!tokenData.ath && tokenData.currentPrice) {
+          tokenData.ath = tokenData.currentPrice * 1.1; // Assume current price is close to ATH if unknown
+        }
+        if (!tokenData.atl && tokenData.currentPrice) {
+          tokenData.atl = tokenData.currentPrice * 0.9; // Assume current price is close to ATL if unknown
+        }
+        logger.debug(
+          `[CommunityInvestorService] Successfully fetched token data for ${tokenData.symbol || address} (${address})`
+        );
+        return tokenData;
+      } else if (chain !== SupportedChain.SOLANA) {
+        // If not SOLANA and tokenData is still empty (e.g. ETH/BASE failed)
+        logger.warn(
+          `[CommunityInvestorService] Failed to fetch token data for ${address} on ${chain} after all attempts.`
+        );
+        return null;
+      }
+      // If it's SOLANA and tokenData is empty, we would have returned null already.
+      // For other chains, if tokenData is empty, this means their primary fetch failed.
+      // This final return null should ideally not be hit if all paths correctly return null on failure.
+      return null;
     } catch (error) {
       logger.error(
         `[CommunityInvestorService] Unexpected error fetching token API data for ${address}:`,
@@ -2679,9 +2668,30 @@ ${report.tokenReports.join('\n')}
     }
   }
 
-  async calculateUserTrustScore(userId: UUID, runtime: IAgentRuntime): Promise<void> {
-    logger.info(`[CommunityInvestorService] Calculating trust score for user ${userId}`);
-    const userProfileWorldId = runtime.agentId as UUID; // Using agentId as WorldId for these user-specific global components
+  async calculateUserTrustScore(
+    userId: UUID,
+    runtime: IAgentRuntime,
+    worldId?: UUID
+  ): Promise<void> {
+    logger.info(
+      `[CommunityInvestorService] Calculating trust score for user ${userId}${worldId ? ' in world ' + worldId : ''}`
+    );
+    const userProfileWorldId = worldId || (runtime.agentId as UUID);
+
+    // Ensure the world exists before creating components
+    try {
+      await runtime.ensureWorldExists({
+        id: userProfileWorldId,
+        name: `Community Investor World ${userProfileWorldId}`,
+        agentId: runtime.agentId,
+        serverId: 'community-investor',
+        metadata: {},
+      });
+    } catch (error) {
+      logger.debug(
+        `[CommunityInvestorService] World ${userProfileWorldId} already exists or error ensuring world: ${error}`
+      );
+    }
 
     const componentResult = await runtime.getComponent(
       userId,

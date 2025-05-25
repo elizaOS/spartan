@@ -530,6 +530,9 @@ export class HeliusClient {
           params.cursor = cursor;
         }
 
+        // NOTE: Current implementation limits to 2 pages (approx. 2000 holders)
+        // to prevent excessive API calls. For tokens with more holders,
+        // this list will be partial. Increase page > 2 limit if needed.
         if (page > 2) {
           break;
         }
