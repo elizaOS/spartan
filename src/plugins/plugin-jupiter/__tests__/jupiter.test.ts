@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import type { IAgentRuntime, TestCase as CoreTestCase, Character } from '@elizaos/core';
-import { JupiterService } from '../../src/services/srv_jupiter';
+import { JupiterService } from '../src/services/srv_jupiter';
 import { Connection } from '@solana/web3.js';
 import type { QuoteResponse, SwapResponse } from '@jup-ag/api';
 
@@ -435,7 +435,6 @@ describe('Jupiter Plugin Tests', () => {
 
   it('should confirm a transaction successfully', async () => {
     console.log('\n[Jupiter Test] Starting: should confirm a transaction successfully');
-    vi.useFakeTimers();
     const runtime = agentRuntimes.get(defaultCharacter.name);
     if (!runtime) throw new Error('Runtime not found');
     const jupiterService = runtime.getService('JUPITER_SERVICE') as JupiterService;
@@ -462,8 +461,6 @@ describe('Jupiter Plugin Tests', () => {
     } catch (e: any) {
       console.error('[Jupiter Test Result] FAILED: should confirm a transaction successfully with error:', e);
       throw e;
-    } finally {
-      vi.useRealTimers();
     }
   }, TEST_TIMEOUT);
 
