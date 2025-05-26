@@ -4,6 +4,7 @@ import type { Character, IAgentRuntime, OnboardingConfig, ProjectAgent } from '@
 import dotenv from 'dotenv';
 import { initCharacter } from './init.js';
 import { communityInvestorPlugin } from './plugins/communityInvestor';
+import { degenIntelPlugin } from './plugins/degenIntel/index.js';
 
 const imagePath = path.resolve('./src/spartan/assets/portrait.jpg');
 
@@ -521,7 +522,7 @@ const config: OnboardingConfig = {
 };
 
 export const spartan: ProjectAgent = {
-  plugins: [communityInvestorPlugin],
+  plugins: [communityInvestorPlugin, degenIntelPlugin],
   character,
   init: async (runtime: IAgentRuntime) => await initCharacter({ runtime, config }),
 };
