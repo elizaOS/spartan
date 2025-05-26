@@ -3,7 +3,7 @@ import path from 'node:path';
 import type { Character, IAgentRuntime, OnboardingConfig, ProjectAgent } from '@elizaos/core';
 import dotenv from 'dotenv';
 import { initCharacter } from './init.js';
-import { communityInvestorPlugin } from './plugins/communityInvestor';
+import { degenTraderPlugin } from './plugins/degenTrader';
 
 const imagePath = path.resolve('./src/spartan/assets/portrait.jpg');
 
@@ -42,7 +42,7 @@ const character: Character = {
     '@elizaos/plugin-bootstrap',
     // '@elizaos-plugins/plugin-degenTrader',
     // '@elizaos-plugins/plugin-jupiter',
-    // '@elizaos/plugin-solana',
+    '@elizaos/plugin-solana',
   ],
   settings: {
     GROQ_PLUGIN_LARGE:
@@ -521,7 +521,7 @@ const config: OnboardingConfig = {
 };
 
 export const spartan: ProjectAgent = {
-  plugins: [communityInvestorPlugin],
+  plugins: [degenTraderPlugin],
   character,
   init: async (runtime: IAgentRuntime) => await initCharacter({ runtime, config }),
 };

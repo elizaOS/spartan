@@ -2,8 +2,17 @@ import { type IAgentRuntime, logger } from '@elizaos/core';
 import { TokenSignal, TradePerformanceData } from '../types/index';
 import { v4 as uuidv4 } from 'uuid';
 
+// Import technicalindicators - it's already in package.json dependencies
+import * as TI from 'technicalindicators';
+
 export class AnalyticsService {
-  constructor(private runtime: IAgentRuntime) {}
+  public static readonly serviceType = 'analytics';
+  public capabilityDescription = 'Provides technical analysis and signal scoring';
+  private runtime: IAgentRuntime;
+
+  constructor(runtime: IAgentRuntime) {
+    this.runtime = runtime;
+  }
 
   async initialize(): Promise<void> {
     logger.info('Initializing analytics service');
@@ -142,36 +151,43 @@ export class AnalyticsService {
       return 50; // Default neutral value
     }
 
-    let gains = 0;
-    let losses = 0;
+    try {
+      // Use technicalindicators library if available
+      const rsiValues = TI.RSI.calculate({ values: prices, period });
+      return rsiValues[rsiValues.length - 1] || 50;
+    } catch (error) {
+      // Fallback to manual calculation
+      let gains = 0;
+      let losses = 0;
 
-    // Calculate initial average gain and loss
-    for (let i = 1; i <= period; i++) {
-      const change = prices[i] - prices[i - 1];
-      if (change >= 0) {
-        gains += change;
-      } else {
-        losses -= change;
+      // Calculate initial average gain and loss
+      for (let i = 1; i <= period; i++) {
+        const change = prices[i] - prices[i - 1];
+        if (change >= 0) {
+          gains += change;
+        } else {
+          losses -= change;
+        }
       }
-    }
 
-    let avgGain = gains / period;
-    let avgLoss = losses / period;
+      let avgGain = gains / period;
+      let avgLoss = losses / period;
 
-    // Calculate RSI using smoothed averages
-    for (let i = period + 1; i < prices.length; i++) {
-      const change = prices[i] - prices[i - 1];
-      if (change >= 0) {
-        avgGain = (avgGain * (period - 1) + change) / period;
-        avgLoss = (avgLoss * (period - 1)) / period;
-      } else {
-        avgGain = (avgGain * (period - 1)) / period;
-        avgLoss = (avgLoss * (period - 1) - change) / period;
+      // Calculate RSI using smoothed averages
+      for (let i = period + 1; i < prices.length; i++) {
+        const change = prices[i] - prices[i - 1];
+        if (change >= 0) {
+          avgGain = (avgGain * (period - 1) + change) / period;
+          avgLoss = (avgLoss * (period - 1)) / period;
+        } else {
+          avgGain = (avgGain * (period - 1)) / period;
+          avgLoss = (avgLoss * (period - 1) - change) / period;
+        }
       }
-    }
 
-    const rs = avgGain / avgLoss;
-    return 100 - 100 / (1 + rs);
+      const rs = avgGain / avgLoss;
+      return 100 - 100 / (1 + rs);
+    }
   }
 
   calculateMACD(prices: number[]): {
@@ -187,17 +203,35 @@ export class AnalyticsService {
       return { macd: 0, signal: 0, histogram: 0 };
     }
 
-    // Calculate EMAs
+    try {
+      // Use technicalindicators library if available
+      const macdValues = TI.MACD.calculate({
+        values: prices,
+        fastPeriod: shortPeriod,
+        slowPeriod: longPeriod,
+        signalPeriod: signalPeriod,
+        SimpleMAOscillator: false,
+        SimpleMASignal: false
+      });
+      
+      const lastValue = macdValues[macdValues.length - 1];
+      if (lastValue) {
+        return {
+          macd: lastValue.MACD || 0,
+          signal: lastValue.signal || 0,
+          histogram: lastValue.histogram || 0,
+        };
+      }
+    } catch (error) {
+      // Fallback to manual calculation
+      console.warn('Using manual MACD calculation:', error);
+    }
+
+    // Manual calculation fallback
     const shortEMA = this.calculateEMA(prices, shortPeriod);
     const longEMA = this.calculateEMA(prices, longPeriod);
-
-    // Calculate MACD line
     const macdLine = shortEMA - longEMA;
-
-    // Calculate signal line (9-day EMA of MACD line)
     const signalLine = this.calculateEMA([macdLine], signalPeriod);
-
-    // Calculate histogram
     const histogram = macdLine - signalLine;
 
     return {

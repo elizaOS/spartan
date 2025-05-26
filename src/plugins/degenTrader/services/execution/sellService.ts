@@ -2,18 +2,17 @@ import { type IAgentRuntime, logger, type UUID } from '@elizaos/core';
 import { BaseTradeService } from '../base/BaseTradeService';
 import { TokenValidationService } from '../validation/TokenValidationService';
 import { TradeCalculationService } from '../calculation/tradeCalculation';
-import { SellSignalMessage } from '../../types';
+import { SellSignalMessage, ServiceTypes } from '../../types';
 import { v4 as uuidv4 } from 'uuid';
 import { BN, toBN } from '../../utils/bignumber';
-import { getTokenBalance } from '../../utils/wallet';
 import { TradeMemoryService } from '../tradeMemoryService';
-import { WalletService } from '../walletService';
+import { WalletService, WalletOperationResult } from '../walletService';
 import { DataService } from '../dataService';
 import { AnalyticsService } from '../analyticsService';
 
-import { executeTrade } from '../../utils/wallet';
-
 export class SellService extends BaseTradeService {
+  public static readonly serviceType = ServiceTypes.SELL;
+  public capabilityDescription = 'Handles the execution of sell trades.';
   private pendingSells: { [tokenAddress: string]: BN } = {};
   private validationService: TokenValidationService;
   private calculationService: TradeCalculationService;
@@ -97,109 +96,77 @@ export class SellService extends BaseTradeService {
     }
   }
 
-  public async executeSell(signal: SellSignalMessage & { expectedOutAmount?: string }): Promise<{
-    success: boolean;
-    signature?: string;
-    error?: string;
-    receivedAmount?: string;
-    receivedValue?: string;
-  }> {
+  public async executeSell(signal: SellSignalMessage & { expectedOutAmount?: string }): Promise<WalletOperationResult> {
+    let tokenBalanceInfo;
+    let sellAmountNum = 0;
     try {
       if (!signal) {
         throw new Error('No signal data in sell task');
       }
 
-      const tokenBalance = await getTokenBalance(this.runtime, signal.tokenAddress);
-      if (!tokenBalance) {
+      tokenBalanceInfo = await this.walletService.getTokenBalance(signal.tokenAddress);
+      if (!tokenBalanceInfo) {
         return { success: false, error: 'No token balance found' };
       }
 
-      const sellAmount = toBN(signal.amount).times(10 ** tokenBalance.decimals);
-      if (sellAmount.gt(toBN(tokenBalance.balance))) {
-        return {
-          success: false,
-          error: `Insufficient token balance. Requested: ${sellAmount.toString()}, Available: ${tokenBalance.balance}`,
-        };
+      const availableBalance = parseFloat(tokenBalanceInfo.amount);
+      if (availableBalance === 0) {
+        return { success: false, error: 'Insufficient token balance' };
       }
+
+      sellAmountNum = Math.min(availableBalance, parseFloat(signal.amount));
 
       try {
         this.pendingSells[signal.tokenAddress] = (
           this.pendingSells[signal.tokenAddress] || toBN(0)
-        ).plus(sellAmount);
+        ).plus(toBN(sellAmountNum).times(10 ** tokenBalanceInfo.decimals));
 
         const slippageBps = await this.calculationService.calculateDynamicSlippage(
           signal.tokenAddress,
-          Number(sellAmount),
+          sellAmountNum,
           true
         );
 
-        // Add validation for slippage with warning and enforce stricter limits
-        /*
-        const MAX_SLIPPAGE_BPS = 1000; // 10% max slippage
-        const MIN_SLIPPAGE_BPS = 10; // 0.1% min slippage
-        const validatedSlippage = Math.min(
-          Math.max(
-            Math.floor(slippageBps),
-            MIN_SLIPPAGE_BPS
-          ),
-          MAX_SLIPPAGE_BPS
-        );
-
-        if (validatedSlippage !== slippageBps) {
-          logger.warn('Slippage value adjusted', {
-            original: slippageBps,
-            adjusted: validatedSlippage,
-            tokenAddress: signal.tokenAddress,
-            reason: 'Value outside safe bounds'
-          });
-        }
-        */
-
-        const result = await executeTrade(this.runtime, {
+        const wallet = await this.walletService.getWallet();
+        const result: WalletOperationResult = await wallet.sell({
           tokenAddress: signal.tokenAddress,
-          amount: sellAmount.toString(),
-          slippage: slippageBps,
-          dex: 'jup',
-          action: 'SELL',
+          tokenAmount: sellAmountNum.toString(),
+          slippageBps,
         });
 
-        // why are we getting this after the trade execution?
-        // for the price? shouldn't we already have it?
-        const marketData = await this.dataService.getTokenMarketData(signal.tokenAddress);
-        //console.log('sell marketData', marketData)
-
-        if (result.success) {
+        if (result.success && result.signature) {
+          const marketData = await this.dataService.getTokenMarketData(signal.tokenAddress);
+          logger.info(`Sell executed successfully: ${result.signature}`);
+          
           await this.tradeMemoryService.createTrade({
             tokenAddress: signal.tokenAddress,
             chain: 'solana',
             type: 'SELL',
-            amount: sellAmount.toString(),
-            price: marketData.priceUsd.toString(),
+            amount: sellAmountNum.toString(),
+            price: marketData.price.toString(),
             txHash: result.signature,
-            metadata: {
-              slippage: slippageBps,
-              expectedAmount: signal.expectedOutAmount || '0',
-              receivedAmount: result.receivedAmount || '0',
-              valueUsd: result.receivedValue || '0',
-            },
           });
 
-          await this.analyticsService.trackSlippageImpact(
-            signal.tokenAddress,
-            signal.expectedOutAmount || '0',
-            result.receivedAmount || '0',
-            slippageBps,
-            true
-          );
+          await this.analyticsService.trackTradeExecution({
+            type: 'sell',
+            tokenAddress: signal.tokenAddress,
+            amount: result.outAmount || sellAmountNum.toString(),
+            signature: result.signature,
+          });
+          return result;
         }
-
         return result;
+      } catch (error) {
+        logger.error('Error executing sell:', error);
+        return { success: false, error: error instanceof Error ? error.message : String(error) };
       } finally {
-        this.pendingSells[signal.tokenAddress] = (
-          this.pendingSells[signal.tokenAddress] || toBN(0)
-        ).minus(sellAmount);
-        if (this.pendingSells[signal.tokenAddress].lte(toBN(0))) {
-          delete this.pendingSells[signal.tokenAddress];
+        if (tokenBalanceInfo) {
+          this.pendingSells[signal.tokenAddress] = (
+            this.pendingSells[signal.tokenAddress] || toBN(0)
+          ).minus(toBN(sellAmountNum).times(10 ** tokenBalanceInfo.decimals));
+          if (this.pendingSells[signal.tokenAddress].lte(toBN(0))) {
+            delete this.pendingSells[signal.tokenAddress];
+          }
         }
       }
     } catch (error) {

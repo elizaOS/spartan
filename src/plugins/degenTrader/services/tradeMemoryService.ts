@@ -1,9 +1,10 @@
-import { type IAgentRuntime, type Memory, type UUID, logger, ModelType } from '@elizaos/core';
+import { IAgentRuntime, logger, Memory, UUID } from '@elizaos/core';
 import { v4 as uuidv4 } from 'uuid';
-import { BaseTradeService } from './base/BaseTradeService';
-import { WalletService } from './walletService';
-import { DataService } from './dataService';
+import { Position, ServiceTypes } from '../types';
 import { AnalyticsService } from './analyticsService';
+import { BaseTradeService } from './base/BaseTradeService';
+import { DataService } from './dataService';
+import { WalletService } from './walletService';
 
 export interface TradeMemory {
   id: UUID;
@@ -23,6 +24,9 @@ export interface TradeMemory {
 }
 
 export class TradeMemoryService extends BaseTradeService {
+  public static readonly serviceType = ServiceTypes.TRADE_MEMORY;
+  public capabilityDescription = 'Manages storage and retrieval of trade and position data.';
+
   constructor(
     runtime: IAgentRuntime,
     walletService: WalletService,
@@ -33,34 +37,26 @@ export class TradeMemoryService extends BaseTradeService {
   }
 
   async initialize(): Promise<void> {
-    logger.info('Initializing trade memory service');
+    logger.info('Trade memory service initialized');
+  }
+
+  async stop(): Promise<void> {
+    // Cleanup if needed
   }
 
   async storeTrade(trade: TradeMemory): Promise<void> {
     try {
-      const memoryContent = `${trade.type} trade for ${trade.tokenAddress} on ${trade.chain} at ${trade.timestamp.toISOString()}. Amount: ${trade.amount}, Price: ${trade.price}`;
-
       const memory: Memory = {
-        id: trade.id,
+        id: uuidv4() as UUID,
         agentId: this.runtime.agentId,
         entityId: this.runtime.agentId,
         roomId: this.runtime.agentId,
-        content: {
-          text: memoryContent,
-          trade,
-        },
+        content: { trade },
         createdAt: Date.now(),
+        metadata: { tableName: 'trades' } as any,
       };
-
-      // Add embedding and store memory
-      const memoryWithEmbedding = await this.runtime.addEmbeddingToMemory(memory);
-      await this.runtime.createMemory(memoryWithEmbedding, 'trades', true);
-
-      // Cache for quick access
-      const cacheKey = `trade:${trade.chain}:${trade.tokenAddress}:${trade.txHash}`;
-      await this.runtime.setCache(cacheKey, trade);
-
-      logger.info(`Stored ${trade.type} trade for ${trade.tokenAddress}`);
+      await this.runtime.createMemory(memory, 'trades');
+      logger.info(`Trade stored for ${trade.tokenAddress} (${trade.type})`);
     } catch (error) {
       logger.error(`Error storing trade for ${trade.tokenAddress}:`, error);
       throw error;
@@ -70,17 +66,18 @@ export class TradeMemoryService extends BaseTradeService {
   async getTradesForToken(tokenAddress: string, chain: string): Promise<TradeMemory[]> {
     try {
       const memories = await this.runtime.getMemories({
-        agentId: this.runtime.agentId,
         tableName: 'trades',
       });
 
       return memories
-        .filter((memory) => {
-          const trade = memory.content.trade as TradeMemory;
-          return trade.tokenAddress === tokenAddress && trade.chain === chain;
+        .filter(memory => {
+          if (memory.content && typeof memory.content === 'object' && 'trade' in memory.content) {
+            const trade = memory.content.trade as TradeMemory; // Assert type after check
+            return trade.tokenAddress === tokenAddress && trade.chain === chain;
+          }
+          return false;
         })
-        .map((memory) => memory.content.trade as TradeMemory)
-        .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+        .map((memory) => memory.content.trade as TradeMemory);
     } catch (error) {
       logger.error(`Error getting trades for token ${tokenAddress}:`, error);
       return [];
@@ -101,7 +98,6 @@ export class TradeMemoryService extends BaseTradeService {
       timestamp: new Date(),
       ...params,
     };
-
     await this.storeTrade(trade);
     return trade;
   }
@@ -130,19 +126,21 @@ export class TradeMemoryService extends BaseTradeService {
 
   async searchTrades(query: string): Promise<TradeMemory[]> {
     try {
-      // Get embedding for search query
-      const queryEmbedding = await this.runtime.useModel(ModelType.TEXT_EMBEDDING, query);
-
-      // Search memories with similar embeddings
+      const queryEmbedding = await this.runtime.useModel('TEXT_EMBEDDING', { text: query });
       const memories = await this.runtime.searchMemories({
         embedding: queryEmbedding,
         tableName: 'trades',
         count: 10,
         match_threshold: 0.7,
-        roomId: this.runtime.agentId,
       });
 
-      return memories.map((memory) => memory.content.trade as TradeMemory);
+      return memories
+        .filter(memory => 
+            memory.content && 
+            typeof memory.content === 'object' && 
+            'trade' in memory.content
+        )
+        .map((memory) => memory.content.trade as TradeMemory);
     } catch (error) {
       logger.error('Error searching trades:', error);
       return [];
@@ -157,5 +155,34 @@ export class TradeMemoryService extends BaseTradeService {
       logger.error(`Error deleting trade ${tradeId}:`, error);
       throw error;
     }
+  }
+
+  async getPosition(positionId: UUID): Promise<Position | null> {
+    logger.info(`Getting position ${positionId}`);
+    const memory = await this.runtime.getMemoryById(positionId);
+    if (memory && memory.content.position) {
+      return memory.content.position as Position;
+    }
+    return null;
+  }
+
+  async updatePosition(position: Position): Promise<void> {
+    logger.info(`Updating position ${position.id}`);
+    const memoryToUpdate = {
+      id: position.id,
+      content: { position },
+    };
+    await this.runtime.updateMemory(memoryToUpdate as any);
+  }
+
+  async deletePosition(positionId: UUID): Promise<void> {
+    logger.info(`Deleting position ${positionId}`);
+    await this.runtime.deleteMemory(positionId);
+  }
+
+  async getAllPositions(): Promise<Position[]> {
+    logger.info('Getting all positions');
+    const memories = await this.runtime.getMemories({ tableName: 'positions' } as any);
+    return memories.map(m => m.content.position as Position).filter(p => p);
   }
 }

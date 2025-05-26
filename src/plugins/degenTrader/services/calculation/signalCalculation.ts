@@ -1,6 +1,7 @@
 import { TokenSignal } from '../../types/trading';
 import { BaseTradeService } from '../base/BaseTradeService';
 import { logger } from '@elizaos/core';
+import { UUID } from '@elizaos/core';
 
 export class SignalCalculationService extends BaseTradeService {
   async calculateTechnicalSignals(marketData: any) {
@@ -37,35 +38,35 @@ export class SignalCalculationService extends BaseTradeService {
       if (tokenMap.has(signal.address)) {
         const existing = tokenMap.get(signal.address)!;
         existing.reasons.push(...signal.reasons);
-        existing.score += signal.score;
+        existing.score = (existing.score || 0) + (signal.score || 0);
       } else {
-        tokenMap.set(signal.address, signal);
+        tokenMap.set(signal.address, { ...signal });
       }
     }
 
-    // Score each token
+    // Score each token based on its aggregated data and pre-populated technical/social/market metrics
     const scoredTokens = await Promise.all(
       Array.from(tokenMap.values()).map(async (token) => {
-        let score = 0;
+        let newScore = 0;
 
         // Technical Analysis Score (0-40)
         if (token.technicalSignals) {
-          score += await this.analyticsService.scoreTechnicalSignals(token.technicalSignals);
+          newScore += await this.analyticsService.scoreTechnicalSignals(token.technicalSignals);
         }
 
         // Social Signal Score (0-30)
         if (token.socialMetrics) {
-          score += await this.analyticsService.scoreSocialMetrics(token.socialMetrics);
+          newScore += await this.analyticsService.scoreSocialMetrics(token.socialMetrics);
         }
 
         // Market Metrics Score (0-30)
-        score += await this.analyticsService.scoreMarketMetrics({
+        newScore += await this.analyticsService.scoreMarketMetrics({
           marketCap: token.marketCap,
           volume24h: token.volume24h,
           liquidity: token.liquidity,
         });
-
-        token.score = score;
+        
+        token.score = newScore;
         return token;
       })
     );
@@ -74,9 +75,9 @@ export class SignalCalculationService extends BaseTradeService {
     return scoredTokens
       .filter(
         (token) =>
-          token.score >= 60 && // Minimum score requirement
-          token.liquidity >= 50000 && // Minimum liquidity $50k
-          token.volume24h >= 100000 // Minimum 24h volume $100k
+          token.score >= (this.tradingConfig.thresholds.minScore || 60) && 
+          token.liquidity >= (this.tradingConfig.thresholds.minLiquidity || 50000) && 
+          token.volume24h >= (this.tradingConfig.thresholds.minVolume || 100000) 
       )
       .sort((a, b) => b.score - a.score);
   }
@@ -88,7 +89,8 @@ export class SignalCalculationService extends BaseTradeService {
   }): Promise<number> {
     try {
       // Get historical high water mark from storage
-      const highWaterMark = await this.getHighWaterMark();
+      const highWaterMarkValue = await this.runtime.getMemoryById('high_water_mark_memory' as UUID);
+      const highWaterMark = highWaterMarkValue && highWaterMarkValue.content.value ? Number(highWaterMarkValue.content.value) : 0;
 
       // Calculate current drawdown
       const currentDrawdown =
@@ -96,31 +98,21 @@ export class SignalCalculationService extends BaseTradeService {
 
       // Update high water mark if needed
       if (portfolio.totalValue > highWaterMark) {
-        await this.updateHighWaterMark(portfolio.totalValue);
+        await this.runtime.createMemory({
+            id: 'high_water_mark_memory' as UUID,
+            agentId: this.runtime.agentId,
+            entityId: this.runtime.agentId,
+            roomId: this.runtime.agentId,
+            content: { value: portfolio.totalValue.toString() },
+            metadata: { tableName: 'portfolio_metrics' } as any,
+            createdAt: Date.now()
+        }, 'portfolio_metrics');
       }
 
       return Math.max(0, currentDrawdown);
     } catch (error) {
       logger.error('Error calculating drawdown:', error);
       return 0;
-    }
-  }
-
-  private async getHighWaterMark(): Promise<number> {
-    try {
-      const stored = await this.runtime.databaseAdapter.getValue('high_water_mark');
-      return stored ? Number(stored) : 0;
-    } catch (error) {
-      logger.error('Error getting high water mark:', error);
-      return 0;
-    }
-  }
-
-  private async updateHighWaterMark(value: number): Promise<void> {
-    try {
-      await this.runtime.databaseAdapter.setValue('high_water_mark', value.toString());
-    } catch (error) {
-      logger.error('Error updating high water mark:', error);
     }
   }
 }

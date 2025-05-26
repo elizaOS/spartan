@@ -2,7 +2,7 @@ import { type IAgentRuntime, logger, type UUID } from '@elizaos/core';
 import { BaseTradeService } from '../base/BaseTradeService';
 import { TokenValidationService } from '../validation/TokenValidationService';
 import { TradeCalculationService } from '../calculation/tradeCalculation';
-import { BuySignalMessage } from '../../types';
+import { BuySignalMessage, ServiceTypes } from '../../types';
 import { v4 as uuidv4 } from 'uuid';
 import { TradeMemoryService } from '../tradeMemoryService';
 import { WalletService } from '../walletService';
@@ -10,6 +10,8 @@ import { DataService } from '../dataService';
 import { AnalyticsService } from '../analyticsService';
 
 export class BuyService extends BaseTradeService {
+  public static readonly serviceType = ServiceTypes.BUY;
+  public capabilityDescription = 'Handles the execution of buy trades.';
   private validationService: TokenValidationService;
   private calculationService: TradeCalculationService;
   private tradeMemoryService: TradeMemoryService;
@@ -145,7 +147,7 @@ export class BuyService extends BaseTradeService {
           chain: 'solana',
           type: 'BUY',
           amount: buyAmount.toString(),
-          price: marketData.priceUsd.toString(),
+          price: marketData.price.toString(),
           txHash: result.signature,
           metadata: {
             slippage: slippageBps,

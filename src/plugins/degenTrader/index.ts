@@ -1,5 +1,6 @@
 import type { Plugin } from '@elizaos/core';
 import { DegenTradingService } from './tradingService';
+import degenTraderTestSuite from './tests';
 
 export const degenTraderPlugin: Plugin = {
   name: 'Degen Trader Plugin',
@@ -8,6 +9,7 @@ export const degenTraderPlugin: Plugin = {
   providers: [],
   actions: [],
   services: [DegenTradingService],
+  tests: [degenTraderTestSuite],
 };
 
 export default degenTraderPlugin;

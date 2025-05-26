@@ -9,11 +9,7 @@
     "allowJs": true,
     "esModuleInterop": true,
     "resolveJsonModule": true,
-    "skipLibCheck": true,
-    "paths": {
-      "@elizaos/core": ["../core/src"],
-      "@elizaos/core/*": ["../core/src/*"]
-    }
+    "skipLibCheck": true
   },
   "ts-node": {
     "experimentalSpecifierResolution": "node",

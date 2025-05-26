@@ -11,7 +11,6 @@ import {
   ServiceTypes,
 } from './types';
 import { tradeAnalysisTemplate } from './utils/analyzeTrade';
-import { executeTrade, getTokenBalance, getWalletBalance, getWalletKeypair } from './utils/wallet';
 import { CacheManager } from './utils/cacheManager';
 
 // Service imports
@@ -149,7 +148,10 @@ export class DegenTradingService extends Service {
       runtime,
       this.dataService,
       this.walletService,
-      this.analyticsService
+      this.analyticsService,
+      this.tradeMemoryService,
+      this.buyService,
+      this.sellService
     );
   }
 

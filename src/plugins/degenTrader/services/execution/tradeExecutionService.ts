@@ -1,5 +1,5 @@
 import { type AgentRuntime, IAgentRuntime, logger } from '@elizaos/core';
-import { executeTrade } from '../../utils/wallet';
+// import { executeTrade } from '../../utils/wallet'; // OBSOLETE
 import { WalletService } from '../walletService';
 import { DataService } from '../dataService';
 import { AnalyticsService } from '../analyticsService';
@@ -20,97 +20,23 @@ export class TradeExecutionService {
     // Cleanup if needed
   }
 
-  async executeBuyTrade({
-    tokenAddress,
-    amount,
-    slippage,
-  }: {
-    tokenAddress: string;
-    amount: number;
-    slippage: number;
-  }): Promise<{
-    success: boolean;
-    signature?: string;
-    error?: string;
-    outAmount?: string;
-  }> {
-    try {
-      const result = await executeTrade(this.runtime, {
-        tokenAddress,
-        amount: amount.toString(),
-        slippage,
-        dex: 'raydium',
-        action: 'BUY',
-      });
-
-      if (result.success) {
-        await this.analyticsService.trackTradeExecution({
-          type: 'buy',
-          tokenAddress,
-          amount: amount.toString(),
-          signature: result.signature!,
-        });
-      }
-
-      return result;
-    } catch (error) {
-      logger.error('Buy trade execution failed:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
-  }
-
-  async executeSellTrade({
-    tokenAddress,
-    amount,
-    slippage,
-  }: {
-    tokenAddress: string;
-    amount: number;
-    slippage: number;
-  }): Promise<{
-    success: boolean;
-    signature?: string;
-    error?: string;
-    receivedAmount?: string;
-  }> {
-    try {
-      const result = await executeTrade(this.runtime, {
-        tokenAddress,
-        amount: amount.toString(),
-        slippage,
-        dex: 'raydium',
-        action: 'SELL',
-      });
-
-      if (result.success) {
-        await this.analyticsService.trackTradeExecution({
-          type: 'sell',
-          tokenAddress,
-          amount: amount.toString(),
-          signature: result.signature!,
-        });
-      }
-
-      return result;
-    } catch (error) {
-      logger.error('Sell trade execution failed:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
-  }
+  // executeBuyTrade and executeSellTrade are removed as BuyService/SellService handle this via WalletService
+  /*
+  async executeBuyTrade({ ... }) { ... }
+  async executeSellTrade({ ... }) { ... }
+  */
 
   async calculateExpectedAmount(
     tokenAddress: string,
-    amount: number,
+    amount: number, // Amount of input currency (SOL for buy, Token for sell)
     isSell: boolean
   ): Promise<string> {
     try {
       const marketData = await this.dataService.getTokenMarketData(tokenAddress);
+      if (marketData.price === 0 && !isSell) {
+        logger.warn(`Cannot calculate expected buy amount for ${tokenAddress}, price is zero.`);
+        return '0'; // Avoid division by zero if price is 0 for a buy
+      }
       const expectedAmount = isSell ? amount * marketData.price : amount / marketData.price;
 
       return expectedAmount.toString();

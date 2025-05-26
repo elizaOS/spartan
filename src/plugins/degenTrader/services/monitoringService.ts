@@ -1,22 +1,30 @@
-import { type IAgentRuntime, logger } from '@elizaos/core';
-import { getTokenBalance } from '../utils/wallet';
+import { type IAgentRuntime, Memory, logger, UUID } from '@elizaos/core';
 import { DataService } from './dataService';
 import { TradeExecutionService } from './execution/tradeExecutionService';
 import { WalletService } from './walletService';
 import { AnalyticsService } from './analyticsService';
+import { TradeMemoryService } from './tradeMemoryService';
+import { BuyService } from './execution/buyService';
+import { SellService } from './execution/sellService';
 import { v4 as uuidv4 } from 'uuid';
 import { DEFAULT_CONFIG } from '../config/config';
 
 export class MonitoringService extends TradeExecutionService {
+  public static readonly serviceType = 'monitoring';
+  public capabilityDescription = 'Monitors token prices and triggers actions based on market movements.';
+  
   private isInitialized = false;
   private monitoringIntervals: NodeJS.Timeout[] = [];
   private tradingConfig = DEFAULT_CONFIG;
 
   constructor(
-    runtime: IAgentRuntime,
-    dataService: DataService,
-    walletService: WalletService,
-    analyticsService: AnalyticsService
+    protected runtime: IAgentRuntime, 
+    protected dataService: DataService,
+    protected walletService: WalletService,
+    protected analyticsService: AnalyticsService,
+    private tradeMemoryService: TradeMemoryService,
+    private buyService: BuyService,
+    private sellService: SellService
   ) {
     super(runtime, walletService, dataService, analyticsService);
   }
@@ -119,9 +127,9 @@ export class MonitoringService extends TradeExecutionService {
   }): Promise<any> {
     try {
       const { tokenAddress } = options;
-      const currentBalance = await getTokenBalance(this.runtime, tokenAddress);
+      const currentBalance = await this.walletService.getTokenBalance(tokenAddress);
 
-      if (!currentBalance || BigInt(currentBalance.toString()) <= BigInt(0)) {
+      if (!currentBalance || BigInt(currentBalance.amount) <= BigInt(0)) {
         console.log('No position to monitor', { tokenAddress });
         return;
       }
@@ -144,7 +152,7 @@ export class MonitoringService extends TradeExecutionService {
           stopLossPrice: options.stopLossPrice,
         });
 
-        await this.createSellSignal(tokenAddress, currentBalance.toString(), 'Stop loss triggered');
+        await this.createSellSignal(tokenAddress, currentBalance.amount.toString(), 'Stop loss triggered');
         return;
       }
 
@@ -156,7 +164,7 @@ export class MonitoringService extends TradeExecutionService {
           takeProfitPrice: options.takeProfitPrice,
         });
 
-        const halfPosition = BigInt(currentBalance.toString()) / BigInt(2);
+        const halfPosition = BigInt(currentBalance.amount) / BigInt(2);
         await this.createSellSignal(
           tokenAddress,
           halfPosition.toString(),
