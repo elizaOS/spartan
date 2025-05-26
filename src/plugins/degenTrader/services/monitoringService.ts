@@ -11,14 +11,15 @@ import { DEFAULT_CONFIG } from '../config/config';
 
 export class MonitoringService extends TradeExecutionService {
   public static readonly serviceType = 'monitoring';
-  public capabilityDescription = 'Monitors token prices and triggers actions based on market movements.';
-  
+  public capabilityDescription =
+    'Monitors token prices and triggers actions based on market movements.';
+
   private isInitialized = false;
   private monitoringIntervals: NodeJS.Timeout[] = [];
   private tradingConfig = DEFAULT_CONFIG;
 
   constructor(
-    protected runtime: IAgentRuntime, 
+    protected runtime: IAgentRuntime,
     protected dataService: DataService,
     protected walletService: WalletService,
     protected analyticsService: AnalyticsService,
@@ -152,7 +153,11 @@ export class MonitoringService extends TradeExecutionService {
           stopLossPrice: options.stopLossPrice,
         });
 
-        await this.createSellSignal(tokenAddress, currentBalance.amount.toString(), 'Stop loss triggered');
+        await this.createSellSignal(
+          tokenAddress,
+          currentBalance.amount.toString(),
+          'Stop loss triggered'
+        );
         return;
       }
 

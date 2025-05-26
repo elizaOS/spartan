@@ -96,7 +96,9 @@ export class SellService extends BaseTradeService {
     }
   }
 
-  public async executeSell(signal: SellSignalMessage & { expectedOutAmount?: string }): Promise<WalletOperationResult> {
+  public async executeSell(
+    signal: SellSignalMessage & { expectedOutAmount?: string }
+  ): Promise<WalletOperationResult> {
     let tokenBalanceInfo;
     let sellAmountNum = 0;
     try {
@@ -137,7 +139,7 @@ export class SellService extends BaseTradeService {
         if (result.success && result.signature) {
           const marketData = await this.dataService.getTokenMarketData(signal.tokenAddress);
           logger.info(`Sell executed successfully: ${result.signature}`);
-          
+
           await this.tradeMemoryService.createTrade({
             tokenAddress: signal.tokenAddress,
             chain: 'solana',

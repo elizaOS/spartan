@@ -70,7 +70,7 @@ export class TradeMemoryService extends BaseTradeService {
       });
 
       return memories
-        .filter(memory => {
+        .filter((memory) => {
           if (memory.content && typeof memory.content === 'object' && 'trade' in memory.content) {
             const trade = memory.content.trade as TradeMemory; // Assert type after check
             return trade.tokenAddress === tokenAddress && trade.chain === chain;
@@ -135,10 +135,9 @@ export class TradeMemoryService extends BaseTradeService {
       });
 
       return memories
-        .filter(memory => 
-            memory.content && 
-            typeof memory.content === 'object' && 
-            'trade' in memory.content
+        .filter(
+          (memory) =>
+            memory.content && typeof memory.content === 'object' && 'trade' in memory.content
         )
         .map((memory) => memory.content.trade as TradeMemory);
     } catch (error) {
@@ -183,6 +182,6 @@ export class TradeMemoryService extends BaseTradeService {
   async getAllPositions(): Promise<Position[]> {
     logger.info('Getting all positions');
     const memories = await this.runtime.getMemories({ tableName: 'positions' } as any);
-    return memories.map(m => m.content.position as Position).filter(p => p);
+    return memories.map((m) => m.content.position as Position).filter((p) => p);
   }
 }

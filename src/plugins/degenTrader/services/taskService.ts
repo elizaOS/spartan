@@ -26,27 +26,36 @@ export class TaskService {
     this.runtime.registerTaskWorker({
       name: 'EXECUTE_SELL',
       execute: async (runtime: IAgentRuntime, options: { [key: string]: unknown }, task: Task) => {
-        logger.info('Handling EXECUTE_SELL task', { id: task.id, metadata: task.metadata, tags: task.tags });
-        if (task.metadata && 
-            typeof task.metadata.positionId === 'string' &&
-            typeof task.metadata.tokenAddress === 'string' && 
-            typeof task.metadata.amount === 'string'
-            ) {
-            
-            const sellParams = task.metadata as any;
+        logger.info('Handling EXECUTE_SELL task', {
+          id: task.id,
+          metadata: task.metadata,
+          tags: task.tags,
+        });
+        if (
+          task.metadata &&
+          typeof task.metadata.positionId === 'string' &&
+          typeof task.metadata.tokenAddress === 'string' &&
+          typeof task.metadata.amount === 'string'
+        ) {
+          const sellParams = task.metadata as any;
 
-            const sellSignalForService: SellSignalMessage & { expectedOutAmount?: string } = {
-                positionId: sellParams.positionId as UUID,
-                tokenAddress: sellParams.tokenAddress,
-                amount: sellParams.amount,
-                slippage: typeof sellParams.slippage === 'number' ? sellParams.slippage : undefined,
-                isSimulation: typeof sellParams.isSimulation === 'boolean' ? sellParams.isSimulation : undefined,
-                reason: typeof sellParams.reason === 'string' ? sellParams.reason : undefined,
-                expectedOutAmount: typeof sellParams.expectedAmount === 'string' ? sellParams.expectedAmount : undefined,
-            };
-            await this.sellService.executeSell(sellSignalForService);
+          const sellSignalForService: SellSignalMessage & { expectedOutAmount?: string } = {
+            positionId: sellParams.positionId as UUID,
+            tokenAddress: sellParams.tokenAddress,
+            amount: sellParams.amount,
+            slippage: typeof sellParams.slippage === 'number' ? sellParams.slippage : undefined,
+            isSimulation:
+              typeof sellParams.isSimulation === 'boolean' ? sellParams.isSimulation : undefined,
+            reason: typeof sellParams.reason === 'string' ? sellParams.reason : undefined,
+            expectedOutAmount:
+              typeof sellParams.expectedAmount === 'string' ? sellParams.expectedAmount : undefined,
+          };
+          await this.sellService.executeSell(sellSignalForService);
         } else {
-            logger.error('EXECUTE_SELL task missing or invalid core metadata for SellSignalMessage', {taskId: task.id, metadata: task.metadata});
+          logger.error('EXECUTE_SELL task missing or invalid core metadata for SellSignalMessage', {
+            taskId: task.id,
+            metadata: task.metadata,
+          });
         }
       },
       validate: async () => true,
@@ -71,8 +80,11 @@ export class TaskService {
         tokenAddress: params.tokenAddress,
         amount: params.amount,
       });
-      
-      const taskCreationPayload: Pick<Task, 'name' | 'description' | 'tags' | 'metadata' | 'worldId' | 'roomId' | 'entityId'> & { updatedAt?: number } = {
+
+      const taskCreationPayload: Pick<
+        Task,
+        'name' | 'description' | 'tags' | 'metadata' | 'worldId' | 'roomId' | 'entityId'
+      > & { updatedAt?: number } = {
         name: 'EXECUTE_SELL',
         description: `Sell ${params.amount} of ${params.tokenAddress} for ${params.reason}`,
         tags: ['degen_trader', ServiceTypes.DEGEN_TRADING, 'SELL_ORDER'],
@@ -80,10 +92,10 @@ export class TaskService {
         roomId: this.runtime.agentId,
         entityId: params.entityId as UUID,
         metadata: {
-            ...params,
-            appTaskStatus: 'queued',
-            appTaskTimeout: 300,
-            appTaskExecuteAt: Date.now(),
+          ...params,
+          appTaskStatus: 'queued',
+          appTaskTimeout: 300,
+          appTaskExecuteAt: Date.now(),
         },
         updatedAt: Date.now(),
       };

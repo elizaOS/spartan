@@ -211,9 +211,9 @@ export class AnalyticsService {
         slowPeriod: longPeriod,
         signalPeriod: signalPeriod,
         SimpleMAOscillator: false,
-        SimpleMASignal: false
+        SimpleMASignal: false,
       });
-      
+
       const lastValue = macdValues[macdValues.length - 1];
       if (lastValue) {
         return {

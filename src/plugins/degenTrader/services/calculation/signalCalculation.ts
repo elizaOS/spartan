@@ -65,7 +65,7 @@ export class SignalCalculationService extends BaseTradeService {
           volume24h: token.volume24h,
           liquidity: token.liquidity,
         });
-        
+
         token.score = newScore;
         return token;
       })
@@ -75,9 +75,9 @@ export class SignalCalculationService extends BaseTradeService {
     return scoredTokens
       .filter(
         (token) =>
-          token.score >= (this.tradingConfig.thresholds.minScore || 60) && 
-          token.liquidity >= (this.tradingConfig.thresholds.minLiquidity || 50000) && 
-          token.volume24h >= (this.tradingConfig.thresholds.minVolume || 100000) 
+          token.score >= (this.tradingConfig.thresholds.minScore || 60) &&
+          token.liquidity >= (this.tradingConfig.thresholds.minLiquidity || 50000) &&
+          token.volume24h >= (this.tradingConfig.thresholds.minVolume || 100000)
       )
       .sort((a, b) => b.score - a.score);
   }
@@ -90,7 +90,10 @@ export class SignalCalculationService extends BaseTradeService {
     try {
       // Get historical high water mark from storage
       const highWaterMarkValue = await this.runtime.getMemoryById('high_water_mark_memory' as UUID);
-      const highWaterMark = highWaterMarkValue && highWaterMarkValue.content.value ? Number(highWaterMarkValue.content.value) : 0;
+      const highWaterMark =
+        highWaterMarkValue && highWaterMarkValue.content.value
+          ? Number(highWaterMarkValue.content.value)
+          : 0;
 
       // Calculate current drawdown
       const currentDrawdown =
@@ -98,15 +101,18 @@ export class SignalCalculationService extends BaseTradeService {
 
       // Update high water mark if needed
       if (portfolio.totalValue > highWaterMark) {
-        await this.runtime.createMemory({
+        await this.runtime.createMemory(
+          {
             id: 'high_water_mark_memory' as UUID,
             agentId: this.runtime.agentId,
             entityId: this.runtime.agentId,
             roomId: this.runtime.agentId,
             content: { value: portfolio.totalValue.toString() },
             metadata: { tableName: 'portfolio_metrics' } as any,
-            createdAt: Date.now()
-        }, 'portfolio_metrics');
+            createdAt: Date.now(),
+          },
+          'portfolio_metrics'
+        );
       }
 
       return Math.max(0, currentDrawdown);

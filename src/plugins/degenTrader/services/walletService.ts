@@ -14,9 +14,19 @@ interface ISolanaPluginService extends Service {
     payerAddress: string; // Public key of the payer
     priorityFeeMicroLamports?: number;
     // Potentially other options like specific DEX, wrap/unwrap SOL etc.
-  }) => Promise<{ success: boolean; signature?: string; error?: string; outAmount?: string; inAmount?: string; swapUsdValue?: string; }>; // Extended to include more details
+  }) => Promise<{
+    success: boolean;
+    signature?: string;
+    error?: string;
+    outAmount?: string;
+    inAmount?: string;
+    swapUsdValue?: string;
+  }>; // Extended to include more details
   getSolBalance: (publicKey: string) => Promise<number>; // Returns SOL balance
-  getTokenBalance: (publicKey: string, mintAddress: string) => Promise<{ amount: string; decimals: number; uiAmount: number } | null>;
+  getTokenBalance: (
+    publicKey: string,
+    mintAddress: string
+  ) => Promise<{ amount: string; decimals: number; uiAmount: number } | null>;
   getPublicKey: () => Promise<string>; // Gets the public key managed by the Solana plugin
 }
 
@@ -24,9 +34,9 @@ export interface WalletOperationResult {
   success: boolean;
   signature?: string;
   error?: string;
-  outAmount?: string;       // Amount of token received by the user
-  inAmount?: string;        // Amount of token sent by the user
-  swapUsdValue?: string;    // USD value of the swap
+  outAmount?: string; // Amount of token received by the user
+  inAmount?: string; // Amount of token sent by the user
+  swapUsdValue?: string; // USD value of the swap
 }
 
 export class WalletService {
@@ -46,9 +56,11 @@ export class WalletService {
     try {
       // Attempt to get the Solana service from the runtime.
       // The actual service name ('solana' or similar) depends on how @elizaos/plugin-solana registers itself.
-      const service = this.runtime.getService<ISolanaPluginService>('solana'); 
+      const service = this.runtime.getService<ISolanaPluginService>('solana');
       if (!service) {
-        throw new Error('@elizaos/plugin-solana service not found. Ensure it is registered and started.');
+        throw new Error(
+          '@elizaos/plugin-solana service not found. Ensure it is registered and started.'
+        );
       }
       this.solanaPluginService = service;
 
@@ -58,7 +70,9 @@ export class WalletService {
         throw new Error('Failed to retrieve public key from Solana plugin service.');
       }
 
-      logger.info(`WalletService initialized. Using Solana Plugin for wallet: ${this.walletPublicKey}`);
+      logger.info(
+        `WalletService initialized. Using Solana Plugin for wallet: ${this.walletPublicKey}`
+      );
     } catch (error) {
       logger.error('Failed to initialize WalletService with Solana Plugin:', error);
       throw error;
@@ -98,10 +112,18 @@ export class WalletService {
 
     return {
       publicKey: payerAddress, // Provide the public key obtained from the plugin
-      
+
       // executeTrade is now a direct call to solanaPluginService.executeSwap
       // The internal Jupiter logic is removed.
-      async buy({ tokenAddress, amountInSol, slippageBps }: { tokenAddress: string; amountInSol: number; slippageBps: number }): Promise<WalletOperationResult> {
+      async buy({
+        tokenAddress,
+        amountInSol,
+        slippageBps,
+      }: {
+        tokenAddress: string;
+        amountInSol: number;
+        slippageBps: number;
+      }): Promise<WalletOperationResult> {
         const SOL_MINT = 'So11111111111111111111111111111111111111112';
         try {
           const result = await solService.executeSwap({
@@ -118,7 +140,15 @@ export class WalletService {
         }
       },
 
-      async sell({ tokenAddress, tokenAmount, slippageBps }: { tokenAddress: string; tokenAmount: string; slippageBps: number }): Promise<WalletOperationResult> {
+      async sell({
+        tokenAddress,
+        tokenAmount,
+        slippageBps,
+      }: {
+        tokenAddress: string;
+        tokenAmount: string;
+        slippageBps: number;
+      }): Promise<WalletOperationResult> {
         const SOL_MINT = 'So11111111111111111111111111111111111111112';
         try {
           // tokenAmount is expected to be in base units of the token
@@ -152,18 +182,23 @@ export class WalletService {
   }
 
   // Optional: Expose a way to get SPL token balances if needed directly by DegenTrader plugin
-  async getTokenBalance(tokenMintAddress: string): Promise<{ amount: string; decimals: number; uiAmount: number } | null> {
+  async getTokenBalance(
+    tokenMintAddress: string
+  ): Promise<{ amount: string; decimals: number; uiAmount: number } | null> {
     const solService = this.ensureSolanaService();
     const publicKey = await this.ensurePublicKey();
     try {
       const balanceInfo = await solService.getTokenBalance(publicKey, tokenMintAddress);
       return balanceInfo;
     } catch (error) {
-      logger.error(`Error getting token balance for ${tokenMintAddress} for wallet ${publicKey} via Solana Plugin:`, error);
+      logger.error(
+        `Error getting token balance for ${tokenMintAddress} for wallet ${publicKey} via Solana Plugin:`,
+        error
+      );
       throw error; // or return null based on desired error handling
     }
   }
-  
+
   // Added to provide direct access to the public key
   async getPublicKey(): Promise<string> {
     return this.ensurePublicKey();

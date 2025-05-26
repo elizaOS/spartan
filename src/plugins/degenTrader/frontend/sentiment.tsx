@@ -42,14 +42,15 @@ export default function Sentiment() {
   const recentSentiments = sentiments.slice(0, 10);
 
   // Calculate overall sentiment stats
-  const allTokens = sentiments.flatMap(s => s.occuringTokens || []);
-  const avgSentiment = allTokens.length > 0
-    ? allTokens.reduce((sum, token) => sum + token.sentiment, 0) / allTokens.length
-    : 0;
+  const allTokens = sentiments.flatMap((s) => s.occuringTokens || []);
+  const avgSentiment =
+    allTokens.length > 0
+      ? allTokens.reduce((sum, token) => sum + token.sentiment, 0) / allTokens.length
+      : 0;
 
-  const bullishCount = allTokens.filter(t => t.sentiment > 25).length;
-  const bearishCount = allTokens.filter(t => t.sentiment < -25).length;
-  const neutralCount = allTokens.filter(t => t.sentiment >= -25 && t.sentiment <= 25).length;
+  const bullishCount = allTokens.filter((t) => t.sentiment > 25).length;
+  const bearishCount = allTokens.filter((t) => t.sentiment < -25).length;
+  const neutralCount = allTokens.filter((t) => t.sentiment >= -25 && t.sentiment <= 25).length;
 
   return (
     <div className="space-y-6">
@@ -61,9 +62,7 @@ export default function Sentiment() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{avgSentiment.toFixed(1)}</div>
-            <p className="text-xs text-muted-foreground">
-              {getSentimentLabel(avgSentiment)}
-            </p>
+            <p className="text-xs text-muted-foreground">{getSentimentLabel(avgSentiment)}</p>
           </CardContent>
         </Card>
 
@@ -97,9 +96,7 @@ export default function Sentiment() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{sentiments.length}</div>
-            <p className="text-xs text-muted-foreground">
-              {allTokens.length} tokens analyzed
-            </p>
+            <p className="text-xs text-muted-foreground">{allTokens.length} tokens analyzed</p>
           </CardContent>
         </Card>
       </div>
@@ -141,7 +138,8 @@ export default function Sentiment() {
                             className={`${getSentimentColor(token.sentiment)} border-0`}
                             variant="secondary"
                           >
-                            {token.sentiment > 0 ? '+' : ''}{token.sentiment}
+                            {token.sentiment > 0 ? '+' : ''}
+                            {token.sentiment}
                           </Badge>
                           <div className="text-xs text-muted-foreground max-w-[200px] truncate">
                             {token.reason}

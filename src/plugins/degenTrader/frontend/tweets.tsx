@@ -33,17 +33,20 @@ export default function Tweets() {
 
   // Filter and sort tweets
   const filteredTweets = tweets
-    .filter(tweet =>
-      !searchTerm ||
-      tweet.text?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      tweet.username?.toLowerCase().includes(searchTerm.toLowerCase())
+    .filter(
+      (tweet) =>
+        !searchTerm ||
+        tweet.text?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        tweet.username?.toLowerCase().includes(searchTerm.toLowerCase())
     )
     .sort((a, b) => {
       switch (sortBy) {
         case 'likes':
           return (b.likes || b.metadata?.likes || 0) - (a.likes || a.metadata?.likes || 0);
         case 'retweets':
-          return (b.retweets || b.metadata?.retweets || 0) - (a.retweets || a.metadata?.retweets || 0);
+          return (
+            (b.retweets || b.metadata?.retweets || 0) - (a.retweets || a.metadata?.retweets || 0)
+          );
         case 'timestamp':
         default:
           return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
@@ -52,8 +55,14 @@ export default function Tweets() {
 
   // Calculate stats
   const totalTweets = tweets.length;
-  const totalLikes = tweets.reduce((sum, tweet) => sum + (tweet.likes || tweet.metadata?.likes || 0), 0);
-  const totalRetweets = tweets.reduce((sum, tweet) => sum + (tweet.retweets || tweet.metadata?.retweets || 0), 0);
+  const totalLikes = tweets.reduce(
+    (sum, tweet) => sum + (tweet.likes || tweet.metadata?.likes || 0),
+    0
+  );
+  const totalRetweets = tweets.reduce(
+    (sum, tweet) => sum + (tweet.retweets || tweet.metadata?.retweets || 0),
+    0
+  );
   const avgEngagement = totalTweets > 0 ? (totalLikes + totalRetweets) / totalTweets : 0;
 
   const getEngagementColor = (likes: number, retweets: number) => {
@@ -231,8 +240,7 @@ export default function Tweets() {
               <p className="text-sm text-muted-foreground mt-2">
                 {searchTerm
                   ? 'Try adjusting your search terms'
-                  : 'Tweets will appear here once the Twitter plugin is active'
-                }
+                  : 'Tweets will appear here once the Twitter plugin is active'}
               </p>
             </div>
           )}

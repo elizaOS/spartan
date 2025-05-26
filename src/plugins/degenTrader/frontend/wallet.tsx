@@ -63,9 +63,10 @@ export default function Wallet() {
 
   // Filter and sort tokens
   const filteredTokens = portfolio.items
-    .filter(asset => {
+    .filter((asset) => {
       const valueUsd = Number(asset?.valueUsd) || 0;
-      const matchesSearch = !searchTerm ||
+      const matchesSearch =
+        !searchTerm ||
         asset.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         asset.symbol?.toLowerCase().includes(searchTerm.toLowerCase());
       const meetsValueThreshold = showSmallBalances || valueUsd > 1;
@@ -76,7 +77,10 @@ export default function Wallet() {
         case 'value':
           return (Number(b.valueUsd) || 0) - (Number(a.valueUsd) || 0);
         case 'balance':
-          return (Number(b.uiAmount) || Number(b.balance) || 0) - (Number(a.uiAmount) || Number(a.balance) || 0);
+          return (
+            (Number(b.uiAmount) || Number(b.balance) || 0) -
+            (Number(a.uiAmount) || Number(a.balance) || 0)
+          );
         case 'name':
           return (a.name || a.symbol || '').localeCompare(b.name || b.symbol || '');
         default:
@@ -87,8 +91,10 @@ export default function Wallet() {
   // Calculate stats
   const totalValue = Number(portfolio.totalUsd) || 0;
   const totalTokens = portfolio.items.length;
-  const significantTokens = portfolio.items.filter(asset => (Number(asset?.valueUsd) || 0) > 50).length;
-  const smallTokens = portfolio.items.filter(asset => (Number(asset?.valueUsd) || 0) <= 1).length;
+  const significantTokens = portfolio.items.filter(
+    (asset) => (Number(asset?.valueUsd) || 0) > 50
+  ).length;
+  const smallTokens = portfolio.items.filter((asset) => (Number(asset?.valueUsd) || 0) <= 1).length;
 
   return (
     <div className="space-y-6">
@@ -221,9 +227,13 @@ export default function Wallet() {
               return (
                 <Card
                   key={`${asset.address || asset.symbol}-${idx}`}
-                  className={`overflow-hidden hover:shadow-lg transition-all duration-300 ${valueUsd > 100 ? 'ring-2 ring-green-200' :
-                    valueUsd > 10 ? 'ring-1 ring-yellow-200' : ''
-                    }`}
+                  className={`overflow-hidden hover:shadow-lg transition-all duration-300 ${
+                    valueUsd > 100
+                      ? 'ring-2 ring-green-200'
+                      : valueUsd > 10
+                        ? 'ring-1 ring-yellow-200'
+                        : ''
+                  }`}
                 >
                   <CardContent className="p-4">
                     {/* Token Header */}
@@ -255,15 +265,9 @@ export default function Wallet() {
                         </Badge>
                       )}
                       {valueUsd > 10 && valueUsd <= 100 && (
-                        <Badge variant="secondary">
-                          Medium
-                        </Badge>
+                        <Badge variant="secondary">Medium</Badge>
                       )}
-                      {valueUsd <= 10 && valueUsd > 1 && (
-                        <Badge variant="outline">
-                          Small
-                        </Badge>
-                      )}
+                      {valueUsd <= 10 && valueUsd > 1 && <Badge variant="outline">Small</Badge>}
                       {valueUsd <= 1 && (
                         <Badge variant="outline" className="text-muted-foreground">
                           Dust
@@ -283,7 +287,8 @@ export default function Wallet() {
                       {price > 0 && (
                         <div className="pt-2 border-t border-muted">
                           <p className="text-xs text-muted-foreground">
-                            Price: <span className="font-medium">{formatCurrency(price, 6, 6)}</span>
+                            Price:{' '}
+                            <span className="font-medium">{formatCurrency(price, 6, 6)}</span>
                           </p>
                         </div>
                       )}
@@ -297,7 +302,10 @@ export default function Wallet() {
                           variant="outline"
                           className="flex-1 text-xs"
                           onClick={() => {
-                            window.open(`https://www.birdeye.so/token/${asset.address}?chain=solana`, '_blank');
+                            window.open(
+                              `https://www.birdeye.so/token/${asset.address}?chain=solana`,
+                              '_blank'
+                            );
                           }}
                         >
                           Birdeye
@@ -330,8 +338,7 @@ export default function Wallet() {
                   ? 'Try adjusting your search terms or filters'
                   : showSmallBalances
                     ? 'Try enabling small balances filter'
-                    : 'Portfolio tokens will appear here'
-                }
+                    : 'Portfolio tokens will appear here'}
               </p>
             </div>
           )}

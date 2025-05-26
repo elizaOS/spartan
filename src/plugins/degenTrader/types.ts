@@ -181,7 +181,7 @@ export enum ServiceTypes {
   SELL = 'sell',
 }
 
-export type ServiceType = typeof ServiceTypes[keyof typeof ServiceTypes];
+export type ServiceType = (typeof ServiceTypes)[keyof typeof ServiceTypes];
 
 // Ensure TradePerformanceData is correctly defined or imported if it's from another file within types
 export interface TradePerformanceData {
@@ -209,11 +209,14 @@ export interface TradePerformanceData {
 // Portfolio and Signal Types
 export interface PortfolioStatus {
   totalValue: number;
-  positions: Record<string, {
-    amount: number;
-    value: number;
-    price: number;
-  }>;
+  positions: Record<
+    string,
+    {
+      amount: number;
+      value: number;
+      price: number;
+    }
+  >;
   solBalance: number;
   drawdown: number;
 }

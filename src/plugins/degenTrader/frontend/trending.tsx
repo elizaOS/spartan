@@ -59,24 +59,27 @@ export default function Trending() {
 
   const data = query?.data || {};
   const allTokens = [
-    ...(data.solana || []).map(t => ({ ...t, chain: 'solana' })),
-    ...(data.base || []).map(t => ({ ...t, chain: 'base' })),
-    ...(data.ethereum || []).map(t => ({ ...t, chain: 'ethereum' })),
+    ...(data.solana || []).map((t) => ({ ...t, chain: 'solana' })),
+    ...(data.base || []).map((t) => ({ ...t, chain: 'base' })),
+    ...(data.ethereum || []).map((t) => ({ ...t, chain: 'ethereum' })),
   ];
 
-  const filteredTokens = selectedChain === 'all'
-    ? allTokens
-    : allTokens.filter(token => token.chain === selectedChain);
+  const filteredTokens =
+    selectedChain === 'all'
+      ? allTokens
+      : allTokens.filter((token) => token.chain === selectedChain);
 
   const sortedTokens = filteredTokens.sort((a, b) => (a.rank || 999) - (b.rank || 999));
 
   // Calculate stats
   const totalTokens = allTokens.length;
-  const avgChange = allTokens.length > 0
-    ? allTokens.reduce((sum, token) => sum + (token.price24hChangePercent || 0), 0) / allTokens.length
-    : 0;
-  const gainers = allTokens.filter(t => (t.price24hChangePercent || 0) > 0).length;
-  const losers = allTokens.filter(t => (t.price24hChangePercent || 0) < 0).length;
+  const avgChange =
+    allTokens.length > 0
+      ? allTokens.reduce((sum, token) => sum + (token.price24hChangePercent || 0), 0) /
+        allTokens.length
+      : 0;
+  const gainers = allTokens.filter((t) => (t.price24hChangePercent || 0) > 0).length;
+  const losers = allTokens.filter((t) => (t.price24hChangePercent || 0) < 0).length;
 
   return (
     <div className="space-y-6">
@@ -97,8 +100,11 @@ export default function Trending() {
             <CardTitle className="text-sm font-medium">Avg 24h Change</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold ${avgChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {avgChange >= 0 ? '+' : ''}{avgChange.toFixed(2)}%
+            <div
+              className={`text-2xl font-bold ${avgChange >= 0 ? 'text-green-600' : 'text-red-600'}`}
+            >
+              {avgChange >= 0 ? '+' : ''}
+              {avgChange.toFixed(2)}%
             </div>
             <p className="text-xs text-muted-foreground">Market sentiment</p>
           </CardContent>
@@ -206,9 +212,7 @@ export default function Trending() {
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell className="text-right font-medium">
-                    {formatUSD(item.price)}
-                  </TableCell>
+                  <TableCell className="text-right font-medium">{formatUSD(item.price)}</TableCell>
                   <TableCell className="text-right">
                     {item?.price24hChangePercent !== undefined ? (
                       <Badge
@@ -219,7 +223,8 @@ export default function Trending() {
                             : 'bg-red-100 text-red-800 hover:bg-red-100'
                         )}
                       >
-                        {item.price24hChangePercent >= 0 ? '+' : ''}{item.price24hChangePercent.toFixed(2)}%
+                        {item.price24hChangePercent >= 0 ? '+' : ''}
+                        {item.price24hChangePercent.toFixed(2)}%
                       </Badge>
                     ) : (
                       <span className="text-muted-foreground">-</span>
@@ -261,7 +266,9 @@ export default function Trending() {
                           aria-disabled={linkItem.disabled}
                           className={cn([
                             'rounded-md p-1 hover:bg-muted transition-colors',
-                            linkItem?.disabled ? 'opacity-30 cursor-not-allowed' : 'opacity-70 hover:opacity-100',
+                            linkItem?.disabled
+                              ? 'opacity-30 cursor-not-allowed'
+                              : 'opacity-70 hover:opacity-100',
                           ])}
                         >
                           <img
