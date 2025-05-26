@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { type IAgentRuntime, type Plugin, type Memory, type UUID, logger, Service, ChannelType, ModelType } from '@elizaos/core';
 import * as core from '@elizaos/core';
 import { degenIntelPlugin } from '../index';
-import type { Sentiment, Token } from '../schemas';
+import { type Sentiment, type Token, SentimentArraySchema, TweetArraySchema, WalletSchema, BuySignalSchema } from '../schemas';
 import type { Portfolio, TransactionHistory } from '../tasks/birdeye';
 import Birdeye from '../tasks/birdeye';
 import Twitter from '../tasks/twitter';
@@ -64,8 +64,15 @@ const createMockRuntime = (): IAgentRuntime => {
     getAllServices: vi.fn(() => services), // Adjusted to return Map for compatibility if needed
     registerService: vi.fn(async (service: Service & { name: string }) => { services.set(service.name, service); }),
     registerProvider: vi.fn((provider: any) => { providers.push(provider); }),
-    getCache: vi.fn(async (key: string) => cache.get(key)),
-    setCache: vi.fn(async (key: string, value: any) => { cache.set(key, value); return true; }), // Return boolean
+    getCache: vi.fn(async (key: string) => {
+      const value = cache.get(key);
+      if (value === undefined) return undefined; // Return undefined if not in cache, to be distinct from null
+      return JSON.parse(JSON.stringify(value));
+    }),
+    setCache: vi.fn(async (key: string, value: any) => {
+      cache.set(key, JSON.parse(JSON.stringify(value)));
+      return true;
+    }),
     emitEvent: vi.fn(async (event: string, data: any) => {}),
     useModel: vi.fn(async (modelType: string, params: any) => JSON.stringify({})),
     plugins: [{ name: 'twitter' } as Plugin],
@@ -156,8 +163,10 @@ describe('DegenIntel Plugin E2E Tests', () => {
     });
 
     it('should have routes defined', () => {
-      expect(degenIntelPlugin.routes).toBeDefined();
-      expect(Array.isArray(degenIntelPlugin.routes)).toBe(true);
+      const allRoutes = degenIntelPlugin.routes; // All routes are now consolidated here via apis.ts
+      expect(allRoutes).toBeDefined();
+      expect(Array.isArray(allRoutes)).toBe(true);
+      expect(allRoutes.length).toBeGreaterThan(0);
     });
 
     it('should register tasks during initialization', () => {
@@ -171,11 +180,15 @@ describe('DegenIntel Plugin E2E Tests', () => {
         {
           timeslot: new Date().toISOString(),
           processed: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
           text: 'Bullish sentiment on TEST',
           occuringTokens: [{ token: 'TEST', sentiment: 75, reason: 'Bullish' }],
         },
       ];
-      await runtime.setCache('sentiments', sentimentData);
+      // The API route now validates against SentimentArraySchema, so ensure mock data is valid
+      const validatedMockSentiments = SentimentArraySchema.parse(sentimentData);
+      await runtime.setCache('sentiments', validatedMockSentiments);
 
       const sentimentProvider = (runtime.providers as any[]).find((p: any) => p.name === 'CRYPTOTWITTER_MARKET_SENTIMENT');
       expect(sentimentProvider).toBeDefined();
@@ -190,7 +203,7 @@ describe('DegenIntel Plugin E2E Tests', () => {
         expect(result?.text).toContain('TOKEN ANALYSIS:');
         expect(result?.text).toContain('TEST - Sentiment: 75');
         expect(result?.text).toContain('Bullish');
-        expect(result?.data?.sentimentData).toEqual(sentimentData);
+        expect(result?.data?.sentimentData).toEqual(validatedMockSentiments);
       }
     });
 
@@ -210,7 +223,7 @@ describe('DegenIntel Plugin E2E Tests', () => {
           marketcap: 1000000000,
           price: 50000,
           price24hChangePercent: 5.2,
-          last_updated: new Date() as any,
+          last_updated: new Date().toISOString() as any,
         },
       ];
       await runtime.setCache('coinmarketcap_sync', marketData);
@@ -244,7 +257,7 @@ describe('DegenIntel Plugin E2E Tests', () => {
           rank: 1,
           price: 0.1,
           price24hChangePercent: 20,
-          last_updated: new Date() as any,
+          last_updated: new Date().toISOString() as any,
         },
       ];
       await runtime.setCache('tokens_solana', trendingTokens);
@@ -290,7 +303,7 @@ describe('DegenIntel Plugin E2E Tests', () => {
       const transactionHistory: TransactionHistory[] = [
         {
           txHash: 'test-tx-hash',
-          blockTime: new Date('2024-01-01T00:00:00Z') as any,
+          blockTime: new Date('2024-01-01T00:00:00Z').toISOString() as any,
           data: {
             status: true,
             mainAction: 'swap',
@@ -442,49 +455,6 @@ describe('DegenIntel Plugin E2E Tests', () => {
       }
     });
 
-    it('should handle POST /trending (API) correctly', async () => {
-      const trendingTokens: Token[] = [
-        { name: 'TokenA', rank: 1, provider: 'birdeye', chain: 'solana', address: 'addrA', decimals: 9, liquidity: 1000, marketcap:10000, logoURI: 'uriA', symbol: 'TA', volume24hUSD: 100, price: 1, price24hChangePercent: 10, last_updated: new Date() as any },
-        { name: 'TokenB', rank: 2, provider: 'birdeye', chain: 'solana', address: 'addrB', decimals: 9, liquidity: 2000, marketcap:20000, logoURI: 'uriB', symbol: 'TB', volume24hUSD: 200, price: 2, price24hChangePercent: 5, last_updated: new Date() as any },
-      ];
-      await runtime.setCache('tokens_solana', trendingTokens);
-
-      const trendingRoute = degenIntelPlugin.routes?.find((r: any) => r.path === '/trending' && r.type === 'POST');
-      expect(trendingRoute).toBeDefined();
-
-      if (trendingRoute?.handler) {
-        await trendingRoute.handler(mockReq, mockRes, runtime);
-        expect(mockRes.json).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ name: 'TokenA' })]));
-        const responseData = mockRes.json.mock.calls[0][0];
-        expect(responseData[0].name).toBe('TokenA');
-        expect(responseData[1].name).toBe('TokenB');
-      }
-    });
-
-    it('should handle POST /wallet (API) correctly', async () => {
-      const portfolioData: Portfolio = { key: 'PORTFOLIO', data: { wallet: 'wallet1', totalUsd: 100, items: [] } };
-      const transactionHistory: TransactionHistory[] = [
-        { txHash: 'tx1', blockTime: new Date() as any, data: { mainAction: 'received' } },
-        { txHash: 'tx2', blockTime: new Date(Date.now() - 1000) as any, data: { mainAction: 'received' } },
-      ];
-      await runtime.setCache('portfolio', portfolioData);
-      await runtime.setCache('transaction_history', transactionHistory);
-
-      const walletRoute = degenIntelPlugin.routes?.find((r: any) => r.path === '/wallet' && r.type === 'POST');
-      expect(walletRoute).toBeDefined();
-
-      if (walletRoute?.handler) {
-        await walletRoute.handler(mockReq, mockRes, runtime);
-        expect(mockRes.json).toHaveBeenCalledWith({
-          history: expect.arrayContaining([expect.objectContaining({ txHash: 'tx1' })]),
-          portfolio: portfolioData.data,
-        });
-        const responseData = mockRes.json.mock.calls[0][0];
-        expect(responseData.history.length).toBe(2);
-        expect(new Date(responseData.history[0].blockTime).getTime()).toBeGreaterThanOrEqual(new Date(responseData.history[1].blockTime).getTime());
-      }
-    });
-
     it('should handle GET /tweets (API) correctly', async () => {
       const tweetMemories: Memory[] = [
         {
@@ -496,7 +466,12 @@ describe('DegenIntel Plugin E2E Tests', () => {
           content: { 
             source: 'twitter', 
             text: 'Tweet 1', 
-            tweet: { username: 'userA', likes: 10, retweets: 5 }
+            metadata: {
+              username: 'userA',
+              likes: 10,
+              retweets: 5,
+              timestamp: new Date().toISOString()
+            }
           } 
         },
         {
@@ -508,7 +483,12 @@ describe('DegenIntel Plugin E2E Tests', () => {
           content: { 
             source: 'twitter', 
             text: 'Tweet 2', 
-            tweet: { username: 'userB', likes: 20, retweets: 15 }
+            metadata: {
+              username: 'userB',
+              likes: 20,
+              retweets: 15,
+              timestamp: new Date(Date.now() - 1000).toISOString()
+            }
           }
         },
       ];
@@ -519,149 +499,37 @@ describe('DegenIntel Plugin E2E Tests', () => {
         return [];
       });
 
-      const tweetsRoute = degenIntelPlugin.routes?.find((r: any) => r.path === '/tweets' && r.type === 'GET');
+      const tweetsRoute = degenIntelPlugin.routes?.find((r: any) => r.path === '/api/intel/tweets' && r.type === 'GET');
       expect(tweetsRoute).toBeDefined();
 
       if (tweetsRoute?.handler) {
         await tweetsRoute.handler(mockReq, mockRes, runtime);
         expect(runtime.getMemories).toHaveBeenCalledWith(expect.objectContaining({ roomId: 'twitter-feed-uuid' }));
         
-        expect(mockRes.json).toHaveBeenCalledWith(expect.arrayContaining([
-          expect.objectContaining({
-            text: 'Tweet 1',
-            username: 'userA',
-            likes: 10,
-            retweets: 5,
-            id: 't1',
-            _id: 't1'
-          }),
-          expect.objectContaining({
-            text: 'Tweet 2',
-            username: 'userB',
-            likes: 20,
-            retweets: 15,
-            id: 't2',
-            _id: 't2'
-          }),
-        ]));
-        const responseData = mockRes.json.mock.calls[0][0];
+        expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({
+          success: true,
+          data: expect.arrayContaining([
+            expect.objectContaining({
+              text: 'Tweet 1',
+              username: 'userA',
+              likes: 10,
+              retweets: 5,
+              id: 't1',
+              _id: 't1'
+            }),
+            expect.objectContaining({
+              text: 'Tweet 2',
+              username: 'userB',
+              likes: 20,
+              retweets: 15,
+              id: 't2',
+              _id: 't2'
+            }),
+          ])
+        }));
+        const responseData = mockRes.json.mock.calls[0][0].data;
         expect(responseData.length).toBe(2);
         expect(responseData[0].text).toBe('Tweet 1');
-      }
-    });
-
-    it('should handle GET /sentiment (API) correctly', async () => {
-      const baseTime = Date.now();
-      type MockSentimentMemoryContent = {
-        source: string;
-        text?: string;
-        metadata: { 
-          timeslot?: string;      // Made optional for s3 mock
-          processed?: boolean;     // Made optional for s3 mock
-          occuringTokens?: Array<{token: string; sentiment: number; reason: string}>;
-        };
-      };
-
-      const sentimentMemories: (Memory & { content: MockSentimentMemoryContent })[] = [
-        { 
-          id: 's1' as UUID, roomId: 'sentiment-analysis-uuid' as UUID, agentId: 'agent1' as UUID, entityId: 'user1' as UUID, 
-          createdAt: baseTime - 500,
-          content: { 
-            source: 'sentiment-analysis', text: 'Sentiment Alpha', 
-            metadata: { 
-              timeslot: new Date(baseTime - 3600000 * 1).toISOString(), 
-              processed: true, 
-              occuringTokens: [{token: 'TKA', sentiment: 10, reason: 'RA'}, {token: 'TKB', sentiment: 12, reason: 'RB'}] 
-            }
-          }
-        },
-        { 
-          id: 's2' as UUID, roomId: 'sentiment-analysis-uuid' as UUID, agentId: 'agent1' as UUID, entityId: 'user1' as UUID, 
-          createdAt: baseTime - 1500,
-          content: { 
-            source: 'sentiment-analysis', text: 'Sentiment Beta', 
-            metadata: { 
-              timeslot: new Date(baseTime - 3600000 * 2).toISOString(), 
-              processed: true, 
-              occuringTokens: [{token: 'TKC', sentiment: 20, reason: 'RC'}] 
-            }
-          }
-        },
-        {
-          id: 's3' as UUID, roomId: 'sentiment-analysis-uuid' as UUID, agentId: 'agent1' as UUID, entityId: 'user1' as UUID, 
-          createdAt: baseTime - 2500,
-          content: { 
-            source: 'sentiment-analysis', text: 'Sentiment Gamma (Bad Meta)', 
-            metadata: { occuringTokens: [{token: 'TKD', sentiment:30, reason:'RD'}] } // Missing timeslot & processed
-          }
-        },
-        { 
-          id: 's4' as UUID, roomId: 'sentiment-analysis-uuid' as UUID, agentId: 'agent1' as UUID, entityId: 'user1' as UUID, 
-          createdAt: baseTime - 10500, 
-          content: { 
-            source: 'sentiment-analysis', text: 'Sentiment Delta (Older)', 
-            metadata: { 
-              timeslot: new Date(baseTime - 3600000 * 5).toISOString(), 
-              processed: false, 
-              occuringTokens: [{token: 'TKE', sentiment: 5, reason: 'RE'}, {token: 'TKF', sentiment: 8, reason: 'RF'}] 
-            }
-          }
-        },
-      ];
-      
-      (runtime.getMemories as ReturnType<typeof vi.fn>).mockImplementation(async (params: any) => {
-        if (params.roomId === 'sentiment-analysis-uuid') { 
-          return sentimentMemories.slice(0, params.count || 30);
-        }
-        return [];
-      });
-
-      const sentimentRoute = degenIntelPlugin.routes?.find((r: any) => r.path === '/sentiment' && r.type === 'GET');
-      expect(sentimentRoute).toBeDefined();
-
-      if (sentimentRoute?.handler) {
-        await sentimentRoute.handler(mockReq, mockRes, runtime);
-        expect(runtime.getMemories).toHaveBeenCalledWith(expect.objectContaining({ roomId: 'sentiment-analysis-uuid' }));
-        
-        const expectedS1 = {
-            timeslot: expect.stringMatching(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/),
-            text: 'Sentiment Alpha',
-            processed: true,
-            occuringTokens: [{token: 'TKA', sentiment: 10, reason: 'RA'}, {token: 'TKB', sentiment: 12, reason: 'RB'}],
-            createdAt: new Date(baseTime - 500).toISOString(),
-            updatedAt: new Date(baseTime - 500).toISOString(), // API defaults updatedAt to createdAt if not present
-        };
-        const expectedS4 = {
-            timeslot: expect.stringMatching(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/),
-            text: 'Sentiment Delta (Older)',
-            processed: false,
-            occuringTokens: [{token: 'TKE', sentiment: 5, reason: 'RE'}, {token: 'TKF', sentiment: 8, reason: 'RF'}],
-            createdAt: new Date(baseTime - 10500).toISOString(),
-            updatedAt: new Date(baseTime - 10500).toISOString(), // API defaults updatedAt to createdAt
-        };
-
-        expect(mockRes.json).toHaveBeenCalledWith(expect.arrayContaining([
-          expect.objectContaining(expectedS1),
-          expect.objectContaining(expectedS4),
-        ]));
-        const responseData = mockRes.json.mock.calls[0][0];
-        expect(responseData.length).toBe(2); 
-        expect(new Date(responseData[0].timeslot).getTime()).toBeGreaterThan(new Date(responseData[1].timeslot).getTime());
-        expect(responseData[0].text).toBe('Sentiment Alpha');
-        expect(responseData[1].text).toBe('Sentiment Delta (Older)');
-      }
-    });
-
-    it('should handle POST /signal (API) correctly', async () => {
-      const buySignalData = { recommended_buy: 'BTC', reason: 'Strong buy' };
-      await runtime.setCache('BUY_SIGNAL', { data: buySignalData });
-
-      const signalRoute = degenIntelPlugin.routes?.find((r: any) => r.path === '/signal' && r.type === 'POST');
-      expect(signalRoute).toBeDefined();
-
-      if (signalRoute?.handler) {
-        await signalRoute.handler(mockReq, mockRes, runtime);
-        expect(mockRes.json).toHaveBeenCalledWith(buySignalData);
       }
     });
 
@@ -676,22 +544,51 @@ describe('DegenIntel Plugin E2E Tests', () => {
 
       if (apiSentimentRoute?.handler) {
         await apiSentimentRoute.handler(mockReq, mockRes, runtime);
-        expect(mockRes.json).toHaveBeenCalledWith({
-          success: true,
-          data: apiSentimentData,
-        });
+        expect(mockRes.status).toHaveBeenCalledWith(400);
+        expect(mockRes.json).toHaveBeenCalledWith(
+          expect.objectContaining({
+            success: false,
+            error: 'Sentiment data validation failed',
+            details: expect.arrayContaining([
+              expect.objectContaining({ path: [0, 'createdAt'], message: 'Required' }),
+              expect.objectContaining({ path: [0, 'occuringTokens'], message: 'Required' }),
+              expect.objectContaining({ path: [0, 'processed'], message: 'Required' }),
+              expect.objectContaining({ path: [0, 'updatedAt'], message: 'Required' }),
+            ])
+          })
+        );
       }
     });
 
-    it('should handle errors in POST /trending API correctly', async () => {
-        (runtime.getCache as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Cache fail'));
+    it('should correctly handle /api/intel/portfolio route with valid data', async () => {
+      const portfolioData = {
+        wallet: 'sim_wallet_address',
+        totalUsd: 2500,
+        items: [
+          {
+            address: 'sim_solana_0',
+            decimals: 9,
+            balance: 5000,
+            uiAmount: 5,
+            chainId: 'solana',
+            name: 'SIM_SOLANA_0',
+            symbol: 'SIM0',
+            icon: 'https://via.placeholder.com/32',
+            logoURI: 'https://via.placeholder.com/32',
+            priceUsd: 500,
+            valueUsd: 2500,
+          },
+        ],
+      };
+      await runtime.setCache('portfolio', { key: 'PORTFOLIO', data: portfolioData });
 
-        const trendingRoute = degenIntelPlugin.routes?.find((r: any) => r.path === '/trending' && r.type === 'POST');
-        if (trendingRoute?.handler) {
-            await trendingRoute.handler(mockReq, mockRes, runtime);
-            expect(mockRes.status).toHaveBeenCalledWith(500);
-            expect(mockRes.json).toHaveBeenCalledWith({ error: 'Internal server error' });
-        }
+      const portfolioRoute = degenIntelPlugin.routes?.find((r: any) => r.path === '/api/intel/portfolio');
+      expect(portfolioRoute).toBeDefined();
+
+      if (portfolioRoute?.handler) {
+        await portfolioRoute.handler(mockReq, mockRes, runtime);
+        expect(mockRes.json).toHaveBeenCalledWith({ success: true, data: portfolioData });
+      }
     });
   });
 

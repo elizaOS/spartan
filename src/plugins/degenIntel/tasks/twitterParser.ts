@@ -157,6 +157,10 @@ export default class TwitterParser {
         if (!exists) {
           timeSlots.push({
             timeslot,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            text: '',
+            occuringTokens: [],
             processed: false,
           });
         }
@@ -256,6 +260,7 @@ export default class TwitterParser {
             text: json.text,
             occuringTokens: json.occuringTokens,
             processed: true,
+            updatedAt: new Date().toISOString(),
           }
         : s
     );

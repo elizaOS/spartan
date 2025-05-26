@@ -116,14 +116,16 @@ export type Job = {
  * @interface
  * @property {string} timeslot - The timeslot of the sentiment.
  * @property {boolean} processed - Indicates if the sentiment has been processed.
- * @property {string} [text] - The text associated with the sentiment.
- * @property {Array<{ token: string; sentiment: number; reason: string; }>} [occuringTokens] - The array of tokens with their sentiment and reason.
+ * @property {string} text - The text associated with the sentiment.
+ * @property {Array<{ token: string; sentiment: number; reason: string; }>} occuringTokens - The array of tokens with their sentiment and reason.
  */
 export interface Sentiment {
   timeslot: string;
   processed: boolean;
-  text?: string;
-  occuringTokens?: Array<{
+  createdAt?: string;
+  updatedAt?: string;
+  text: string;
+  occuringTokens: Array<{
     token: string;
     sentiment: number;
     reason: string;
