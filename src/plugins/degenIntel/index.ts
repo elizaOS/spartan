@@ -29,31 +29,47 @@ export const degenIntelPlugin: Plugin = {
     },
   ],
   init: async (_, runtime: IAgentRuntime) => {
+    // Check if plugin should run in simulation mode (no real keys/services)
+    const simFlag = String(
+      runtime.getSetting('DEGEN_INTEL_SIMULATE_DATA') ||
+        (process.env as Record<string, any>).DEGEN_INTEL_SIMULATE_DATA ||
+        ''
+    ).toLowerCase();
+
+    const simulationEnabled = ['true', '1', 'yes'].includes(simFlag);
+
     await registerTasks(runtime);
 
     const plugins = runtime.plugins.map((p) => p.name);
     let notUsed = true;
 
-    // check for cmc key, if have then register provider
-    if (runtime.getSetting('COINMARKETCAP_API_KEY')) {
+    // Register CMC provider when API key exists OR simulation is enabled
+    if (runtime.getSetting('COINMARKETCAP_API_KEY') || simulationEnabled) {
       runtime.registerProvider(cmcMarketProvider);
       notUsed = false;
     }
 
-    // check for birdeeye key, if have then register provider
-    if (runtime.getSetting('BIRDEYE_API_KEY')) {
+    // Register Birdeye providers when API key exists OR simulation is enabled
+    if (runtime.getSetting('BIRDEYE_API_KEY') || simulationEnabled) {
       runtime.registerProvider(birdeyeTrendingProvider);
       runtime.registerProvider(birdeyeTradePortfolioProvider);
       notUsed = false;
     }
 
-    // twitter for sentiment
-    if (plugins.indexOf('twitter') !== -1) {
+    // Twitter sentiment provider – rely on actual twitter plugin OR simulation data
+    if (plugins.indexOf('twitter') !== -1 || simulationEnabled) {
       runtime.registerProvider(sentimentProvider);
       notUsed = false;
     }
 
-    if (notUsed) {
+    // Emit helpful logs if we are in simulation mode
+    if (simulationEnabled) {
+      logger.warn(
+        'degen-intel plugin running in SIMULATION mode – mock data will be generated because required keys/services are missing.'
+      );
+    }
+
+    if (notUsed && !simulationEnabled) {
       logger.warn(
         'degen-intel plugin is included but not providing any value (COINMARKETCAP_API_KEY/BIRDEYE_API_KEY or twitter are suggested)'
       );

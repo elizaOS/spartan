@@ -44,7 +44,7 @@ export const routes: Route[] = [
     type: 'GET',
     path: '/degen-intel',
     public: true,
-    name: 'Degen Intel',
+    name: 'Intel',
     handler: async (_req: any, res: any) => {
       const route = _req.url;
       res.sendFile(path.resolve(frontendDist, 'index.html'));
@@ -55,6 +55,7 @@ export const routes: Route[] = [
     path: '/degen-intel/assets/*',
     handler: async (req: any, res: any) => {
       const assetPath = `/dist/assets/${req.path.split('/assets/')[1]}`;
+      console.log('assetPath', assetPath);
       const cwd = process.cwd();
       const filePath = cwd + path.resolve(cwd, assetPath);
       if (fs.existsSync(path.resolve(filePath))) {
