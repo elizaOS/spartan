@@ -80,13 +80,14 @@ export default class Twitter {
       'basedkarbon',
       'RektProof',
       'trader1sz',
-      'notsofast ',
+      'notsofast',
       'cobie',
     ];
     //const username = this.runtime.getSetting('TWITTER_USERNAME');
 
     // Ensure feed room exists
     await this.runtime.ensureRoomExists({
+      worldId: this.feedRoomId, // is this right?
       id: this.feedRoomId,
       name: 'Twitter Feed',
       source: 'twitter',
@@ -94,11 +95,11 @@ export default class Twitter {
     });
 
     // Get the Twitter service from runtime
-    let manager = this.runtime.getService(ServiceType.TWITTER) as TwitterService;
+    let manager = this.runtime.getService("twitter") as TwitterService;
     while (!manager) {
       //console.log('Waiting for Twitter service...');
       await new Promise((resolve) => setTimeout(resolve, 1000));
-      manager = this.runtime.getService(ServiceType.TWITTER) as TwitterService;
+      manager = this.runtime.getService("twitter") as TwitterService;
     }
     console.log('degen-intel: Twitter manager acquired, starting sync');
 

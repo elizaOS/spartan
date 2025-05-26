@@ -6,6 +6,7 @@ import { communityInvestorPlugin } from './plugins/communityInvestor';
 import { degenIntelPlugin } from './plugins/degenIntel';
 import { degenTraderPlugin } from './plugins/degenTrader';
 import { heliusPlugin } from './plugins/helius';
+import { appPlugin } from './plugins/plugin-app';
 import { initCharacter } from './init';
 
 
@@ -40,6 +41,9 @@ export const spartanCharacter: Character = {
     ...(process.env.GROQ_API_KEY ? ['@elizaos/plugin-groq'] : []),
     ...(process.env.ANTHROPIC_API_KEY ? ['@elizaos/plugin-anthropic'] : []),
     ...(process.env.OPENAI_API_KEY ? ['@elizaos/plugin-openai'] : []),
+    '@elizaos/plugin-twitter',
+    '@elizaos/plugin-discord',
+    '@elizaos/plugin-telegram',
     '@elizaos/plugin-bootstrap',
     '@elizaos/plugin-solana',
   ],
@@ -534,10 +538,11 @@ const config: OnboardingConfig = {
 
 export const spartan: ProjectAgent = {
   plugins: [
-    // heliusPlugin,
-    // degenTraderPlugin,
-    // degenIntelPlugin,
+    heliusPlugin,
+    //degenTraderPlugin, // can't load buffer issue
+    degenIntelPlugin,
     // communityInvestorPlugin,
+    appPlugin,
   ],
   character: spartanCharacter,
   init: async (runtime: IAgentRuntime) => await initCharacter({ runtime, config }),
