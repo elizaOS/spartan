@@ -35,6 +35,7 @@
     "@elizaos/plugin-bootstrap": "^1.0.0-beta.75",
     "@elizaos/plugin-discord": "^1.0.0-beta.53",
     "@elizaos/plugin-groq": "^1.0.0-beta.52",
+    "@elizaos/plugin-knowledge": "^1.0.0-beta.72",
     "@elizaos/plugin-openai": "^1.0.0-beta.71",
     "@elizaos/plugin-pdf": "^1.0.0-beta.53",
     "@elizaos/plugin-solana": "^1.0.0-beta.52",
@@ -64,6 +65,7 @@
     "moment": "^2.30.1",
     "multer": "1.4.5-lts.1",
     "node-cron": "^3.0.3",
+    "nodemailer": "^7.0.3",
     "react": "^18.3.1",
     "react-bubble-ui": "^1.1.2",
     "react-dom": "^18.3.1",
@@ -94,5 +96,16 @@
     "typescript-eslint": "^8.18.2",
     "vite": "^6.0.5"
   },
-  "gitHead": "646c632924826e2b75c2304a75ee56959fe4a460"
+  "gitHead": "646c632924826e2b75c2304a75ee56959fe4a460",
+  "trustedDependencies": [
+    "@elizaos/plugin-pdf",
+    "@elizaos/plugin-video-understanding",
+    "@swc/core",
+    "es5-ext",
+    "node-llama-cpp",
+    "node-opus",
+    "onnxruntime-node",
+    "protobufjs",
+    "youtube-dl-exec"
+  ]
 }
