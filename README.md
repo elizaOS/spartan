@@ -152,18 +152,18 @@ ANTHROPIC_API_KEY=your_anthropic_api_key
 OPENAI_API_KEY=your_openai_api_key
 
 # Discord Bot Credentials (for Investment Manager / Spartan)
-INVESTMENT_MANAGER_DISCORD_APPLICATION_ID=your_discord_app_id
-INVESTMENT_MANAGER_DISCORD_API_TOKEN=your_discord_bot_token
+DISCORD_APPLICATION_ID=your_discord_app_id
+DISCORD_API_TOKEN=your_discord_bot_token
 
 # Telegram Bot Credentials (for Investment Manager / Spartan)
-INVESTMENT_MANAGER_TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 TELEGRAM_CHANNEL_ID=your_telegram_channel_id_for_recommendations
 
 # Twitter Credentials (for Investment Manager / Spartan)
-INVESTMENT_MANAGER_TWITTER_EMAIL=your_twitter_email
-INVESTMENT_MANAGER_TWITTER_USERNAME=your_twitter_username
-INVESTMENT_MANAGER_TWITTER_PASSWORD=your_twitter_password
-INVESTMENT_MANAGER_TWITTER_ENABLE_POST_GENERATION=true # or false
+TWITTER_EMAIL=your_twitter_email
+TWITTER_USERNAME=your_twitter_username
+TWITTER_PASSWORD=your_twitter_password
+TWITTER_ENABLE_POST_GENERATION=true # or false
 
 # DeFi Data Providers & Services
 JUPITER_API_KEY=your_jupiter_api_key       # For Jupiter swaps
