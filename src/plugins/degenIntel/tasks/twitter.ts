@@ -15,7 +15,7 @@ import {
 } from '@elizaos/core';
 
 interface TwitterService extends Service {
-  getClientKey(clientId: UUID, agentId: UUID): string;
+  getClient(clientId: UUID, agentId: UUID): any;
   clients: Map<string, any>;
 }
 
@@ -94,11 +94,11 @@ export default class Twitter {
     });
 
     // Get the Twitter service from runtime
-    let manager = this.runtime.getService(ServiceType.TWITTER) as TwitterService;
+    let manager = this.runtime.getService('twitter') as TwitterService;
     while (!manager) {
       //console.log('Waiting for Twitter service...');
       await new Promise((resolve) => setTimeout(resolve, 1000));
-      manager = this.runtime.getService(ServiceType.TWITTER) as TwitterService;
+      manager = this.runtime.getService('twitter') as TwitterService;
     }
     console.log('degen-intel: Twitter manager acquired, starting sync');
 
@@ -161,10 +161,14 @@ export default class Twitter {
         }
 
         logger.info(`Raw tweet sync [username: ${u}] synced ${syncCount} new tweets`);
-        await new Promise((resolve) => setTimeout(resolve, 10_000)); // 10s delay
+        if (process.env.NODE_ENV !== 'test') {
+          await new Promise((resolve) => setTimeout(resolve, 10_000)); // 10s delay
+        }
       } catch (error) {
         logger.error('Error syncing tweets:', error);
-        await new Promise((resolve) => setTimeout(resolve, 10_000)); // 10s delay
+        if (process.env.NODE_ENV !== 'test') {
+          await new Promise((resolve) => setTimeout(resolve, 10_000)); // 10s delay
+        }
       }
     }
     return true;

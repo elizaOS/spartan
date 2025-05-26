@@ -1,5 +1,5 @@
 import type { Action, IAgentRuntime, Memory, Provider, State } from '@elizaos/core';
-import { addHeader, composeActionExamples, formatActionNames, formatActions } from '@elizaos/core';
+import { addHeader, composeActionExamples, formatActionNames, formatActions, logger } from '@elizaos/core';
 import type { IToken } from '../types';
 
 /**
@@ -33,7 +33,7 @@ export const cmcMarketProvider: Provider = {
     //console.log('intel:provider - cmc tokens', sentimentData.length, 'records')
     if (!tokens.length) {
       logger.warn('No CMC token data found');
-      return false;
+      return null;
     }
 
     //console.log('CMC token data', tokens)
@@ -60,7 +60,7 @@ export const cmcMarketProvider: Provider = {
     let idx = 1;
     // maybe filter by active chains
     const reduceTokens = tokens.map((t) => {
-      const obj = {
+      const obj: any = {
         name: t.name,
         rank: t.rank,
         chain: t.chain,
@@ -107,6 +107,5 @@ export const cmcMarketProvider: Provider = {
       values,
       text,
     };
-    return false;
   },
 };

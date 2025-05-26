@@ -1,6 +1,7 @@
 import type { Action, IAgentRuntime, Memory, Provider, State } from '@elizaos/core';
 import { addHeader, composeActionExamples, formatActionNames, formatActions } from '@elizaos/core';
 import type { IToken } from '../types';
+import type { Portfolio, TransactionHistory } from '../tasks/birdeye';
 
 /**
  * Provider for Birdeye trending coins
@@ -33,7 +34,7 @@ export const birdeyeTradePortfolioProvider: Provider = {
     // Get all sentiments
     const chains = ['solana', 'base'];
 
-    const portfolioData = (await runtime.getCache<Portfolio[]>('portfolio')) || [];
+    const portfolioData = (await runtime.getCache<Portfolio>('portfolio')) || null;
     const portfolio = portfolioData?.data;
     /*
     wallet: "3nMBmufBUBVnk28sTp3NsrSJsdVGTyLZYmsqpMFaUT9J",
@@ -49,7 +50,7 @@ export const birdeyeTradePortfolioProvider: Provider = {
     /*
     if (!trades.length) {
       logger.warn('intel:provider - no birdeye trade data found');
-      return false;
+      return null;
     }
     */
 
@@ -98,6 +99,10 @@ export const birdeyeTradePortfolioProvider: Provider = {
 */
 
     //console.log('intel:provider - birdeye token data', tokens)
+
+    if (!portfolio) {
+      return null;
+    }
 
     let promptInjection =
       '\nYour trades for ' + portfolio.wallet + ' (value: $' + portfolio.totalUsd + 'usd):\n';
@@ -166,6 +171,5 @@ export const birdeyeTradePortfolioProvider: Provider = {
       values,
       text,
     };
-    return false;
   },
 };

@@ -2,7 +2,6 @@ import { type IAgentRuntime, ModelType, logger, parseJSONObjectFromText } from '
 import type { Sentiment } from '../schemas';
 import type { IToken } from '../types';
 
-const DEGEN_WALLET = 'BzsJQeZ7cvk3pTHmKeuvdhNDkDxcZ6uCXxW2rjwC7RTq';
 const _rolePrompt = 'You are a buy signal analyzer.';
 /**
  * Template for generating a crypto buy signal based on sentiment analysis and trending tokens.
@@ -63,17 +62,24 @@ interface IBuySignalOutput {
 }
 
 export default class BuySignal {
-  apiKey: string;
   runtime: IAgentRuntime;
+
   constructor(runtime: IAgentRuntime) {
     this.runtime = runtime;
   }
 
   async generateSignal(): Promise<boolean> {
     logger.info('buy-signal::generateSignal - Updating latest buy signal');
-    // Get all sentiments (TwitterParser fillTimeframe)
+
+    // Get Solana service
+    const solanaService = this.runtime.getService('solana') as any;
+    if (!solanaService) {
+      logger.error('Solana service not found');
+      return false;
+    }
+
+    // Get all sentiments
     const sentimentsData = (await this.runtime.getCache<Sentiment[]>('sentiments')) || [];
-    //console.log('sentimentsData', sentimentsData);
     let sentiments = '';
 
     let idx = 1;
@@ -83,7 +89,6 @@ export default class BuySignal {
       for (const token of sentiment.occuringTokens) {
         sentiments += `${token.token} - Sentiment: ${token.sentiment}\n${token.reason}\n`;
       }
-
       sentiments += '\n-------------------\n';
       idx++;
     }
@@ -103,28 +108,27 @@ export default class BuySignal {
       }
     }
 
-    const solanaBalance = await this.getBalance();
+    // Get balance using Solana service
+    const solanaBalance = await this.getBalance(solanaService);
+    if (solanaBalance === null) {
+      logger.error('Failed to get Solana balance');
+      return false;
+    }
 
     const finalPrompt = prompt
       .replace('{{trending_tokens}}', tokens)
       .replace('{{solana_balance}}', String(solanaBalance));
 
-    //console.log('rolePrompt', rolePrompt)
-    //console.log('context', finalPrompt)
-
     let responseContent: IBuySignalOutput | null = null;
-    // Retry if missing required fields
     let retries = 0;
     const maxRetries = 3;
-    // recommended_buy, recommend_buy_address, reason, buy_amount
+
     while (
       retries < maxRetries &&
       (!responseContent?.recommended_buy ||
         !responseContent?.reason ||
         !responseContent?.recommend_buy_address)
     ) {
-      // could use OBJECT_LARGE but this expects a string return type rn
-      // not sure where OBJECT_LARGE does it's parsing...
       const response = await this.runtime.useModel(ModelType.TEXT_LARGE, {
         prompt: finalPrompt,
         system: _rolePrompt,
@@ -133,13 +137,13 @@ export default class BuySignal {
         object: true,
       });
 
-      console.log('intel:buy-signal - response', response);
+      logger.debug('intel:buy-signal - response', response);
       responseContent = parseJSONObjectFromText(response) as IBuySignalOutput;
 
       retries++;
       if (
-        !responseContent?.recommended_buy &&
-        !responseContent?.reason &&
+        !responseContent?.recommended_buy ||
+        !responseContent?.reason ||
         !responseContent?.recommend_buy_address
       ) {
         logger.warn('*** Missing required fields, retrying... generateSignal ***');
@@ -147,31 +151,69 @@ export default class BuySignal {
     }
 
     if (!responseContent?.recommend_buy_address) {
-      console.warn('buy-signal::generateSignal - no buy recommendation');
+      logger.warn('buy-signal::generateSignal - no buy recommendation');
       return false;
     }
 
-    if (!responseContent?.recommend_buy_address?.match(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/)) {
+    // Validate Solana address
+    if (!this.validateSolanaAddress(responseContent.recommend_buy_address)) {
       logger.error('Invalid Solana token address', {
-        address: responseContent?.recommend_buy_address,
+        address: responseContent.recommend_buy_address,
       });
       return false;
     }
 
-    // Fetch the recommended buys current marketcap
+    // Fetch marketcap from Birdeye
+    responseContent.marketcap = await this.fetchMarketcap(responseContent.recommend_buy_address);
+
+    // Emit event for other plugins to consume
+    await this.runtime.emitEvent('DEGEN_INTEL_BUY_SIGNAL', responseContent);
+
+    // Cache the signal
+    await this.runtime.setCache<any>('buy_signals', {
+      key: 'BUY_SIGNAL',
+      data: responseContent,
+    });
+
+    return true;
+  }
+
+  private async getBalance(solanaService: any): Promise<number | null> {
+    try {
+      const connection = solanaService.getConnection();
+      const publicKey = solanaService.getPublicKey();
+
+      if (!publicKey) {
+        logger.warn('No public key available for balance check');
+        return null;
+      }
+
+      const balance = await connection.getBalance(publicKey);
+      return balance / 1_000_000_000; // Convert lamports to SOL
+    } catch (error) {
+      logger.error('Error getting balance:', error);
+      return null;
+    }
+  }
+
+  private validateSolanaAddress(address: string): boolean {
+    return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address);
+  }
+
+  private async fetchMarketcap(tokenAddress: string): Promise<number> {
     const apiKey = this.runtime.getSetting('BIRDEYE_API_KEY');
     if (!apiKey) {
       logger.error('BIRDEYE_API_KEY not found in runtime settings');
-      return false;
+      return 0;
     }
 
     const BIRDEYE_API = 'https://public-api.birdeye.so';
     const endpoint = `${BIRDEYE_API}/defi/token_overview`;
-    const url = `${endpoint}?address=${responseContent.recommend_buy_address}`;
+    const url = `${endpoint}?address=${tokenAddress}`;
 
     logger.debug('Making Birdeye API request', {
       url,
-      address: responseContent.recommend_buy_address,
+      address: tokenAddress,
     });
 
     const options = {
@@ -183,7 +225,6 @@ export default class BuySignal {
       },
     };
 
-    // Add more detailed error logging
     try {
       const res = await fetch(url, options);
       if (!res.ok) {
@@ -192,61 +233,25 @@ export default class BuySignal {
           status: res.status,
           statusText: res.statusText,
           error: errorText,
-          address: responseContent.recommend_buy_address,
+          address: tokenAddress,
         });
         throw new Error(`Birdeye marketcap request failed: ${res.status} ${res.statusText}`);
       }
 
       const resJson = await res.json();
-      // was realMc but it's not there
       const marketcap = resJson?.data?.marketCap;
 
       if (!marketcap) {
         logger.warn('buy-signal: No marketcap data returned from Birdeye', {
           response: resJson,
-          address: responseContent.recommend_buy_address,
+          address: tokenAddress,
         });
       }
 
-      responseContent.marketcap = Number(marketcap || 0);
+      return Number(marketcap || 0);
     } catch (error) {
       logger.error('Error fetching marketcap data:', error);
-      // Continue without marketcap data rather than failing completely
-      responseContent.marketcap = 0;
+      return 0;
     }
-
-    this.runtime.emitEvent('SPARTAN_TRADE_BUY_SIGNAL', responseContent);
-
-    await this.runtime.setCache<any>('buy_signals', {
-      key: 'BUY_SIGNAL',
-      data: responseContent,
-    });
-
-    return true;
-  }
-
-  async getBalance() {
-    const url = 'https://zondra-wil7oz-fast-mainnet.helius-rpc.com';
-    const headers = {
-      'Content-Type': 'application/json',
-    };
-
-    const data = {
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'getBalance',
-      params: [DEGEN_WALLET],
-    };
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: headers,
-      body: JSON.stringify(data),
-    });
-
-    const result = await response.json();
-
-    const lamportsBalance = result?.result?.value;
-
-    return lamportsBalance / 1000000000;
   }
 }

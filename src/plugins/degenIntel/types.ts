@@ -16,8 +16,8 @@ export type TDataProvider = 'birdeye' | 'coinmarketcap';
  * @property { TDataProvider } provider - The data provider of the token.
  * @property { TChain } chain - The blockchain the token belongs to.
  * @property { string } address - The address of the token.
- * @property { number } decimals - The number of decimal places for the token.
- * @property { number } liquidity - The liquidity of the token.
+ * @property { number | null } decimals - The number of decimal places for the token.
+ * @property { number | null } liquidity - The liquidity of the token.
  * @property { number } marketcap - The market cap of the token.
  * @property { string } logoURI - The URI for the token's logo.
  * @property { string } name - The name of the token.
@@ -32,8 +32,8 @@ export interface IToken {
   provider: TDataProvider;
   chain: TChain;
   address: string;
-  decimals: number;
-  liquidity: number;
+  decimals: number | null;
+  liquidity: number | null;
   marketcap: number;
   logoURI: string;
   name: string;

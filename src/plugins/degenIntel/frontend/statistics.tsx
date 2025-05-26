@@ -4,14 +4,22 @@ export default function Statistics() {
   const query = useQuery({
     queryKey: ['statistics'],
     queryFn: async () => {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/statistics`, {
-        method: 'POST',
+      const response = await fetch('/api/intel/summary', {
+        method: 'GET',
       });
-      const data = await response.json();
-      return data;
+      const result = await response.json();
+      return result.success ? result.data : null;
     },
     refetchInterval: 5_000,
   });
+
+  const summary = query?.data?.summary;
+
+  const formatPortfolioValue = (value: any) => {
+    if (!value) return '$0.00';
+    const numValue = typeof value === 'string' ? parseFloat(value.replace('$', '')) : Number(value);
+    return `$${numValue.toFixed(2)}`;
+  };
 
   return (
     <div className="py-4 w-full bg-muted">
@@ -20,13 +28,17 @@ export default function Statistics() {
           <div className="text-sm animate-pulse">Loading</div>
         ) : (
           <div className="flex items-center gap-4 text-sm">
-            <span>📚 Tweets {query?.data?.tweets}</span>
+            <span>📚 Tweets {summary?.totalTweets || 0}</span>
             <span className="text-muted">•</span>
-            <span>🌍 Sentiment {query?.data?.sentiment}</span>
+            <span>🌍 Sentiment {summary?.averageSentiment?.toFixed(1) || 'N/A'}</span>
             <span>•</span>
-            <span>💸 Tokens {query?.data?.tokens}</span>
+            <span>💸 Tokens {summary?.trendingTokensCount || 0}</span>
             <span>•</span>
-            <span>⛓️ Chains 3</span>
+            <span>💰 Portfolio {formatPortfolioValue(summary?.portfolioValue)}</span>
+            <span>•</span>
+            <span>📈 Buy? {summary?.hasActiveBuySignal ? '✅' : '❌'}</span>
+            <span>•</span>
+            <span>📉 Sell? {summary?.hasActiveSellSignal ? '✅' : '❌'}</span>
           </div>
         )}
       </div>

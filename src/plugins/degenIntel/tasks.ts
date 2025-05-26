@@ -5,6 +5,7 @@ import BuySignal from './tasks/buySignal';
 import SellSignal from './tasks/sellSignal';
 import Twitter from './tasks/twitter';
 import TwitterParser from './tasks/twitterParser';
+import CoinmarketCap from './tasks/coinmarketcap';
 import type { Sentiment } from './types';
 
 // let's not make it a dependency

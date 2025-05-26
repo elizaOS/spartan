@@ -1,5 +1,5 @@
-import type { Action, IAgentRuntime, Memory, Provider, State } from '@elizaos/core';
-import { addHeader, composeActionExamples, formatActionNames, formatActions } from '@elizaos/core';
+import type { IAgentRuntime, Memory, Provider, State } from '@elizaos/core';
+import { logger } from '@elizaos/core';
 import type { IToken } from '../types';
 
 /**
@@ -35,7 +35,7 @@ export const birdeyeTrendingProvider: Provider = {
     //console.log('intel:provider - birdeye data', tokens)
     if (!tokens.length) {
       logger.warn('intel:provider - no birdeye token data found');
-      return false;
+      return null;
     }
 
     //console.log('intel:provider - birdeye token data', tokens)
@@ -60,7 +60,7 @@ export const birdeyeTrendingProvider: Provider = {
     let idx = 1;
     // maybe filter by active chains
     const reduceTokens = tokens.map((t) => {
-      const obj = {
+      const obj: any = {
         name: t.name,
         rank: t.rank,
         chain: t.chain,
@@ -107,6 +107,5 @@ export const birdeyeTrendingProvider: Provider = {
       values,
       text,
     };
-    return false;
   },
 };

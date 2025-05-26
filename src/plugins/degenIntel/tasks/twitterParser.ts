@@ -103,11 +103,14 @@ Strictly return the following json:
 export default class TwitterParser {
   runtime: IAgentRuntime;
   roomId: UUID;
+  twitterFeedRoomId: UUID;
 
   constructor(runtime: IAgentRuntime) {
     this.runtime = runtime;
     // Create a consistent room ID for all sentiment analysis
     this.roomId = createUniqueUuid(runtime, 'twitter-sentiment-analysis');
+    // Use the same room ID as the Twitter task for retrieving tweets
+    this.twitterFeedRoomId = createUniqueUuid(runtime, 'twitter-feed');
   }
 
   async fillTimeframe() {
@@ -202,7 +205,7 @@ export default class TwitterParser {
     /** Retrieve tweets from message manager */
     const memories = await this.runtime.getMemories({
       tableName: 'messages',
-      roomId: this.roomId,
+      roomId: this.twitterFeedRoomId,
       start: fromDate.getTime(),
       end: timeslot.getTime(),
     });

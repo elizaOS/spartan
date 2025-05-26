@@ -1,5 +1,6 @@
 import type { Action, IAgentRuntime, Memory, Provider, State } from '@elizaos/core';
-import { addHeader, composeActionExamples, formatActionNames, formatActions } from '@elizaos/core';
+import { addHeader, composeActionExamples, formatActionNames, formatActions, logger } from '@elizaos/core';
+import type { Sentiment } from '../types';
 
 /**
  * Provider for Twitter Sentiment
@@ -30,7 +31,7 @@ export const sentimentProvider: Provider = {
     const sentimentData = (await runtime.getCache<Sentiment[]>('sentiments')) || [];
     if (!sentimentData.length) {
       logger.warn('No sentiment data found');
-      return false;
+      return null;
     }
 
     let sentiments = '\nCurrent cryptocurrency market data:';
