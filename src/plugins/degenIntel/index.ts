@@ -14,35 +14,28 @@ import { TradeChainService } from './services/srv_chain';
 import { TradeDataProviderService } from './services/srv_dataprovider';
 import { TradeStrategyService } from './services/srv_strategy';
 
-// Strategies
-import { llmStrategy } from './strategies/strategy_llm';
-import { copyStrategy } from './strategies/strategy_copy';
-
 // create a new plugin
 export const degenIntelPlugin: Plugin = {
-  name: 'degen-intel',
-  description: 'Degen Intel plugin',
+  name: 'spartan-intel',
+  description: 'Spartan Intel plugin',
   routes,
   providers: [],
   services: [TradeChainService, TradeDataProviderService, TradeStrategyService],
   tests: [
     {
-      name: 'test suite for degen-intel',
+      name: 'test suite for intel',
       tests: [
         {
-          name: 'test for degen-intel',
+          name: 'test for intel',
           fn: async (runtime: IAgentRuntime) => {
-            logger.info('test in degen-intel working');
+            logger.info('test in intel working');
           },
         },
       ],
     },
   ],
   init: async (_, runtime: IAgentRuntime) => {
-    console.log('degenIntel init');
-    // register strategies
-    llmStrategy(runtime); // is async
-    copyStrategy(runtime); // is async
+    console.log('intel init');
 
     await registerTasks(runtime);
 
