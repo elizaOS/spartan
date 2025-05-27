@@ -66,5 +66,6 @@ export const degenIntelPlugin: Plugin = {
         'degen-intel plugin is included but not providing any value (COINMARKETCAP_API_KEY/BIRDEYE_API_KEY or twitter are suggested)'
       );
     }
+    console.log('degenIntel done')
   },
 };

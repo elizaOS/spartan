@@ -1,5 +1,5 @@
 import { type IAgentRuntime, Service, logger, TEEMode } from '@elizaos/core';
-import { Connection, PublicKey, ComputeBudgetProgram, DeriveKeyProvider } from '@solana/web3.js';
+import { Connection, PublicKey, ComputeBudgetProgram } from '@solana/web3.js';
 import BigNumber from 'bignumber.js';
 import { SOLANA_SERVICE_NAME, SOLANA_WALLET_DATA_CACHE_KEY } from './constants';
 import { getWalletKey, KeypairResult } from './keypairUtils';
