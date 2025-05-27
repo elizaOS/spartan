@@ -27,7 +27,7 @@ describe('BirdeyeService Tests', () => {
                 if (key === 'BIRDEYE_API_KEY') {
                     return process.env.BIRDEYE_API_KEY;
                 }
-                return undefined;
+                return PROVIDER_CONFIG.BIRDEYE_API_KEY;
             }),
             getCache: vi.fn().mockResolvedValue(null),
             setCache: vi.fn().mockResolvedValue(undefined),
