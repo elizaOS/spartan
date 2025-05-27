@@ -11,3 +11,5 @@ cache/*
 models/*
 
 dist/*
+.eliza
+e.elizadb

@@ -3,7 +3,6 @@ import path from 'node:path';
 import type { Character, IAgentRuntime, OnboardingConfig, ProjectAgent } from '@elizaos/core';
 import dotenv from 'dotenv';
 import { initCharacter } from './init.js';
-import { communityInvestorPlugin } from './plugins/communityInvestor';
 
 const imagePath = path.resolve('./src/spartan/assets/portrait.jpg');
 
@@ -33,16 +32,18 @@ const character: Character = {
     ...(process.env.GROQ_API_KEY ? ['@elizaos/plugin-groq'] : []),
     ...(process.env.ANTHROPIC_API_KEY ? ['@elizaos/plugin-anthropic'] : []),
     ...(process.env.OPENAI_API_KEY ? ['@elizaos/plugin-openai'] : []),
-    ...(!process.env.OPENAI_API_KEY ? ['@elizaos/plugin-local-ai'] : []),
+    // ...(!process.env.OPENAI_API_KEY ? ['@elizaos/plugin-local-ai'] : []),
     // '@elizaos/plugin-discord',
     // '@elizaos/plugin-telegram',
     // '@elizaos/plugin-twitter',
     // '@elizaos/plugin-pdf',
     // '@elizaos/plugin-video-understanding',
-    '@elizaos/plugin-bootstrap',
-    // '@elizaos-plugins/plugin-degenTrader',
+    // '@elizaos/plugin-bootstrap',
+    // '@elizaos/plugin-auto-trader',
+    // '@elizaos/plugin-degen-intel',
+    '@elizaos/plugin-social-alpha',
+    '@elizaos/plugin-solana',
     // '@elizaos-plugins/plugin-jupiter',
-    // '@elizaos/plugin-solana',
   ],
   settings: {
     GROQ_PLUGIN_LARGE:
@@ -521,7 +522,7 @@ const config: OnboardingConfig = {
 };
 
 export const spartan: ProjectAgent = {
-  plugins: [communityInvestorPlugin],
+  plugins: [],
   character,
   init: async (runtime: IAgentRuntime) => await initCharacter({ runtime, config }),
 };

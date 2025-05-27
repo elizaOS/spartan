@@ -46,7 +46,7 @@ src
 │   └── logos
 │       └── ... (various logos)
 └── plugins                     # Core feature modules
-    ├── communityInvestor       # Manages community-based investment strategies
+    ├── socialAlpha       # Manages community-based investment strategies
     │   ├── clients.ts
     │   ├── config.ts
     │   ├── constants.ts

@@ -1,6 +1,6 @@
 {
   "name": "@elizaos/spartan",
-  "version": "1.0.0-beta",
+  "version": "1.0.0-beta.75",
   "main": "dist/index.js",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -10,10 +10,10 @@
   },
   "scripts": {
     "start": "elizaos dev",
-    "build": "vite build && tsup",
+    "build": "tsup",
     "lint": "prettier --write ./src",
     "dev": "elizaos dev",
-    "test": "elizaos test --port 3001",
+    "test": "elizaos test",
     "clean": "rm -rf dist .turbo node_modules .turbo-tsconfig.json tsconfig.tsbuildinfo",
     "format": "prettier --write ./src",
     "format:check": "prettier --check ./src"
@@ -21,26 +21,32 @@
   "nodemonConfig": {
     "watch": [
       "src",
-      "../core/dist"
+      "plugins/*"
     ],
     "ext": "ts,json",
     "exec": "node --enable-source-maps --loader ts-node/esm src/index.ts"
   },
+  "workspaces": [
+    "plugins/*"
+  ],
   "dependencies": {
     "@coral-xyz/anchor": "^0.31.1",
-    "@elizaos/cli": "^1.0.0-beta.75",
-    "@elizaos/core": "^1.0.0-beta.75",
+    "@elizaos/cli": "^1.0.0-beta.76",
+    "@elizaos/core": "^1.0.0-beta.76",
     "@elizaos/plugin-anthropic": "^1.0.0-beta.52",
     "@elizaos/plugin-bootstrap": "workspace:*",
     "@elizaos/plugin-discord": "^1.0.0-beta.55",
     "@elizaos/plugin-groq": "^1.0.0-beta.52",
+    "@elizaos/plugin-degen-intel": "workspace:*",
     "@elizaos/plugin-local-ai": "^1.0.0-beta.71",
     "@elizaos/plugin-openai": "^1.0.0-beta.72",
     "@elizaos/plugin-pdf": "^1.0.0-beta.55",
-    "@elizaos/plugin-solana": "^1.0.0-beta.52",
-    "@elizaos/plugin-sql": "^1.0.0-beta.75",
+    "@elizaos/plugin-social-alpha": "workspace:*",
+    "@elizaos/plugin-solana": "workspace:*",
+    "@elizaos/plugin-sql": "^1.0.0-beta.76",
     "@elizaos/plugin-tee": "^1.0.0-beta.75",
     "@elizaos/plugin-telegram": "^1.0.0-beta.53",
+    "@elizaos/plugin-auto-trader": "workspace:*",
     "@elizaos/plugin-twitter": "^1.0.0-beta.55",
     "@elizaos/plugin-video-understanding": "^1.0.0-beta.40",
     "@radix-ui/react-slot": "^1.1.1",
@@ -65,8 +71,6 @@
     "readline": "1.3.0",
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
-    "ts-node": "^10.9.2",
-    "typescript": "5.8.2",
     "ws": "8.18.0",
     "zod": "3.24.2"
   },
@@ -76,7 +80,6 @@
     "@types/node": "^22.10.7",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
-    "@vitejs/plugin-react-swc": "^3.5.0",
     "autoprefixer": "^10.4.20",
     "eslint": "^9.17.0",
     "eslint-plugin-react-hooks": "^5.0.0",
@@ -87,9 +90,8 @@
     "tailwindcss": "^3.4.17",
     "ts-node": "10.9.2",
     "tsup": "8.4.0",
-    "typescript": "~5.6.2",
-    "typescript-eslint": "^8.18.2",
-    "vite": "^6.0.5"
+    "typescript": "5.8.3",
+    "typescript-eslint": "^8.18.2"
   },
   "gitHead": "646c632924826e2b75c2304a75ee56959fe4a460"
 }
