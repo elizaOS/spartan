@@ -117,7 +117,7 @@ describe('Jupiter Plugin Tests', () => {
 
   beforeEach(() => {
     console.log('\n[Jupiter Plugin Tests] Running beforeEach to mock fetch...');
-    originalFetch = global.fetch; 
+    originalFetch = global.fetch;
 
     // @ts-ignore
     global.fetch = vi.fn().mockImplementation(async (url: string | URL | Request, options?: RequestInit) => {
@@ -161,8 +161,8 @@ describe('Jupiter Plugin Tests', () => {
 
   afterEach(() => {
     console.log('[Jupiter Plugin Tests] Running afterEach to restore fetch...');
-    global.fetch = originalFetch; 
-    vi.restoreAllMocks(); 
+    global.fetch = originalFetch;
+    vi.restoreAllMocks();
     console.log('[Jupiter Plugin Tests] afterEach complete.');
   });
 
@@ -308,11 +308,11 @@ describe('Jupiter Plugin Tests', () => {
         inputMint: SOL_MINT,
         outputMint: USDC_MINT,
       });
-      // console.log('[Jupiter Test] getTokenPair result:', JSON.stringify(pairInfo, null, 2)); // For detailed logging if needed
+      console.log('[Jupiter Test] getTokenPair result:', JSON.stringify(pairInfo, null, 2)); // For detailed logging if needed
       expect(pairInfo).toBeDefined();
       expect(pairInfo).toHaveProperty('data'); // Expect the main data object
 
-      const tokenPairData = JSON.parse(JSON.stringify(pairInfo)); // Correctly assign the nested 'data' object
+      const tokenPairData = pairInfo.data; // Access the nested 'data' object directly
 
       // Check for the input token data using its mint address as the key
       expect(tokenPairData).toHaveProperty(SOL_MINT);
@@ -361,7 +361,7 @@ describe('Jupiter Plugin Tests', () => {
       });
       console.log('[Jupiter Test] getHistoricalPrices result:', pricesResponse);
       expect(pricesResponse).toHaveProperty('data'); // Expect the main data object
-      const prices = pricesResponse; // The actual array of prices
+      const prices = pricesResponse.data; // The actual array of prices is in pricesResponse.data
 
       expect(Array.isArray(prices)).toBe(true);
       expect(prices.length).toBeGreaterThan(0);
@@ -450,9 +450,6 @@ describe('Jupiter Plugin Tests', () => {
 
     try {
       const promise = jupiterService.confirmTransaction(mockConnection, signature);
-      await vi.advanceTimersByTime(jupiterService['CONFIRMATION_CONFIG'].INITIAL_TIMEOUT);
-      await vi.advanceTimersByTime(jupiterService['CONFIRMATION_CONFIG'].getDelayForAttempt(1));
-
       const result = await promise;
       expect(result).toBe(true);
       expect(mockConnection.getSignatureStatus).toHaveBeenCalledTimes(2);
@@ -473,22 +470,19 @@ describe('Jupiter Plugin Tests', () => {
     if (!jupiterService) return;
 
     const mockConnection = {
-      getSignatureStatus: vi.fn().mockResolvedValue({ value: { confirmationStatus: 'processed' } }),
+      // Consistently throw an error when trying to get signature status
+      getSignatureStatus: vi.fn().mockRejectedValue(new Error("Simulated RPC error: transaction status check failed")),
     } as unknown as Connection;
     const signature = 'testSignatureMaxAttempts';
 
-    const maxAttempts = jupiterService['CONFIRMATION_CONFIG'].MAX_ATTEMPTS;
-
     try {
       const promise = jupiterService.confirmTransaction(mockConnection, signature);
-      for (let i = 0; i < maxAttempts; i++) {
-        await vi.advanceTimersByTime(jupiterService['CONFIRMATION_CONFIG'].getDelayForAttempt(i) + 10); // Advance time for each attempt
-      }
       await expect(promise).rejects.toThrow('Could not confirm transaction status');
-      expect(mockConnection.getSignatureStatus).toHaveBeenCalledTimes(maxAttempts);
+      // We expect getSignatureStatus to have been called multiple times due to retry logic
+      expect(mockConnection.getSignatureStatus).toHaveBeenCalledTimes(jupiterService['CONFIRMATION_CONFIG'].MAX_ATTEMPTS);
       console.log('[Jupiter Test Result] PASSED: should fail to confirm a transaction after max attempts');
     } catch (e: any) {
-      // This catch is for unexpected errors during test setup, not the expected rejection.
+      // This catch is for unexpected errors during test setup or if the rejection is not as expected.
       console.error('[Jupiter Test Result] FAILED UNEXPECTEDLY: should fail to confirm a transaction after max attempts with error:', e);
       throw e;
     }

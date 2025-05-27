@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
+import { describe, expect, it, beforeEach, afterEach, vi, type Mocked } from 'vitest';
 import type { IAgentRuntime, Memory, State, Action, Provider, TaskWorker } from '@elizaos/core';
 import axios from 'axios';
 import { coinmarketcapPlugin } from '../src/index';
@@ -8,7 +8,7 @@ import { trendingProvider } from '../src/providers/trending';
 import type { IToken } from '../src/types';
 
 vi.mock('axios');
-const mockedAxios = axios as vi.Mocked<typeof axios>;
+const mockedAxios = axios as Mocked<typeof axios>;
 
 // Mock settings
 const MOCK_API_KEY = 'test-cmc-api-key';
@@ -48,7 +48,7 @@ describe('CoinMarketCap Plugin Tests', () => {
     });
 
     describe('GET_PRICE Action', () => {
-        const getPriceAction = coinmarketcapPlugin.actions.find(a => a.name === 'GET_PRICE') as Action;
+        const getPriceAction = coinmarketcapPlugin.actions!.find(a => a.name === 'GET_PRICE') as Action;
 
         it('should fetch price successfully', async () => {
             const mockPriceData: PriceData = { price: 50000, marketCap: 1e12, volume24h: 5e10, percentChange24h: 2.5 };
@@ -133,7 +133,7 @@ describe('CoinMarketCap Plugin Tests', () => {
                     { id: 825, name: 'Tether', symbol: 'USDT', slug: 'tether', cmc_rank: 3, platform: { slug: 'ethereum', token_address: '0xdac17f958d2ee523a2206206994597c13d831ec7'}, quote: { USD: { price: 1.00, volume_24h: 6e10, percent_change_24h: 0.01 } }, last_updated: new Date().toISOString() },
                 ],
             };
-            (fetch as vi.Mock).mockResolvedValueOnce({
+            vi.mocked(fetch).mockResolvedValueOnce({
                 ok: true,
                 json: () => Promise.resolve(mockListingData),
             });
@@ -144,7 +144,7 @@ describe('CoinMarketCap Plugin Tests', () => {
             expect(fetch).toHaveBeenCalledWith(
                 'https://pro-api.coinmarketcap.com/v1/cryptocurrency/listings/latest',
                 expect.objectContaining({
-                    headers: { 'X-CMC_PRO_API_KEY': COINMARKETCAP_API_KEY },
+                    headers: { 'X-CMC_PRO_API_KEY': MOCK_API_KEY },
                 })
             );
             expect(mockRuntime.setCache).toHaveBeenCalledWith(
@@ -158,7 +158,7 @@ describe('CoinMarketCap Plugin Tests', () => {
         });
 
         it('should handle API error during token sync', async () => {
-            (fetch as vi.Mock).mockResolvedValueOnce({
+            vi.mocked(fetch).mockResolvedValueOnce({
                 ok: false,
                 status: 500,
                 json: () => Promise.resolve({ error: 'Server Error' }),
