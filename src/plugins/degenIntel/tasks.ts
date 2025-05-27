@@ -6,7 +6,8 @@ import SellSignal from './tasks/sellSignal';
 import Twitter from './tasks/twitter';
 import TwitterParser from './tasks/twitterParser';
 import CoinmarketCap from './tasks/coinmarketcap';
-import type { Sentiment, IToken } from './types';
+import type { IToken, Sentiment as LocalSentiment } from './types';
+import type { Sentiment as ZodSentiment, Wallet as ZodWallet, BuySignal as ZodBuySignal, Token as ZodToken, Tweet as ZodTweet } from './schemas';
 
 // let's not make it a dependency
 //import type { ITradeService } from '../../degenTrader/types';
@@ -241,12 +242,12 @@ export const registerTasks = async (runtime: IAgentRuntime, worldId?: UUID) => {
   // has to be included after degenTrader
   const tradeService = runtime.getService('degen_trader') as unknown; //  as ITradeService
   //if (plugins.indexOf('degenTrader') !== -1) {
-  if (tradeService) {
+  if (tradeService || simulationEnabled) {
     runtime.registerTaskWorker({
       name: 'INTEL_GENERATE_BUY_SIGNAL',
       validate: async (runtime, _message, _state) => {
         // Check if we have some sentiment data before proceeding
-        const sentimentsData = (await runtime.getCache<Sentiment[]>('sentiments')) || [];
+        const sentimentsData = (await runtime.getCache<ZodSentiment[]>('sentiments')) || [];
         if (sentimentsData.length === 0) {
           return false;
         }
@@ -279,7 +280,7 @@ export const registerTasks = async (runtime: IAgentRuntime, worldId?: UUID) => {
       name: 'INTEL_GENERATE_SELL_SIGNAL',
       validate: async (runtime, _message, _state) => {
         // Check if we have some sentiment data before proceeding
-        const sentimentsData = (await runtime.getCache<Sentiment[]>('sentiments')) || [];
+        const sentimentsData = (await runtime.getCache<ZodSentiment[]>('sentiments')) || [];
         if (sentimentsData.length === 0) {
           return false;
         }
@@ -318,24 +319,23 @@ export const registerTasks = async (runtime: IAgentRuntime, worldId?: UUID) => {
   // -------------------------------------------------------------------
 
   const generateSimulatedData = async () => {
-    // Simulate trending tokens for three chains
     const genToken = (idx: number, chain: string): IToken => {
       return {
         provider: 'birdeye',
         rank: idx + 1,
-        chain,
+        chain: chain as IToken['chain'],
         address: `sim_${chain}_${idx}`,
         name: `SIM_${chain.toUpperCase()}_${idx}`,
         symbol: `SIM${idx}`,
-        price: Number((Math.random() * 10 + 0.1).toFixed(4)),
-        price24hChangePercent: Number((Math.random() * 20 - 10).toFixed(2)),
+        price: parseFloat((Math.random() * 10 + 0.1).toFixed(6)),
+        price24hChangePercent: parseFloat((Math.random() * 20 - 10).toFixed(2)),
         volume24hUSD: Math.floor(Math.random() * 1_000_000),
-        liquidity: Math.floor(Math.random() * 5_000_000),
+        liquidity: Math.floor(Math.random() * 5_000_000) || null,
         decimals: 9,
         logoURI: 'https://via.placeholder.com/32',
         marketcap: Math.floor(Math.random() * 100_000_000),
         last_updated: new Date(),
-      } as unknown as IToken;
+      } as IToken;
     };
 
     const tokens_solana: IToken[] = Array.from({ length: 10 }).map((_, i) => genToken(i, 'solana'));
@@ -346,8 +346,7 @@ export const registerTasks = async (runtime: IAgentRuntime, worldId?: UUID) => {
     await runtime.setCache('tokens_base', tokens_base);
     await runtime.setCache('tokens_ethereum', tokens_ethereum);
 
-    // Simulate tweets
-    const tweets = Array.from({ length: 15 }).map((_, i) => ({
+    const simulatedTweets = Array.from({ length: 15 }).map((_, i) => ({
       id: `sim_tweet_${i}`,
       _id: `sim_tweet_${i}`,
       text: `Simulation tweet #${i} about ${tokens_solana[i % tokens_solana.length].symbol}`,
@@ -356,26 +355,24 @@ export const registerTasks = async (runtime: IAgentRuntime, worldId?: UUID) => {
       likes: Math.floor(Math.random() * 200),
       retweets: Math.floor(Math.random() * 100),
       __v: 0,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: new Date(Date.now() - i * 60_000).toISOString(),
+      updatedAt: new Date(Date.now() - i * 60_000).toISOString(),
     }));
-    await runtime.setCache('tweets', tweets);
+    await runtime.setCache('tweets', simulatedTweets);
 
-    // Simulate sentiments
-    const sentiments: Sentiment[] = [
-      {
-        timeslot: new Date().toISOString(),
-        processed: true,
-        text: 'Simulated bullish sentiment on SOL',
-        occuringTokens: [
-          { token: tokens_solana[0].symbol, sentiment: 70, reason: 'Rising volume' },
-          { token: tokens_solana[1].symbol, sentiment: -10, reason: 'Profit taking' },
-        ],
-      } as unknown as Sentiment,
-    ];
-    await runtime.setCache('sentiments', sentiments);
+    const simulatedSentiments: ZodSentiment[] = tokens_solana.slice(0, 2).map((token, i): ZodSentiment => ({
+      timeslot: new Date(Date.now() - (i + 1) * 3600000).toISOString(),
+      processed: i % 2 === 0,
+      text: `Simulated sentiment for ${token.symbol}: market is ${i % 2 === 0 ? 'optimistic' : 'cautious'}.`,
+      occuringTokens: [
+        { token: token.symbol, sentiment: (i % 2 === 0 ? 1 : -1) * (Math.floor(Math.random() * 50) + 20), reason: 'Simulated market chatter' },
+        ...(tokens_solana[i+2] ? [{ token: tokens_solana[i+2].symbol, sentiment: (i % 2 === 0 ? -1: 1) * (Math.floor(Math.random()*30)+10), reason: 'Secondary effect'}] : []),
+      ],
+      createdAt: new Date(Date.now() - (i + 2) * 3600000).toISOString(),
+      updatedAt: new Date(Date.now() - (i + 1) * 3600000).toISOString(),
+    }));
+    await runtime.setCache('sentiments', simulatedSentiments);
 
-    // Simulate signals
     await runtime.setCache('buy_signals', {
       recommended_buy: tokens_solana[0].symbol,
       recommend_buy_address: tokens_solana[0].address,
@@ -392,37 +389,41 @@ export const registerTasks = async (runtime: IAgentRuntime, worldId?: UUID) => {
       sell_amount: '3',
     });
 
-    // Simulate portfolio data
+    const simulatedPortfolioItems = tokens_solana.slice(0, Math.min(tokens_solana.length, 5)).map((token, index) => {
+      const uiAmount = (index + 1) * (Math.random() * 5 + 1);
+      const balance = uiAmount * Math.pow(10, token.decimals || 9);
+      const priceUsd = token.price;
+      const valueUsd = parseFloat((uiAmount * priceUsd).toFixed(2));
+      return {
+        address: token.address,
+        decimals: token.decimals || 9,
+        balance: balance,
+        uiAmount: parseFloat(uiAmount.toFixed(4)),
+        chainId: token.chain as string,
+        name: token.name || `Simulated Token ${index}`,
+        symbol: token.symbol || `SIM${index}`,
+        icon: token.logoURI || `https://via.placeholder.com/32/${Math.floor(Math.random()*16777215).toString(16)}/FFFFFF/?text=${token.symbol ? token.symbol[0] : 'T'}`,
+        logoURI: token.logoURI || `https://via.placeholder.com/64/${Math.floor(Math.random()*16777215).toString(16)}/FFFFFF/?text=${token.symbol || 'TK'}`,
+        priceUsd: priceUsd,
+        valueUsd: valueUsd,
+      };
+    });
+    const calculatedTotalUsd = simulatedPortfolioItems.reduce((sum, item) => sum + item.valueUsd, 0);
+    const simulatedPortfolioData = {
+      wallet: 'sim_wallet_address',
+      items: simulatedPortfolioItems,
+      totalUsd: parseFloat(calculatedTotalUsd.toFixed(2)),
+    };
     await runtime.setCache('portfolio', {
       key: 'PORTFOLIO',
-      data: {
-        wallet: 'sim_wallet_address',
-        totalUsd: 2500,
-        items: [
-          {
-            address: tokens_solana[0].address,
-            decimals: 9,
-            balance: 5000,
-            uiAmount: 5,
-            chainId: 'solana',
-            name: tokens_solana[0].name,
-            symbol: tokens_solana[0].symbol,
-            icon: tokens_solana[0].logoURI,
-            logoURI: tokens_solana[0].logoURI,
-            priceUsd: tokens_solana[0].price,
-            valueUsd: 2500,
-          },
-        ],
-      },
+      data: simulatedPortfolioData,
     });
 
-    // Simulate market overview (reuse solana tokens)
-    const cmcTokens = tokens_solana.slice(0, 10).map((t, i) => ({ ...t, provider: 'coinmarketcap', chain: 'L1', rank: i + 1 }));
+    const cmcTokens = tokens_solana.slice(0, 10).map((t, i) => ({ ...t, provider: 'coinmarketcap', chain: 'L1', rank: i + 1 } as IToken));
     await runtime.setCache('cmc_market_data', cmcTokens);
     await runtime.setCache('coinmarketcap_sync', cmcTokens);
   };
 
-  // If simulation mode is enabled, run the generator immediately & schedule periodic updates
   if (simulationEnabled) {
     await generateSimulatedData();
 
@@ -436,19 +437,14 @@ export const registerTasks = async (runtime: IAgentRuntime, worldId?: UUID) => {
 
     runtime.createTask({
       name: 'INTEL_SIMULATE_DATA',
-      description: 'Generate mock intel data in simulation mode',
+      description: 'Periodically generate mock intel data in simulation mode',
       worldId,
-      metadata: {
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        updateInterval: 1000 * 60, // every minute
-      },
+      metadata: { createdAt: Date.now(), updatedAt: Date.now(), updateInterval: 1000 * 60 },
       tags: ['queue', 'repeat', 'degen_intel', 'immediate'],
     });
 
-    // Skip registering the external-API sync tasks when in simulation mode
-    logger.debug('[degen-intel] Simulation mode active – skipping real API task registrations');
-    return; // Do not continue with real sync workers below
+    logger.debug('[degen-intel] Simulation mode active – skipping real API task registrations, using INTEL_SIMULATE_DATA task instead.');
+    return;
   }
 
   // -------------------------------------------------------------------

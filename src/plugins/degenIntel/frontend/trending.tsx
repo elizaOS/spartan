@@ -35,7 +35,17 @@ export default function Trending() {
   const query = useQuery({
     queryKey: ['trending'],
     queryFn: async () => {
-      const response = await fetch('/api/intel/trending', {
+      let agentId = (window as any).__AGENT_ID__;
+      if (!agentId) {
+        console.warn("Agent ID not found from window.__AGENT_ID__ (trending), falling back to URL parsing.");
+        const pathParts = window.location.pathname.split('/');
+        agentId = pathParts[2];
+      }
+      if (!agentId) {
+        console.error("Agent ID not found for trending:", window.location.pathname);
+        return { solana: [], base: [], ethereum: [] };
+      }
+      const response = await fetch(`/api/${agentId}/intel/trending`, {
         method: 'GET',
       });
       const result = await response.json();

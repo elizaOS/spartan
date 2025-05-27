@@ -16,7 +16,17 @@ export default function Tweets() {
   const query = useQuery({
     queryKey: ['tweets'],
     queryFn: async () => {
-      const response = await fetch('/api/intel/tweets', {
+      let agentId = (window as any).__AGENT_ID__;
+      if (!agentId) {
+        console.warn("Agent ID not found from window.__AGENT_ID__ (tweets), falling back to URL parsing.");
+        const pathParts = window.location.pathname.split('/');
+        agentId = pathParts[2];
+      }
+      if (!agentId) {
+        console.error("Agent ID not found for tweets:", window.location.pathname);
+        return [];
+      }
+      const response = await fetch(`/api/${agentId}/intel/tweets`, {
         method: 'GET',
       });
       const result = await response.json();

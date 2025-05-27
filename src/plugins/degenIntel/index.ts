@@ -1,7 +1,9 @@
 import type { IAgentRuntime, Plugin } from '@elizaos/core';
-import routes from './apis';
+import routes from './routes';
 import { registerTasks } from './tasks';
 import { logger } from '@elizaos/core';
+
+// No React or frontend-specific imports needed here
 
 import { sentimentProvider } from './providers/sentiment';
 import { cmcMarketProvider } from './providers/cmcMarket';
@@ -13,7 +15,7 @@ import { birdeyeTradePortfolioProvider } from './providers/birdeyeWallet';
 export const degenIntelPlugin: Plugin = {
   name: 'degen-intel',
   description: 'Degen Intel plugin',
-  routes,
+  routes, // These routes will serve the API and the public UI
   providers: [],
   tests: [
     {

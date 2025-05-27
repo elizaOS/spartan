@@ -1,11 +1,115 @@
-import { type IAgentRuntime, type Route, createUniqueUuid } from '@elizaos/core';
+import { type IAgentRuntime, type Route, createUniqueUuid, logger } from '@elizaos/core';
 import type { Request, Response } from 'express';
 import { TweetArraySchema, SentimentArraySchema, WalletSchema, BuySignalSchema, type Token } from './schemas';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+// Define the equivalent of __dirname for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// from the package.json, find frontend/dist and host it statically
+const frontendDist = path.resolve(__dirname, './');
+
+// Path to the plugin's frontend dist folder
+// ASSUMING frontend build output is in 'src/plugins/degenIntel/dist'
+const pluginFrontendDist = path.resolve(__dirname, './dist'); // Adjusted path
 
 export const routes: Route[] = [
+  // Frontend routes for serving the React app
   {
     type: 'GET',
-    path: '/api/intel/sentiment',
+    path: '/degen-intel',
+    public: true,
+    name: 'Intel',
+    handler: async (_req: any, res: any) => {
+      const route = _req.url;
+      res.sendFile(path.resolve(frontendDist, 'index.html'));
+    },
+  },
+  {
+    type: 'GET',
+    path: '/degen-intel/assets/*',
+    handler: async (req: any, res: any) => {
+      const assetPath = `/dist/assets/${req.path.split('/assets/')[1]}`;
+      console.log('assetPath', assetPath);
+      const cwd = process.cwd();
+      const filePath = cwd + path.resolve(cwd, assetPath);
+      if (fs.existsSync(path.resolve(filePath))) {
+        res.sendFile(filePath);
+      } else {
+        res.status(404).send('File not found');
+      }
+    },
+  },
+  // Route to serve the plugin's main UI (index.html)
+  {
+    type: 'GET',
+    path: '/ui', // This will be accessed via /api/:agentId/plugins/degen-intel/ui
+    public: true, // Or false if it requires auth, but typically UI shells are public
+    name: 'DegenIntelUI', // A name for the route, if used by the system
+    handler: async (req: Request, res: Response, runtime: IAgentRuntime) => {
+      const agentId = req.params.agentId; // The core server should populate this
+      const indexPath = path.join(pluginFrontendDist, 'index.html');
+
+      if (fs.existsSync(indexPath)) {
+        try {
+          let htmlContent = await fs.promises.readFile(indexPath, 'utf8');
+          // Inject agentId into a global variable or a meta tag
+          // Example: injecting as a global JS variable
+          const injectionScript = `<script>window.__AGENT_ID__ = "${agentId}";</script>`;
+          // Add the script before the closing </head> or </body> tag, or a placeholder
+          // A common placeholder could be <!-- AGENT_ID_INJECTION_POINT -->
+          if (htmlContent.includes('</body>')) {
+            htmlContent = htmlContent.replace('</body>', `${injectionScript}</body>`);
+          } else if (htmlContent.includes('</head>')) {
+            htmlContent = htmlContent.replace('</head>', `${injectionScript}</head>`);
+          } else {
+            // Fallback: append if no clear injection point, though less ideal
+            htmlContent += injectionScript;
+          }
+          
+          res.setHeader('Content-Type', 'text/html');
+          res.send(htmlContent);
+        } catch (error) {
+          logger.error(`[DegenIntelUI] Error reading/modifying index.html: ${error}`);
+          res.status(500).send('Error serving plugin UI.');
+        }
+      } else {
+        res.status(404).send('Plugin UI (index.html) not found. Ensure the plugin frontend is built.');
+      }
+    },
+  },
+  // Route to serve static assets for the plugin's UI (JS, CSS, images, etc.)
+  {
+    type: 'GET',
+    path: '/assets/*', // This will be accessed via /api/:agentId/plugins/degen-intel/assets/...
+    public: true, // Ensure assets are also public
+    handler: async (req: Request, res: Response, runtime: IAgentRuntime) => {
+      const assetName = req.params[0]; // Gets the content of '*', e.g., 'main.js' or 'styles/app.css'
+      if (!assetName || assetName.includes('..')) { // Basic security check
+        res.status(400).send('Invalid asset path');
+        return;
+      }
+      const assetPath = path.join(pluginFrontendDist, 'assets', assetName);
+      if (fs.existsSync(assetPath)) {
+        res.sendFile(assetPath);
+      } else {
+        // Attempt to serve from root of dist if not in assets (e.g. vite.svg, index.html if not handled by /ui)
+        const rootAssetPath = path.join(pluginFrontendDist, assetName);
+        if (fs.existsSync(rootAssetPath)) {
+          res.sendFile(rootAssetPath);
+        } else {
+          res.status(404).send('Asset not found');
+        }
+      }
+    },
+  },
+  // API routes
+  {
+    type: 'GET',
+    path: '/api/:agentId/intel/sentiment',
     handler: async (req: Request, res: Response, runtime: IAgentRuntime) => {
       try {
         const sentiments = await runtime.getCache('sentiments');
@@ -27,7 +131,7 @@ export const routes: Route[] = [
   },
   {
     type: 'GET',
-    path: '/api/intel/signals',
+    path: '/api/:agentId/intel/signals',
     handler: async (req: Request, res: Response, runtime: IAgentRuntime) => {
       try {
         const buySignals = await runtime.getCache('buy_signals');
@@ -53,7 +157,7 @@ export const routes: Route[] = [
   },
   {
     type: 'GET',
-    path: '/api/intel/trending',
+    path: '/api/:agentId/intel/trending',
     handler: async (req: Request, res: Response, runtime: IAgentRuntime) => {
       try {
         const trendingSolana = (await runtime.getCache('tokens_solana')) as Token[] | undefined || [];
@@ -78,7 +182,7 @@ export const routes: Route[] = [
   },
   {
     type: 'GET',
-    path: '/api/intel/tweets',
+    path: '/api/:agentId/intel/tweets',
     handler: async (req: Request, res: Response, runtime: IAgentRuntime) => {
       try {
         // Fetch from memories instead of a direct 'tweets' cache key
@@ -122,7 +226,7 @@ export const routes: Route[] = [
   },
   {
     type: 'GET',
-    path: '/api/intel/portfolio',
+    path: '/api/:agentId/intel/portfolio',
     handler: async (req: Request, res: Response, runtime: IAgentRuntime) => {
       try {
         const portfolio = (await runtime.getCache('portfolio')) as any;
@@ -146,7 +250,7 @@ export const routes: Route[] = [
   },
   {
     type: 'GET',
-    path: '/api/intel/market',
+    path: '/api/:agentId/intel/market',
     handler: async (req: Request, res: Response, runtime: IAgentRuntime) => {
       try {
         const marketData = (await runtime.getCache('cmc_market_data')) as Token[] | undefined || [];
@@ -163,7 +267,7 @@ export const routes: Route[] = [
   },
   {
     type: 'GET',
-    path: '/api/intel/summary',
+    path: '/api/:agentId/intel/summary',
     handler: async (req: Request, res: Response, runtime: IAgentRuntime) => {
       try {
         // Fetch all relevant data
@@ -173,7 +277,7 @@ export const routes: Route[] = [
             runtime.getCache('buy_signals'),
             runtime.getCache('sell_signals'),
             runtime.getCache('tokens_solana'),
-            runtime.getCache('tweets'),
+            runtime.getCache('tweets'), // Ensure this uses correct cache key if changed from direct cache to memories
             runtime.getCache('portfolio'),
             runtime.getCache('cmc_market_data'),
           ]);
@@ -198,7 +302,7 @@ export const routes: Route[] = [
           data: {
             summary: {
               averageSentiment: avgSentiment,
-              totalTweets: ((tweets as any[]) || []).length,
+              totalTweets: ((tweets as any[]) || []).length, // Consider if 'tweets' cache is still primary source
               trendingTokensCount: ((trendingSolana as any[]) || []).length,
               hasActiveBuySignal: !!buySignals,
               hasActiveSellSignal: !!sellSignals,
@@ -211,7 +315,7 @@ export const routes: Route[] = [
             marketOverview: marketData || null,
             recentActivity: {
               sentiments: recentSentiments,
-              tweets: ((tweets as any[]) || []).slice(0, 5),
+              tweets: ((tweets as any[]) || []).slice(0, 5), // Consider if 'tweets' cache is still primary source
             },
           },
         });

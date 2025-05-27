@@ -4,7 +4,17 @@ export default function Statistics() {
   const query = useQuery({
     queryKey: ['statistics'],
     queryFn: async () => {
-      const response = await fetch('/api/intel/summary', {
+      let agentId = (window as any).__AGENT_ID__;
+      if (!agentId) {
+        console.warn("Agent ID not found from window.__AGENT_ID__ (statistics), falling back to URL parsing.");
+        const pathParts = window.location.pathname.split('/');
+        agentId = pathParts[2];
+      }
+      if (!agentId) {
+        console.error("Agent ID not found for statistics:", window.location.pathname);
+        return null;
+      }
+      const response = await fetch(`/api/${agentId}/intel/summary`, {
         method: 'GET',
       });
       const result = await response.json();

@@ -50,4 +50,6 @@ function App() {
   );
 }
 
+export default App;
+
 createRoot(document.getElementById('root')!).render(<App />);

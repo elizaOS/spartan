@@ -19,7 +19,17 @@ export default function Signals() {
     const query = useQuery({
         queryKey: ['signals'],
         queryFn: async () => {
-            const response = await fetch('/api/intel/signals', {
+            let agentId = (window as any).__AGENT_ID__;
+            if (!agentId) {
+                console.warn("Agent ID not found from window.__AGENT_ID__ (signals), falling back to URL parsing.");
+                const pathParts = window.location.pathname.split('/');
+                agentId = pathParts[2];
+            }
+            if (!agentId) {
+              console.error("Agent ID not found for signals:", window.location.pathname);
+              return { buy: null, sell: null };
+            }
+            const response = await fetch(`/api/${agentId}/intel/signals`, {
                 method: 'GET',
             });
             const result = await response.json();
@@ -31,7 +41,17 @@ export default function Signals() {
     const summaryQuery = useQuery({
         queryKey: ['signals-summary'],
         queryFn: async () => {
-            const response = await fetch('/api/intel/summary', {
+            let agentId = (window as any).__AGENT_ID__;
+            if (!agentId) {
+                console.warn("Agent ID not found from window.__AGENT_ID__ (signals-summary), falling back to URL parsing.");
+                const pathParts = window.location.pathname.split('/');
+                agentId = pathParts[2];
+            }
+            if (!agentId) {
+              console.error("Agent ID not found for signals-summary:", window.location.pathname);
+              return null;
+            }
+            const response = await fetch(`/api/${agentId}/intel/summary`, {
                 method: 'GET',
             });
             const result = await response.json();

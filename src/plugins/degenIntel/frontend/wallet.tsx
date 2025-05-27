@@ -30,7 +30,17 @@ export default function Wallet() {
   const query = useQuery({
     queryKey: ['wallet'],
     queryFn: async () => {
-      const response = await fetch('/api/intel/portfolio', {
+      let agentId = (window as any).__AGENT_ID__;
+      if (!agentId) {
+        console.warn("Agent ID not found from window.__AGENT_ID__ (wallet), falling back to URL parsing.");
+        const pathParts = window.location.pathname.split('/');
+        agentId = pathParts[2];
+      }
+      if (!agentId) {
+        console.error("Agent ID not found for wallet:", window.location.pathname);
+        return null;
+      }
+      const response = await fetch(`/api/${agentId}/intel/portfolio`, {
         method: 'GET',
       });
       const result = await response.json();

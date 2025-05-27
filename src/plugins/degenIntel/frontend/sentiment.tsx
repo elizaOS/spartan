@@ -25,7 +25,19 @@ export default function Sentiment() {
   const query = useQuery({
     queryKey: ['sentiment'],
     queryFn: async () => {
-      const response = await fetch('/api/intel/sentiment', {
+      let agentId = (window as any).__AGENT_ID__;
+      if (!agentId) {
+        console.warn("Agent ID not found from window.__AGENT_ID__, falling back to URL parsing.");
+        const pathParts = window.location.pathname.split('/');
+        agentId = pathParts[2]; 
+      }
+
+      if (!agentId) {
+        console.error("Agent ID not found in URL path or window variable:", window.location.pathname);
+        return []; 
+      }
+
+      const response = await fetch(`/api/${agentId}/intel/sentiment`, {
         method: 'GET',
       });
       const result = await response.json();
