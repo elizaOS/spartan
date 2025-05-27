@@ -7,7 +7,7 @@ export default defineConfig({
   sourcemap: true,
   clean: false, // Don't clean dist folder before building
   format: ['esm'], // Ensure you're targeting CommonJS
-  dts: false, // Skip DTS generation to avoid external import issues // Ensure you're targeting CommonJS
+  dts: true, // Generate TypeScript declaration files (.d.ts) for better type support
   external: [
     'dotenv', // Externalize dotenv to prevent bundling
     'node:fs', // Externalize fs to use Node.js built-in module

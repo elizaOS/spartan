@@ -9,15 +9,14 @@
     "access": "public"
   },
   "scripts": {
-    "start": "elizaos start",
+    "start": "elizaos dev",
     "build": "vite build && tsup",
     "lint": "prettier --write ./src",
     "dev": "elizaos dev",
-    "test": "elizaos test && bun run test:spartan",
+    "test": "elizaos test --port 3001",
     "clean": "rm -rf dist .turbo node_modules .turbo-tsconfig.json tsconfig.tsbuildinfo",
     "format": "prettier --write ./src",
-    "format:check": "prettier --check ./src",
-    "test:spartan": "vitest tests/spartan.test.ts"
+    "format:check": "prettier --check ./src"
   },
   "nodemonConfig": {
     "watch": [

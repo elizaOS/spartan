@@ -6,9 +6,13 @@ import {
   Service,
   type UUID,
   logger,
+  type Component,
+  type Task, // Added for task worker
+  asUUID, // Ensure asUUID is imported for creating component IDs
+  createUniqueUuid, // Added for creating unique UUIDs
 } from '@elizaos/core';
 import { v4 as uuidv4 } from 'uuid';
-import { BirdeyeClient, CoingeckoClient, DexscreenerClient, HeliusClient } from './clients';
+import { BirdeyeClient, DexscreenerClient, HeliusClient } from './clients';
 import {
   DEFAULT_TRADING_CONFIG,
   type TradingConfig,
@@ -17,6 +21,7 @@ import {
   getMarketCapMultiplier,
   getVolumeMultiplier,
 } from './config';
+import { TRUST_LEADERBOARD_WORLD_SEED } from './constants'; // Import the seed
 import { formatFullReport } from './reports';
 import {
   type BuySignalMessage,
@@ -28,6 +33,7 @@ import {
   type RecommenderMetrics,
   type RecommenderMetricsHistory,
   ServiceType,
+  SupportedChain,
   type TokenMarketData,
   type TokenMetadata,
   type TokenPerformance,
@@ -36,7 +42,16 @@ import {
   type TokenTradeData,
   type Transaction,
   TransactionType,
+  type TokenAPIData,
+  type LeaderboardEntry,
+  TRUST_MARKETPLACE_COMPONENT_TYPE,
+  type TrustMarketplaceComponentData,
+  type ICommunityInvestorService,
+  Recommendation,
+  RecommendationMetric,
+  UserTrustProfile,
 } from './types';
+import { ChannelType } from '@elizaos/core';
 
 // Event types
 /**
@@ -66,34 +81,54 @@ export type TradingEvent =
  * @method storeRecommenderMetrics - Store entity metrics and cache for 5 minutes.
  * @method storeRecommenderMetricsHistory - Store entity metrics history.
  */
-export class CommunityInvestorService extends Service {
-  static serviceType = ServiceType.COMMUNITY_INVESTOR;
-  capabilityDescription = 'The agent is able to trade on the Solana blockchain';
+export class CommunityInvestorService extends Service implements ICommunityInvestorService {
+  static override serviceType = ServiceType.COMMUNITY_INVESTOR;
+  public capabilityDescription =
+    'Manages community-driven investment trust scores and recommendations.';
 
   // Client instances
   private birdeyeClient: BirdeyeClient;
   private dexscreenerClient: DexscreenerClient;
-  private coingeckoClient: CoingeckoClient | null = null;
   private heliusClient: HeliusClient | null = null;
 
   // Configuration
   tradingConfig: TradingConfig;
 
-  // Event listeners
-  private eventListeners: Map<string, ((event: TradingEvent) => void)[]> = new Map();
+  private apiKeys: {
+    birdeye?: string;
+    moralis?: string;
+    dexscreener?: string;
+  } = {};
 
-  constructor(protected runtime: IAgentRuntime) {
+  // Constants can be defined here or loaded from config/settings
+  private readonly POSITIVE_TRADE_THRESHOLD = 10; // Trust score above this might trigger a trade
+  private readonly NEUTRAL_MARGIN = 5; // Trust scores within +/- this from 0 are neutral
+  private readonly RECENCY_WEIGHT_MONTHS = 6;
+  private readonly MAX_RECOMMENDATIONS_IN_PROFILE = 50;
+  private readonly USER_TRADE_COOLDOWN_HOURS = 12;
+  private readonly METRIC_REFRESH_INTERVAL = 24 * 60 * 60 * 1000; // 1 day to re-evaluate metrics
+
+  // Add this property to the class
+  private userRegistry: Set<UUID> = new Set();
+  private componentWorldId: UUID;
+  private componentRoomId: UUID; // This will be the same as componentWorldId
+
+  constructor(protected override runtime: IAgentRuntime) {
     super(runtime);
+
+    // Generate the consistent World ID and Room ID for this plugin's components
+    this.componentWorldId = createUniqueUuid(runtime, TRUST_LEADERBOARD_WORLD_SEED);
+    this.componentRoomId = this.componentWorldId; // Use the same ID for room context of components
+    logger.info(
+      `[CommunityInvestorService] Using Component World/Room ID: ${this.componentWorldId}`
+    );
+
+    // Ensure this world and room exist for the plugin's components
+    this.ensurePluginComponentContext();
 
     // Initialize API clients
     this.birdeyeClient = BirdeyeClient.createFromRuntime(runtime);
     this.dexscreenerClient = DexscreenerClient.createFromRuntime(runtime);
-
-    try {
-      this.coingeckoClient = CoingeckoClient.createFromRuntime(runtime);
-    } catch (error) {
-      logger.warn('Failed to initialize Coingecko client, prices may be limited:', error);
-    }
 
     try {
       this.heliusClient = HeliusClient.createFromRuntime(runtime);
@@ -103,56 +138,25 @@ export class CommunityInvestorService extends Service {
 
     // Merge provided config with defaults
     this.tradingConfig = DEFAULT_TRADING_CONFIG;
+
+    this.initialize(runtime);
+    this.registerTaskWorkers(runtime); // Register task workers on service instantiation
   }
 
   static async start(runtime: IAgentRuntime): Promise<CommunityInvestorService> {
-    const tradingService = new CommunityInvestorService(runtime);
-    return tradingService;
+    const service = new CommunityInvestorService(runtime);
+    return service;
   }
 
   static async stop(runtime: IAgentRuntime): Promise<void> {
-    const tradingService = runtime.getService('trading');
-    if (tradingService) {
-      await tradingService.stop();
+    const service = runtime.getService('trading');
+    if (service) {
+      await service.stop();
     }
   }
 
   async stop(): Promise<void> {
     return Promise.resolve();
-  }
-
-  /**
-   * Add an event listener for trading events
-   */
-  addEventListener(eventId: string, listener: (event: TradingEvent) => void): void {
-    if (!this.eventListeners.has(eventId)) {
-      this.eventListeners.set(eventId, []);
-    }
-    this.eventListeners.get(eventId).push(listener);
-  }
-
-  /**
-   * Remove an event listener
-   */
-  removeEventListener(eventId: string): void {
-    logger.debug('removing event listener', eventId);
-    this.eventListeners.delete(eventId);
-  }
-
-  /**
-   * Emit a trading event to all listeners
-   */
-  private emitEvent(event: TradingEvent): void {
-    logger.debug('emitting event', event);
-    for (const listeners of this.eventListeners.values()) {
-      for (const listener of listeners) {
-        try {
-          listener(event);
-        } catch (error) {
-          logger.error('Error in event listener:', error);
-        }
-      }
-    }
   }
 
   /**
@@ -225,7 +229,7 @@ export class CommunityInvestorService extends Service {
       );
 
       // Emit event
-      this.emitEvent({ type: 'position_opened', position });
+      // this.emitEvent({ type: 'position_opened', position });
 
       return position;
     } catch (error) {
@@ -293,7 +297,7 @@ export class CommunityInvestorService extends Service {
       await this.updateRecommenderMetrics(position.entityId, priceChange * 100);
 
       // Emit event
-      this.emitEvent({ type: 'position_closed', position: updatedPosition });
+      // this.emitEvent({ type: 'position_closed', position: updatedPosition });
 
       return true;
     } catch (error) {
@@ -500,31 +504,216 @@ export class CommunityInvestorService extends Service {
   /**
    * Resolve a ticker to a token address
    */
-  async resolveTicker(chain: string, ticker: string): Promise<string | null> {
-    logger.debug('resolving ticker', chain, ticker);
-    // Check cache first
-    const cacheKey = `ticker:${chain}:${ticker}`;
-    const cachedAddress = await this.runtime.getCache<string>(cacheKey);
+  async resolveTicker(
+    ticker: string,
+    chain: SupportedChain = SupportedChain.SOLANA,
+    contextMessages?: Memory[] // Context might be used to disambiguate if multiple matches
+  ): Promise<{ address: string; chain: SupportedChain; ticker?: string } | null> {
+    logger.debug(
+      `[CommunityInvestorService] Attempting to resolve ticker "${ticker}" on chain ${chain}`
+    );
 
-    if (cachedAddress) {
-      return cachedAddress;
+    const cleanTicker = ticker.startsWith('$')
+      ? ticker.substring(1).toUpperCase()
+      : ticker.toUpperCase();
+
+    // Check context messages first if they contain a contract address for this ticker recently
+    if (contextMessages) {
+      for (const msg of contextMessages.slice().reverse()) {
+        // Check recent first
+        if (msg.content?.text?.includes(ticker) && msg.content.text.length > ticker.length + 5) {
+          // Basic check for potential address patterns
+          // Split by spaces, parentheses, commas, then iterate and validate
+          const potentialAddressParts = msg.content.text.split(/[\s(),]+/);
+          for (const part of potentialAddressParts) {
+            // Solana addresses: 32-44 alphanumeric characters
+            if (
+              chain === SupportedChain.SOLANA &&
+              part.length >= 32 &&
+              part.length <= 44 &&
+              /^[a-zA-Z0-9]+$/.test(part)
+            ) {
+              logger.info(
+                `[CommunityInvestorService] Found potential Solana address ${part} for ticker ${ticker} in context.`
+              );
+              return {
+                address: part,
+                chain: SupportedChain.SOLANA,
+                ticker: cleanTicker,
+              };
+            }
+            // Ethereum/Base addresses: 0x followed by 40 hex characters
+            if (
+              (chain === SupportedChain.ETHEREUM || chain === SupportedChain.BASE) &&
+              part.length === 42 &&
+              part.toLowerCase().startsWith('0x') &&
+              /^0x[a-fA-F0-9]{40}$/.test(part)
+            ) {
+              logger.info(
+                `[CommunityInvestorService] Found potential Ethereum/Base address ${part} for ticker ${ticker} in context.`
+              );
+              return {
+                address: part,
+                chain: chain,
+                ticker: cleanTicker,
+              };
+            }
+          }
+        }
+      }
     }
 
-    if (chain.toLowerCase() === 'solana') {
-      const result = await this.dexscreenerClient.searchForHighestLiquidityPair(ticker, chain, {
-        expires: '5m',
-      });
+    // Known tokens on Solana
+    if (chain === SupportedChain.SOLANA) {
+      const knownSolanaTokens: Record<string, string> = {
+        SOL: 'So11111111111111111111111111111111111111112',
+        USDC: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+        USDT: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
+        WIF: 'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzL7WDb43cuQu2',
+        BONK: 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263',
+        JUP: 'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN',
+        RAY: '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R',
+        ORCA: 'orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE',
+        SRM: 'SRMuApVNdxXokk5GT7XD5cUUgXMBCoAz2LHeuAoKWRt',
+        FTT: 'AGFEad2et2ZJif9jaGpdMixQqvW5i81aBdvKe7PHNfz3',
+      };
 
-      const address = result?.baseToken?.address || null;
-
-      // Cache the result if found
-      if (address) {
-        await this.runtime.setCache<string>(cacheKey, address); // Cache for 1 hour
+      if (knownSolanaTokens[cleanTicker]) {
+        return {
+          address: knownSolanaTokens[cleanTicker],
+          chain: SupportedChain.SOLANA,
+          ticker: cleanTicker,
+        };
       }
 
-      return address;
+      // Try to search using DexScreener for Solana
+      try {
+        const searchResults = await this.dexscreenerClient.search(cleanTicker, { expires: '5m' });
+        if (searchResults && searchResults.pairs && searchResults.pairs.length > 0) {
+          // Find the most liquid pair for this token
+          const bestPair = searchResults.pairs
+            .filter((pair) => pair.baseToken.symbol.toUpperCase() === cleanTicker)
+            .sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
+
+          if (bestPair) {
+            logger.info(
+              `[CommunityInvestorService] Found ${cleanTicker} via DexScreener: ${bestPair.baseToken.address}`
+            );
+            return {
+              address: bestPair.baseToken.address,
+              chain: SupportedChain.SOLANA,
+              ticker: cleanTicker,
+            };
+          }
+        }
+      } catch (error) {
+        logger.warn(
+          `[CommunityInvestorService] DexScreener search failed for ${cleanTicker}:`,
+          error
+        );
+      }
     }
-    throw new Error(`Chain ${chain} not supported for ticker resolution`);
+
+    // Known tokens on Ethereum
+    else if (chain === SupportedChain.ETHEREUM) {
+      const knownEthereumTokens: Record<string, string> = {
+        ETH: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', // WETH
+        USDC: '0xA0b86a33E6441c69De69b9A87e20b88dd75B61FC',
+        USDT: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
+        DAI: '0x6B175474E89094C44Da98b954EedeAC495271d0F',
+        LINK: '0x514910771AF9Ca656af840dff83E8264EcF986CA',
+        UNI: '0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984',
+        WBTC: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599',
+      };
+
+      if (knownEthereumTokens[cleanTicker]) {
+        return {
+          address: knownEthereumTokens[cleanTicker],
+          chain: SupportedChain.ETHEREUM,
+          ticker: cleanTicker,
+        };
+      }
+
+      // Try to search using DexScreener for Ethereum
+      try {
+        const searchResults = await this.dexscreenerClient.search(cleanTicker, { expires: '5m' });
+        if (searchResults && searchResults.pairs && searchResults.pairs.length > 0) {
+          const bestPair = searchResults.pairs
+            .filter(
+              (pair) =>
+                pair.chainId.toLowerCase() === 'ethereum' &&
+                pair.baseToken.symbol.toUpperCase() === cleanTicker
+            )
+            .sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
+
+          if (bestPair) {
+            logger.info(
+              `[CommunityInvestorService] Found ${cleanTicker} via DexScreener on Ethereum: ${bestPair.baseToken.address}`
+            );
+            return {
+              address: bestPair.baseToken.address,
+              chain: SupportedChain.ETHEREUM,
+              ticker: cleanTicker,
+            };
+          }
+        }
+      } catch (error) {
+        logger.warn(
+          `[CommunityInvestorService] DexScreener search failed for ${cleanTicker} on Ethereum:`,
+          error
+        );
+      }
+    }
+
+    // Known tokens on Base
+    else if (chain === SupportedChain.BASE) {
+      const knownBaseTokens: Record<string, string> = {
+        ETH: '0x4200000000000000000000000000000000000006', // Base ETH
+        USDC: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+        WETH: '0x4200000000000000000000000000000000000006',
+      };
+
+      if (knownBaseTokens[cleanTicker]) {
+        return {
+          address: knownBaseTokens[cleanTicker],
+          chain: SupportedChain.BASE,
+          ticker: cleanTicker,
+        };
+      }
+
+      // Try to search using DexScreener for Base
+      try {
+        const searchResults = await this.dexscreenerClient.search(cleanTicker, { expires: '5m' });
+        if (searchResults && searchResults.pairs && searchResults.pairs.length > 0) {
+          const bestPair = searchResults.pairs
+            .filter(
+              (pair) =>
+                pair.chainId.toLowerCase() === 'base' &&
+                pair.baseToken.symbol.toUpperCase() === cleanTicker
+            )
+            .sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
+
+          if (bestPair) {
+            logger.info(
+              `[CommunityInvestorService] Found ${cleanTicker} via DexScreener on Base: ${bestPair.baseToken.address}`
+            );
+            return {
+              address: bestPair.baseToken.address,
+              chain: SupportedChain.BASE,
+              ticker: cleanTicker,
+            };
+          }
+        }
+      } catch (error) {
+        logger.warn(
+          `[CommunityInvestorService] DexScreener search failed for ${cleanTicker} on Base:`,
+          error
+        );
+      }
+    }
+
+    logger.warn(`[CommunityInvestorService] Could not resolve ticker ${ticker} on chain ${chain}`);
+    return null;
   }
 
   /**
@@ -813,10 +1002,10 @@ export class CommunityInvestorService extends Service {
       await this.storeTokenPerformance(performance);
 
       // Emit event
-      this.emitEvent({
+      /* this.emitEvent({
         type: 'token_performance_updated',
         performance,
-      });
+      }); */
 
       return performance;
     } catch (error) {
@@ -1036,10 +1225,10 @@ export class CommunityInvestorService extends Service {
       await this.storeTokenRecommendation(recommendation);
 
       // Emit event
-      this.emitEvent({
+      /* this.emitEvent({
         type: 'recommendation_added',
         recommendation,
-      });
+      }); */
 
       return recommendation;
     } catch (error) {
@@ -1180,7 +1369,7 @@ export class CommunityInvestorService extends Service {
       await this.storeTransaction(transaction);
 
       // Emit event
-      this.emitEvent({ type: 'transaction_added', transaction });
+      // this.emitEvent({ type: 'transaction_added', transaction });
 
       return true;
     } catch (error) {
@@ -1405,7 +1594,7 @@ export class CommunityInvestorService extends Service {
       await this.storePosition(position);
 
       // Emit event
-      this.emitEvent({ type: 'position_closed', position });
+      // this.emitEvent({ type: 'position_closed', position });
 
       return true;
     } catch (error) {
@@ -1945,14 +2134,1067 @@ Total Unrealized P&L: ${report.totalUnrealizedPnL}
 Total P&L: ${report.totalPnL}
 
 Positions:
-${report.positionReports.join('\n\n')}
+${report.positionReports.join('\n')}
 
 Tokens:
-${report.tokenReports.join('\n\n')}
+${report.tokenReports.join('\n')}
             `.trim();
     } catch (error) {
       logger.error('Error generating portfolio report:', error);
       return 'Error generating portfolio report.';
+    }
+  }
+
+  async initialize(runtime: IAgentRuntime): Promise<void> {
+    logger.info('[CommunityInvestorService] Initializing...');
+    this.apiKeys.birdeye = runtime.getSetting('BIRDEYE_API_KEY') as string | undefined;
+    this.apiKeys.moralis = runtime.getSetting('MORALIS_API_KEY') as string | undefined;
+    // Load the user registry
+    await this.loadUserRegistry();
+    logger.info('[CommunityInvestorService] Initialized.');
+  }
+
+  /**
+   * Fetches token data from an external API.
+   * Uses Birdeye and DexScreener for real market data.
+   */
+  async getTokenAPIData(address: string, chain: SupportedChain): Promise<TokenAPIData | null> {
+    logger.debug(`[CommunityInvestorService] Fetching token API data for ${address} on ${chain}`);
+
+    try {
+      let tokenData: TokenAPIData = {};
+
+      if (chain === SupportedChain.SOLANA) {
+        // Fetch from Birdeye for Solana tokens
+        try {
+          const [tokenOverview, price, security, tradeData, dexScreenerData] = await Promise.all([
+            this.birdeyeClient.fetchTokenOverview(address, { chain: 'solana', expires: '5m' }),
+            this.birdeyeClient.fetchPrice(address, { chain: 'solana', expires: '1m' }),
+            this.birdeyeClient.fetchTokenSecurity(address, { chain: 'solana', expires: '10m' }),
+            this.birdeyeClient.fetchTokenTradeData(address, { chain: 'solana', expires: '5m' }),
+            this.dexscreenerClient.search(address, { expires: '5m' }),
+          ]);
+
+          const dexPair = dexScreenerData.pairs?.[0];
+
+          tokenData = {
+            name: tokenOverview.name || dexPair?.baseToken?.name,
+            symbol: tokenOverview.symbol || dexPair?.baseToken?.symbol,
+            currentPrice: price || parseFloat(dexPair?.priceUsd || '0'),
+            liquidity: dexPair?.liquidity?.usd || 0,
+            marketCap: dexPair?.marketCap || tradeData.market || 0,
+            isKnownScam: false, // Would need additional scam detection logic
+          };
+
+          // Calculate ATH and ATL from recent trade data if available
+          if (tradeData) {
+            const recent24hPrices = [
+              tradeData.price,
+              tradeData.history_24h_price,
+              tradeData.history_12h_price,
+              tradeData.history_8h_price,
+              tradeData.history_6h_price,
+              tradeData.history_4h_price,
+              tradeData.history_2h_price,
+              tradeData.history_1h_price,
+              tradeData.history_30m_price,
+            ].filter((p) => p != null && p > 0);
+
+            if (recent24hPrices.length > 0) {
+              tokenData.ath = Math.max(...recent24hPrices);
+              tokenData.atl = Math.min(...recent24hPrices);
+            }
+
+            // Create simplified price history from trade data
+            const now = Date.now();
+            tokenData.priceHistory = [
+              {
+                timestamp: now - 24 * 60 * 60 * 1000,
+                price: tradeData.history_24h_price || tradeData.price,
+              },
+              {
+                timestamp: now - 12 * 60 * 60 * 1000,
+                price: tradeData.history_12h_price || tradeData.price,
+              },
+              {
+                timestamp: now - 8 * 60 * 60 * 1000,
+                price: tradeData.history_8h_price || tradeData.price,
+              },
+              {
+                timestamp: now - 6 * 60 * 60 * 1000,
+                price: tradeData.history_6h_price || tradeData.price,
+              },
+              {
+                timestamp: now - 4 * 60 * 60 * 1000,
+                price: tradeData.history_4h_price || tradeData.price,
+              },
+              {
+                timestamp: now - 2 * 60 * 60 * 1000,
+                price: tradeData.history_2h_price || tradeData.price,
+              },
+              {
+                timestamp: now - 1 * 60 * 60 * 1000,
+                price: tradeData.history_1h_price || tradeData.price,
+              },
+              {
+                timestamp: now - 30 * 60 * 1000,
+                price: tradeData.history_30m_price || tradeData.price,
+              },
+              { timestamp: now, price: tradeData.price },
+            ].filter((p) => p.price != null && p.price > 0);
+
+            // Simple scam detection based on trade data patterns
+            const hasRugPullPattern =
+              tradeData.price_change_24h_percent < -90 || // 90% drop in 24h
+              (tradeData.volume_24h_usd < 1000 &&
+                tokenData.marketCap &&
+                tokenData.marketCap > 100000) || // Low volume but high market cap
+              (security && security.top10HolderPercent > 95); // Top 10 holders own >95%
+
+            tokenData.isKnownScam = hasRugPullPattern;
+          }
+        } catch (error) {
+          logger.warn(
+            `[CommunityInvestorService] Error fetching Solana token data for ${address}:`,
+            error
+          );
+
+          // Fallback to DexScreener only
+          try {
+            const dexScreenerData = await this.dexscreenerClient.search(address, { expires: '5m' });
+            const dexPair = dexScreenerData.pairs?.[0];
+
+            if (dexPair) {
+              tokenData = {
+                name: dexPair.baseToken.name,
+                symbol: dexPair.baseToken.symbol,
+                currentPrice: parseFloat(dexPair.priceUsd || '0'),
+                liquidity: dexPair.liquidity?.usd || 0,
+                marketCap: dexPair.marketCap || 0,
+                isKnownScam: false, // Dexscreener doesn't directly provide this
+              };
+              // No extensive history from this fallback, but it's better than nothing
+            } else {
+              logger.debug(
+                `[CommunityInvestorService] DexScreener found no pair for ${address} after Birdeye failure.`
+              );
+              // Explicitly return null if DexScreener also fails for Solana
+              return null;
+            }
+          } catch (fallbackError) {
+            logger.error(
+              `[CommunityInvestorService] Fallback DexScreener search also failed for ${address}:`,
+              fallbackError
+            );
+            return null; // Return null on fallback failure too
+          }
+        }
+      } else if (chain === SupportedChain.ETHEREUM || chain === SupportedChain.BASE) {
+        // For Ethereum and Base, use DexScreener as primary source
+        try {
+          const dexScreenerData = await this.dexscreenerClient.search(address, { expires: '5m' });
+          const chainFilter = chain === SupportedChain.ETHEREUM ? 'ethereum' : 'base';
+          const dexPair = dexScreenerData.pairs?.find(
+            (pair) => pair.chainId.toLowerCase() === chainFilter
+          );
+
+          if (dexPair) {
+            tokenData = {
+              name: dexPair.baseToken.name,
+              symbol: dexPair.baseToken.symbol,
+              currentPrice: parseFloat(dexPair.priceUsd || '0'),
+              liquidity: dexPair.liquidity?.usd || 0,
+              marketCap: dexPair.marketCap || 0,
+              isKnownScam: false,
+            };
+
+            // Extract price history from DexScreener price changes
+            const now = Date.now();
+            const currentPrice = parseFloat(dexPair.priceUsd || '0');
+
+            tokenData.priceHistory = [
+              {
+                timestamp: now - 24 * 60 * 60 * 1000,
+                price: currentPrice / (1 + (dexPair.priceChange?.h24 || 0) / 100),
+              },
+              {
+                timestamp: now - 6 * 60 * 60 * 1000,
+                price: currentPrice / (1 + (dexPair.priceChange?.h6 || 0) / 100),
+              },
+              {
+                timestamp: now - 1 * 60 * 60 * 1000,
+                price: currentPrice / (1 + (dexPair.priceChange?.h1 || 0) / 100),
+              },
+              {
+                timestamp: now - 5 * 60 * 1000,
+                price: currentPrice / (1 + (dexPair.priceChange?.m5 || 0) / 100),
+              },
+              { timestamp: now, price: currentPrice },
+            ].filter((p) => p.price > 0);
+
+            if (tokenData.priceHistory.length > 0) {
+              tokenData.ath = Math.max(...tokenData.priceHistory.map((p) => p.price));
+              tokenData.atl = Math.min(...tokenData.priceHistory.map((p) => p.price));
+            }
+
+            // Simple scam detection for Ethereum/Base tokens
+            const hasRugPullPattern =
+              (dexPair.priceChange?.h24 || 0) < -90 || // 90% drop in 24h
+              ((dexPair.volume?.h24 || 0) < 1000 && (dexPair.marketCap || 0) > 100000); // Low volume but high market cap
+
+            tokenData.isKnownScam = hasRugPullPattern;
+          }
+        } catch (error) {
+          logger.error(
+            `[CommunityInvestorService] Error fetching ${chain} token data for ${address}:`,
+            error
+          );
+          return null;
+        }
+      } else {
+        logger.warn(`[CommunityInvestorService] Unsupported chain: ${chain}`);
+        return null;
+      }
+
+      // This check is now effectively handled by returning null in the SOLANA block if all sources fail.
+      // if (chain === SupportedChain.SOLANA && Object.keys(tokenData).length === 0) {
+      //   logger.debug(`[CommunityInvestorService] TokenData for SOLANA token ${address} is empty after all attempts, returning null.`);
+      //   return null;
+      // }
+
+      // Set defaults for missing values if tokenData was populated by non-SOLANA chain logic or partially by SOLANA.
+      if (Object.keys(tokenData).length > 0) {
+        // Ensure tokenData is not empty before defaulting
+        if (!tokenData.ath && tokenData.currentPrice) {
+          tokenData.ath = tokenData.currentPrice * 1.1; // Assume current price is close to ATH if unknown
+        }
+        if (!tokenData.atl && tokenData.currentPrice) {
+          tokenData.atl = tokenData.currentPrice * 0.9; // Assume current price is close to ATL if unknown
+        }
+        logger.debug(
+          `[CommunityInvestorService] Successfully fetched token data for ${tokenData.symbol || address} (${address})`
+        );
+        return tokenData;
+      } else if (chain !== SupportedChain.SOLANA) {
+        // If not SOLANA and tokenData is still empty (e.g. ETH/BASE failed)
+        logger.warn(
+          `[CommunityInvestorService] Failed to fetch token data for ${address} on ${chain} after all attempts.`
+        );
+        return null;
+      }
+      // If it's SOLANA and tokenData is empty, we would have returned null already.
+      // For other chains, if tokenData is empty, this means their primary fetch failed.
+      // This final return null should ideally not be hit if all paths correctly return null on failure.
+      return null;
+    } catch (error) {
+      logger.error(
+        `[CommunityInvestorService] Unexpected error fetching token API data for ${address}:`,
+        error
+      );
+      return null;
+    }
+  }
+
+  async isLikelyScamOrRug(
+    tokenData: TokenAPIData,
+    recommendationTimestamp: number
+  ): Promise<boolean> {
+    // Check if already flagged as scam
+    if (tokenData.isKnownScam) {
+      logger.warn(
+        `[CommunityInvestorService] Token ${tokenData.symbol} already flagged as known scam`
+      );
+      return true;
+    }
+
+    const warnings: string[] = [];
+    let riskScore = 0;
+
+    // 1. Price drop analysis
+    const pricesPostRecommendation =
+      tokenData.priceHistory?.filter((p) => p.timestamp > recommendationTimestamp) || [];
+
+    if (pricesPostRecommendation.length > 1) {
+      const peakPricePostRec = Math.max(...pricesPostRecommendation.map((p) => p.price));
+      const lastKnownPricePostRec =
+        pricesPostRecommendation[pricesPostRecommendation.length - 1].price;
+      const currentPrice = tokenData.currentPrice || 0;
+
+      // Severe price drop from peak (>90%)
+      if (
+        peakPricePostRec > 0 &&
+        lastKnownPricePostRec < peakPricePostRec * 0.1 &&
+        currentPrice < peakPricePostRec * 0.1
+      ) {
+        warnings.push(
+          `Severe price drop: >90% from peak ($${peakPricePostRec.toFixed(6)} to $${currentPrice.toFixed(6)})`
+        );
+        riskScore += 40;
+      }
+      // Major price drop (>70%)
+      else if (
+        peakPricePostRec > 0 &&
+        lastKnownPricePostRec < peakPricePostRec * 0.3 &&
+        currentPrice < peakPricePostRec * 0.3
+      ) {
+        warnings.push(
+          `Major price drop: >70% from peak ($${peakPricePostRec.toFixed(6)} to $${currentPrice.toFixed(6)})`
+        );
+        riskScore += 25;
+      }
+    }
+
+    // 2. Liquidity-to-MarketCap ratio analysis
+    const marketCap = tokenData.marketCap || 0;
+    const liquidity = tokenData.liquidity || 0;
+
+    if (marketCap > 10000 && liquidity > 0) {
+      const liquidityRatio = liquidity / marketCap;
+
+      // Extremely low liquidity ratio (<0.5%)
+      if (liquidityRatio < 0.005) {
+        warnings.push(
+          `Extremely low liquidity ratio: ${(liquidityRatio * 100).toFixed(2)}% (Liquidity: $${liquidity.toFixed(0)}, MC: $${marketCap.toFixed(0)})`
+        );
+        riskScore += 30;
+      }
+      // Very low liquidity ratio (<1%)
+      else if (liquidityRatio < 0.01) {
+        warnings.push(`Very low liquidity ratio: ${(liquidityRatio * 100).toFixed(2)}%`);
+        riskScore += 20;
+      }
+      // Low liquidity ratio (<2%)
+      else if (liquidityRatio < 0.02) {
+        warnings.push(`Low liquidity ratio: ${(liquidityRatio * 100).toFixed(2)}%`);
+        riskScore += 10;
+      }
+    }
+
+    // 3. Absolute liquidity thresholds
+    if (liquidity > 0) {
+      if (liquidity < 500) {
+        warnings.push(`Critical liquidity: $${liquidity.toFixed(0)}`);
+        riskScore += 35;
+      } else if (liquidity < 2000) {
+        warnings.push(`Very low liquidity: $${liquidity.toFixed(0)}`);
+        riskScore += 20;
+      } else if (liquidity < 5000) {
+        warnings.push(`Low liquidity: $${liquidity.toFixed(0)}`);
+        riskScore += 10;
+      }
+    } else {
+      warnings.push('No liquidity data available');
+      riskScore += 15;
+    }
+
+    // 4. Market cap sanity check
+    if (marketCap > 0 && tokenData.currentPrice && tokenData.currentPrice > 0) {
+      // If market cap seems unrealistically high compared to liquidity
+      if (marketCap > 1000000 && liquidity < 10000) {
+        warnings.push(
+          `Suspicious MC/Liquidity: MC $${marketCap.toFixed(0)} vs Liquidity $${liquidity.toFixed(0)}`
+        );
+        riskScore += 25;
+      }
+    }
+
+    // 5. Price movement patterns (volatility spikes)
+    if (tokenData.priceHistory && tokenData.priceHistory.length >= 3) {
+      const prices = tokenData.priceHistory.map((p) => p.price);
+      const priceChanges = [];
+
+      for (let i = 1; i < prices.length; i++) {
+        if (prices[i - 1] > 0) {
+          const change = ((prices[i] - prices[i - 1]) / prices[i - 1]) * 100;
+          priceChanges.push(Math.abs(change));
+        }
+      }
+
+      if (priceChanges.length > 0) {
+        const avgVolatility =
+          priceChanges.reduce((sum, change) => sum + change, 0) / priceChanges.length;
+        const maxChange = Math.max(...priceChanges);
+
+        // Extreme volatility patterns
+        if (maxChange > 200) {
+          // >200% price change in one period
+          warnings.push(`Extreme volatility: ${maxChange.toFixed(1)}% max change`);
+          riskScore += 20;
+        } else if (avgVolatility > 50) {
+          // Average >50% volatility
+          warnings.push(`High volatility: ${avgVolatility.toFixed(1)}% average change`);
+          riskScore += 10;
+        }
+      }
+    }
+
+    // 6. Age-based risk (newer tokens are riskier)
+    const tokenAge = Date.now() - recommendationTimestamp;
+    const ageInHours = tokenAge / (1000 * 60 * 60);
+
+    if (ageInHours < 24) {
+      warnings.push(`Very new token: ${ageInHours.toFixed(1)} hours old`);
+      riskScore += 15;
+    } else if (ageInHours < 72) {
+      warnings.push(`New token: ${ageInHours.toFixed(1)} hours old`);
+      riskScore += 8;
+    }
+
+    // Determine if it's likely a scam/rug based on risk score
+    const isLikelyRug = riskScore >= 50; // Threshold for rug pull classification
+
+    if (warnings.length > 0) {
+      const logLevel = isLikelyRug ? 'warn' : 'debug';
+      logger[logLevel](
+        `[CommunityInvestorService] Token ${tokenData.symbol} risk analysis (Score: ${riskScore}/100): ${warnings.join('; ')}`
+      );
+    }
+
+    if (isLikelyRug) {
+      logger.warn(
+        `[CommunityInvestorService] Token ${tokenData.symbol} classified as likely scam/rug (Risk Score: ${riskScore}/100)`
+      );
+    }
+
+    return isLikelyRug;
+  }
+
+  async evaluateRecommendationPerformance(
+    recommendation: Recommendation,
+    tokenData: TokenAPIData
+  ): Promise<RecommendationMetric> {
+    logger.debug(
+      `[CommunityInvestorService] Evaluating performance for rec ID: ${recommendation.id}`
+    );
+    const metric: RecommendationMetric = {
+      evaluationTimestamp: Date.now(),
+      isScamOrRug: await this.isLikelyScamOrRug(tokenData, recommendation.timestamp),
+      notes: '',
+    };
+    const priceAtRec =
+      recommendation.priceAtRecommendation ||
+      tokenData.priceHistory?.find((p) => p.timestamp >= recommendation.timestamp)?.price ||
+      tokenData.currentPrice ||
+      0;
+    const pricesAfterRec =
+      tokenData.priceHistory?.filter((p) => p.timestamp > recommendation.timestamp) || [];
+
+    if (metric.isScamOrRug) {
+      if (recommendation.recommendationType === 'BUY') {
+        metric.potentialProfitPercent = -99;
+        metric.notes = 'Token identified as likely scam/rug pull after BUY recommendation.';
+      }
+      if (recommendation.recommendationType === 'SELL') {
+        metric.avoidedLossPercent = 99;
+        metric.notes =
+          'Criticism/SELL recommendation was correct; token identified as likely scam/rug pull.';
+      }
+      logger.debug(
+        `[CommunityInvestorService] Rec ${recommendation.id} (Scam/Rug): Performance ${metric.potentialProfitPercent || metric.avoidedLossPercent}%`
+      );
+      return metric;
+    }
+
+    if (pricesAfterRec.length === 0) {
+      metric.notes =
+        'No significant price data available after recommendation time to evaluate performance yet.';
+      if (tokenData.currentPrice && tokenData.currentPrice !== priceAtRec && priceAtRec > 0) {
+        const currentPerformance = ((tokenData.currentPrice - priceAtRec) / priceAtRec) * 100;
+        if (recommendation.recommendationType === 'BUY')
+          metric.potentialProfitPercent = currentPerformance;
+        if (recommendation.recommendationType === 'SELL')
+          metric.avoidedLossPercent = -currentPerformance;
+        metric.notes = 'Evaluated based on current price vs price at recommendation.';
+      } else if (
+        priceAtRec === 0 &&
+        tokenData.currentPrice &&
+        tokenData.currentPrice > 0 &&
+        recommendation.recommendationType === 'BUY'
+      ) {
+        metric.potentialProfitPercent = Infinity; // Bought at 0, price is now > 0
+        metric.notes = 'Token acquired at effectively zero cost and now has value.';
+      } else if (
+        priceAtRec > 0 &&
+        tokenData.currentPrice === 0 &&
+        recommendation.recommendationType === 'SELL'
+      ) {
+        metric.avoidedLossPercent = 100; // Sold before it went to zero
+        metric.notes = 'Token value went to zero after sell recommendation.';
+      }
+      logger.debug(
+        `[CommunityInvestorService] Rec ${recommendation.id} (No prices after): Performance ${metric.potentialProfitPercent || metric.avoidedLossPercent}%`
+      );
+      return metric;
+    }
+    const peakPriceAfterRec = Math.max(...pricesAfterRec.map((p) => p.price), priceAtRec);
+    const troughPriceAfterRec = Math.min(...pricesAfterRec.map((p) => p.price), priceAtRec);
+
+    if (recommendation.recommendationType === 'BUY') {
+      if (priceAtRec > 0) {
+        if (peakPriceAfterRec > priceAtRec) {
+          metric.potentialProfitPercent = ((peakPriceAfterRec - priceAtRec) / priceAtRec) * 100;
+          metric.notes = `Potential profit to peak of $${peakPriceAfterRec.toFixed(4)} from $${priceAtRec.toFixed(4)}.`;
+        } else {
+          const lossPrice = Math.min(tokenData.currentPrice || 0, troughPriceAfterRec);
+          metric.potentialProfitPercent = ((lossPrice - priceAtRec) / priceAtRec) * 100;
+          metric.notes = `No profitable exit; current/trough price $${lossPrice.toFixed(4)} vs buy $${priceAtRec.toFixed(4)}.`;
+        }
+      } else {
+        // Bought at zero or near-zero
+        metric.potentialProfitPercent = peakPriceAfterRec > 0 ? Infinity : 0; // Effectively infinite profit if price rose
+        metric.notes = `Bought at effectively zero, peak price $${peakPriceAfterRec.toFixed(4)}.`;
+      }
+    } else if (recommendation.recommendationType === 'SELL') {
+      if (priceAtRec > 0) {
+        if (troughPriceAfterRec < priceAtRec) {
+          metric.avoidedLossPercent = ((priceAtRec - troughPriceAfterRec) / priceAtRec) * 100;
+          metric.notes = `Avoided loss as price dropped to $${troughPriceAfterRec.toFixed(4)} from $${priceAtRec.toFixed(4)}.`;
+        } else {
+          const missedProfitPrice = Math.max(tokenData.currentPrice || 0, peakPriceAfterRec);
+          metric.avoidedLossPercent = ((priceAtRec - missedProfitPrice) / priceAtRec) * 100;
+          metric.notes = `Missed potential gains; price rose/stayed above $${priceAtRec.toFixed(4)}, reaching $${missedProfitPrice.toFixed(4)}.`;
+        }
+      } else {
+        // Sold at zero (e.g. criticized a non-existent token that remained zero)
+        metric.avoidedLossPercent = 0; // No loss to avoid if it started at zero and stayed zero
+        metric.notes = `Token was at zero or near-zero at time of sell/criticism.`;
+      }
+    }
+    logger.debug(
+      `[CommunityInvestorService] Rec ${recommendation.id}: Performance ${metric.potentialProfitPercent || metric.avoidedLossPercent}%`
+    );
+    return metric;
+  }
+
+  getRecencyWeight(recommendationTimestamp: number): number {
+    const now = Date.now();
+    const ageInMilliseconds = now - recommendationTimestamp;
+    const ageInMonths = ageInMilliseconds / (1000 * 60 * 60 * 24 * 30.44);
+    if (ageInMonths > this.RECENCY_WEIGHT_MONTHS) return 0.1;
+    return Math.max(0.1, 1 - (ageInMonths / this.RECENCY_WEIGHT_MONTHS) * 0.9);
+  }
+
+  getConvictionWeight(conviction: Recommendation['conviction']): number {
+    switch (conviction) {
+      case 'HIGH':
+        return 1.5;
+      case 'MEDIUM':
+        return 1.0;
+      case 'LOW':
+        return 0.5;
+      case 'NONE':
+      default:
+        return 0.25;
+    }
+  }
+
+  async calculateUserTrustScore(
+    userId: UUID,
+    runtime: IAgentRuntime,
+    _worldId?: UUID // _worldId from task is no longer needed here for component lookup
+  ): Promise<void> {
+    logger.info(
+      `[CommunityInvestorService] Starting calculateUserTrustScore for user ${userId} (components in world/room: ${this.componentWorldId})`
+    );
+    // Always use the plugin-specific consistent worldId for user trust profiles.
+    // const userProfileWorldId = runtime.agentId as UUID; // Old way
+    const userProfileWorldId = this.componentWorldId;
+    const userProfileRoomId = this.componentRoomId; // Consistent room for components
+
+    this.registerUser(userId);
+
+    // Ensure the plugin's specific world (for storing components) exists
+    try {
+      await runtime.ensureWorldExists({
+        id: userProfileWorldId,
+        name: `Community Investor Global World (Agent: ${runtime.agentId})`,
+        agentId: runtime.agentId,
+        serverId: TRUST_LEADERBOARD_WORLD_SEED, // Use the seed as a serverId for uniqueness
+        metadata: { plugin_managed: true },
+      });
+      logger.debug(
+        `[CommunityInvestorService] Ensured plugin component world ${userProfileWorldId} exists.`
+      );
+    } catch (error) {
+      logger.warn(
+        `[CommunityInvestorService] Error ensuring plugin component world ${userProfileWorldId} (continuing operation): ${error}`
+      );
+    }
+
+    const componentResult = await runtime.getComponent(
+      userId,
+      TRUST_MARKETPLACE_COMPONENT_TYPE,
+      userProfileWorldId, // Use the consistent worldId
+      runtime.agentId
+    );
+    let userProfile: UserTrustProfile;
+    let isNewProfile = false;
+
+    if (componentResult?.data) {
+      userProfile = componentResult.data as UserTrustProfile;
+      logger.info(
+        `[CommunityInvestorService] Found existing profile for user ${userId}. Last calculated: ${new Date(userProfile.lastTrustScoreCalculationTimestamp).toISOString()}`
+      );
+      if (!Array.isArray(userProfile.recommendations)) {
+        logger.warn(
+          `[calculateUserTrustScore] User ${userId} profile recommendations was not an array. Initializing.`
+        );
+        userProfile.recommendations = [];
+      }
+    } else {
+      logger.info(
+        `[CommunityInvestorService] No profile component found for ${userId}, initializing new one.`
+      );
+      userProfile = {
+        version: '1.0.0',
+        userId,
+        trustScore: 0,
+        lastTrustScoreCalculationTimestamp: 0,
+        recommendations: [],
+      };
+      isNewProfile = true;
+    }
+
+    let totalWeightedScore = 0,
+      totalWeight = 0;
+    let profileActuallyModified = false;
+
+    for (const rec of userProfile.recommendations) {
+      const shouldReEvaluate =
+        !rec.metrics ||
+        !rec.metrics.evaluationTimestamp ||
+        Date.now() - rec.metrics.evaluationTimestamp > this.METRIC_REFRESH_INTERVAL;
+
+      if (shouldReEvaluate) {
+        if (!rec.tokenAddress || !rec.chain) {
+          logger.warn(
+            `[calculateUserTrustScore] Rec ${rec.id} for user ${userId} missing address/chain. Skipping metric evaluation.`
+          );
+          continue;
+        }
+        const tokenData = await this.getTokenAPIData(rec.tokenAddress, rec.chain);
+        if (tokenData) {
+          rec.metrics = await this.evaluateRecommendationPerformance(rec, tokenData);
+          if (rec.priceAtRecommendation === undefined || rec.priceAtRecommendation === null) {
+            rec.priceAtRecommendation =
+              tokenData.priceHistory?.find((p) => p.timestamp >= rec.timestamp)?.price ??
+              tokenData.currentPrice;
+          }
+          profileActuallyModified = true;
+        } else {
+          logger.warn(
+            `[calculateUserTrustScore] No token data for ${rec.tokenAddress} (rec ${rec.id}, user ${userId}) to update metrics.`
+          );
+          // Not continuing here, will use existing metrics if any, or result in 0 perf score if metrics remain undefined
+        }
+      }
+
+      if (!rec.metrics) {
+        // If still no metrics after attempt (e.g. tokenData was null)
+        logger.warn(
+          `[calculateUserTrustScore] Rec ${rec.id} for user ${userId} still has no metrics. It will not contribute to score.`
+        );
+        continue;
+      }
+
+      const weight =
+        this.getRecencyWeight(rec.timestamp) * this.getConvictionWeight(rec.conviction);
+      let perfScore = 0;
+      if (rec.recommendationType === 'BUY') {
+        perfScore = rec.metrics.potentialProfitPercent || 0;
+        if (rec.metrics.isScamOrRug) perfScore = -100;
+      } else {
+        // SELL type
+        perfScore = rec.metrics.avoidedLossPercent || 0;
+        if (rec.metrics.isScamOrRug) perfScore = 100;
+      }
+      totalWeightedScore += Math.max(-100, Math.min(100, perfScore)) * weight;
+      totalWeight += weight;
+    }
+
+    const newTrustScore =
+      totalWeight > 0 ? Math.max(-100, Math.min(100, totalWeightedScore / totalWeight)) : 0;
+    // Update only if score changed significantly, metrics were updated, or it's a new profile
+    if (
+      Math.abs(userProfile.trustScore - newTrustScore) > 0.01 ||
+      profileActuallyModified ||
+      isNewProfile
+    ) {
+      userProfile.trustScore = newTrustScore;
+      profileActuallyModified = true;
+    }
+    userProfile.lastTrustScoreCalculationTimestamp = Date.now();
+
+    if (profileActuallyModified) {
+      logger.info(
+        `[CommunityInvestorService] User ${userId} trust score is now: ${userProfile.trustScore.toFixed(2)}. Profile marked for update.`
+      );
+      if (componentResult && !isNewProfile) {
+        logger.info(
+          `[CommunityInvestorService] Attempting to UPDATE component ${componentResult.id} for user ${userId} in world/room ${userProfileWorldId}`
+        );
+        await runtime
+          .updateComponent({ ...componentResult, data: userProfile })
+          .then(() =>
+            logger.info(
+              `[CommunityInvestorService] Successfully UPDATED component ${componentResult.id} for user ${userId} in world/room ${userProfileWorldId}`
+            )
+          )
+          .catch((err) =>
+            logger.error(
+              `[CommunityInvestorService] FAILED to UPDATE component ${componentResult.id} for user ${userId}:`,
+              err
+            )
+          );
+      } else {
+        const newComponentId = componentResult?.id || asUUID(uuidv4()); // Reuse ID if component was created in this call
+        logger.info(
+          `[CommunityInvestorService] Attempting to CREATE component ${newComponentId} for user ${userId} (isNewProfile: ${isNewProfile}, componentResult existed: ${!!componentResult})`
+        );
+        await runtime
+          .createComponent({
+            id: newComponentId,
+            entityId: userId,
+            agentId: runtime.agentId,
+            worldId: userProfileWorldId, // Consistent worldId
+            roomId: userProfileRoomId, // Consistent roomId for the component
+            sourceEntityId: runtime.agentId,
+            type: TRUST_MARKETPLACE_COMPONENT_TYPE,
+            createdAt: Date.now(),
+            data: userProfile,
+          })
+          .then(() =>
+            logger.info(
+              `[CommunityInvestorService] Successfully CREATED component ${newComponentId} for user ${userId} in world/room ${userProfileWorldId}`
+            )
+          )
+          .catch((err) =>
+            logger.error(
+              `[CommunityInvestorService] FAILED to CREATE component ${newComponentId} for user ${userId}:`,
+              err
+            )
+          );
+      }
+    } else {
+      logger.debug(
+        `[CommunityInvestorService] User ${userId} trust score and metrics are up-to-date. No component update needed.`
+      );
+    }
+  }
+
+  // --- Task Worker Execution --- (Could be in a separate tasks.ts file)
+  private async executeProcessTradeDecision(
+    options: { recommendationId: UUID; userId: UUID },
+    task: Task
+  ): Promise<void> {
+    logger.info(
+      `[CommunityInvestorService] Task Worker: Processing rec: ${options.recommendationId}, user: ${options.userId}`
+    );
+    const { recommendationId, userId } = options;
+    const runtime = this.runtime;
+    const userProfileWorldId = runtime.agentId as UUID;
+    const componentResult = await runtime.getComponent(
+      userId,
+      TRUST_MARKETPLACE_COMPONENT_TYPE,
+      userProfileWorldId,
+      runtime.agentId
+    );
+
+    if (!componentResult?.data) {
+      logger.error(
+        `Task Worker: UserProfile component not found for user ${userId}. Deleting task.`
+      );
+      await runtime.deleteTask(task.id as UUID);
+      return;
+    }
+    const userProfile = componentResult.data as UserTrustProfile;
+    let recommendation = userProfile.recommendations.find((r) => r.id === recommendationId);
+
+    if (!recommendation) {
+      logger.error(
+        `Task Worker: Rec ${recommendationId} not found in profile for user ${userId}. Deleting task.`
+      );
+      await runtime.deleteTask(task.id as UUID);
+      return;
+    }
+
+    // If already fully processed (and not just for cooldown), delete task.
+    if (
+      recommendation.processedForTradeDecision &&
+      !(
+        userProfile.lastTradeDecisionMadeTimestamp &&
+        Date.now() - userProfile.lastTradeDecisionMadeTimestamp <
+          this.USER_TRADE_COOLDOWN_HOURS * 3600000
+      )
+    ) {
+      logger.info(
+        `Task Worker: Rec ${recommendationId} already fully processed & not in cooldown. Deleting task.`
+      );
+      await runtime.deleteTask(task.id as UUID);
+      return;
+    }
+
+    // Ensure trust score & recommendation metrics are up-to-date before making a decision.
+    // This is important because new data might have come in since the task was created.
+    await this.calculateUserTrustScore(userId, runtime);
+
+    const updatedComponent = await runtime.getComponent(
+      userId,
+      TRUST_MARKETPLACE_COMPONENT_TYPE,
+      userProfileWorldId,
+      runtime.agentId
+    );
+    if (!updatedComponent?.data) {
+      logger.error(
+        `Task Worker: Profile for ${userId} disappeared after score recalc. Deleting task.`
+      );
+      await runtime.deleteTask(task.id as UUID);
+      return;
+    }
+    const updatedUserProfile = updatedComponent.data as UserTrustProfile;
+    const finalTrustScore = updatedUserProfile.trustScore;
+    // Refresh recommendation from potentially updated profile data
+    recommendation =
+      updatedUserProfile.recommendations.find((r) => r.id === recommendationId) || recommendation;
+
+    // Check cooldown again, as calculateUserTrustScore might take time
+    const now = Date.now();
+    if (
+      updatedUserProfile.lastTradeDecisionMadeTimestamp &&
+      now - updatedUserProfile.lastTradeDecisionMadeTimestamp <
+        this.USER_TRADE_COOLDOWN_HOURS * 3600000
+    ) {
+      logger.info(
+        `Task Worker: User ${userId} on trade cooldown (post-score update). Holding on rec ${recommendationId}.`
+      );
+      if (recommendation) {
+        recommendation.processedForTradeDecision = false; // Keep it false so it can be picked for a real decision later
+      } else {
+        logger.error('Task Worker: Rec null after profile refresh in cooldown check.');
+      }
+      await runtime.updateComponent({ ...updatedComponent, data: updatedUserProfile });
+      await runtime.deleteTask(task.id as UUID);
+      return;
+    }
+
+    let decisionMade = false;
+    if (recommendation.recommendationType === 'BUY') {
+      if (finalTrustScore > this.POSITIVE_TRADE_THRESHOLD) {
+        logger.info(
+          `Task Worker: SIMULATING BUY for rec ${recommendationId}. User ${userId}, Score: ${finalTrustScore.toFixed(2)}`
+        );
+        updatedUserProfile.lastTradeDecisionMadeTimestamp = now;
+        decisionMade = true;
+      } else {
+        logger.info(
+          `Task Worker: HOLDING on BUY rec ${recommendationId}. User ${userId}, Score: ${finalTrustScore.toFixed(2)}, Threshold: >${this.POSITIVE_TRADE_THRESHOLD})`
+        );
+      }
+    } else {
+      // SELL type
+      if (finalTrustScore > this.POSITIVE_TRADE_THRESHOLD) {
+        logger.info(
+          `Task Worker: ACKNOWLEDGING VALID SELL/CRITICISM for rec ${recommendationId}. User ${userId}, Score: ${finalTrustScore.toFixed(2)}`
+        );
+        updatedUserProfile.lastTradeDecisionMadeTimestamp = now;
+        decisionMade = true;
+      } else if (finalTrustScore < -this.NEUTRAL_MARGIN) {
+        logger.info(
+          `Task Worker: IGNORING POTENTIAL FUD SELL/CRITICISM for rec ${recommendationId}. User ${userId}, Score: ${finalTrustScore.toFixed(2)} (Threshold for FUD: <${-this.NEUTRAL_MARGIN})`
+        );
+      } else {
+        logger.info(
+          `Task Worker: NOTING SELL/CRITICISM for rec ${recommendationId}. User ${userId}, Score: ${finalTrustScore.toFixed(2)}`
+        );
+      }
+    }
+
+    const recToUpdate = updatedUserProfile.recommendations.find((r) => r.id === recommendationId);
+    if (recToUpdate) {
+      recToUpdate.processedForTradeDecision = true; // Now it's fully processed for a trade decision cycle
+    } else {
+      logger.error(
+        `[CommunityInvestorService] Task Worker: Could not find rec ${recommendationId} in updated profile to mark as processed.`
+      );
+    }
+
+    await runtime.updateComponent({ ...updatedComponent, data: updatedUserProfile });
+    await runtime.deleteTask(task.id as UUID);
+    logger.info(
+      `Task Worker: Finished trade decision for rec ${recommendationId}. User: ${userId}. Made Sim Trade: ${decisionMade}`
+    );
+  }
+
+  private registerTaskWorkers(runtime: IAgentRuntime): void {
+    runtime.registerTaskWorker({
+      name: 'PROCESS_TRADE_DECISION',
+      execute: async (_runtime, options, task) =>
+        this.executeProcessTradeDecision(options as { recommendationId: UUID; userId: UUID }, task),
+    });
+    logger.info('[CommunityInvestorService] Registered PROCESS_TRADE_DECISION task worker.');
+  }
+
+  async getLeaderboardData(runtime: IAgentRuntime): Promise<LeaderboardEntry[]> {
+    logger.info('[CommunityInvestorService] getLeaderboardData called');
+    const leaderboardEntries: LeaderboardEntry[] = [];
+    // Use the consistent componentWorldId for fetching profiles
+    const worldIdForComponents = this.componentWorldId;
+
+    // Use the user registry to get all users who have made recommendations
+    logger.info(
+      `[CommunityInvestorService] Preparing leaderboard from world ${worldIdForComponents}. Checking ${this.userRegistry.size} registered users from userRegistry: [${Array.from(this.userRegistry).join(', ')}]`
+    );
+
+    for (const userId of this.userRegistry) {
+      logger.debug(
+        `[CommunityInvestorService] Leaderboard: Processing registered user ${userId} from world ${worldIdForComponents}`
+      );
+      try {
+        const component = await runtime.getComponent(
+          userId,
+          TRUST_MARKETPLACE_COMPONENT_TYPE,
+          worldIdForComponents, // Use consistent worldId
+          runtime.agentId
+        );
+
+        if (component?.data) {
+          const profileData = component.data as TrustMarketplaceComponentData;
+          const entityDetails = await runtime.getEntityById(component.entityId);
+
+          const recommendations = Array.isArray(profileData.recommendations)
+            ? profileData.recommendations
+            : [];
+
+          leaderboardEntries.push({
+            userId: component.entityId,
+            username: entityDetails?.names?.[0] || component.entityId.toString(),
+            trustScore: profileData.trustScore || 0,
+            recommendations: recommendations,
+          });
+
+          logger.debug(
+            `[CommunityInvestorService] Added user ${userId} to leaderboard with score ${profileData.trustScore}`
+          );
+        } else {
+          logger.debug(
+            `[CommunityInvestorService] Leaderboard: No profile component found for registered user ${userId}`
+          );
+        }
+      } catch (error) {
+        logger.error(
+          `[CommunityInvestorService] Leaderboard: Error fetching profile component for user ${userId}:`,
+          error
+        );
+      }
+    }
+
+    logger.info(
+      `[CommunityInvestorService] Leaderboard: Found ${leaderboardEntries.length} users with profiles to include.`
+    );
+
+    // Sort by trust score and add ranks
+    leaderboardEntries.sort((a, b) => b.trustScore - a.trustScore);
+    const rankedLeaderboard = leaderboardEntries.map((entry, index) => ({
+      ...entry,
+      rank: index + 1,
+    }));
+    logger.info(
+      `[CommunityInvestorService] Leaderboard generated with ${rankedLeaderboard.length} entries.`
+    );
+    return rankedLeaderboard;
+  }
+
+  // Add this method to register a user when they make a recommendation
+  private registerUser(userId: UUID): void {
+    const originalSize = this.userRegistry.size;
+    this.userRegistry.add(userId);
+    if (this.userRegistry.size > originalSize) {
+      logger.info(
+        `[CommunityInvestorService] User ${userId} ADDED to registry. New size: ${this.userRegistry.size}. Registry now: [${Array.from(this.userRegistry).join(', ')}]`
+      );
+    } else {
+      logger.debug(
+        `[CommunityInvestorService] User ${userId} already in registry. Size: ${this.userRegistry.size}`
+      );
+    }
+    // Persist this to a cache using a key namespaced by the plugin's world ID
+    const registryCacheKey = `community-investor:user-registry:${this.componentWorldId}`;
+    this.runtime
+      .setCache(registryCacheKey, Array.from(this.userRegistry))
+      .then(() =>
+        logger.debug(
+          `[CommunityInvestorService] User registry cache updated for user ${userId} at key ${registryCacheKey}.`
+        )
+      )
+      .catch((err) =>
+        logger.error(
+          `[CommunityInvestorService] FAILED to update user registry cache for ${userId} at key ${registryCacheKey}:`,
+          err
+        )
+      );
+  }
+
+  // Load user registry on initialization
+  private async loadUserRegistry(): Promise<void> {
+    const registryCacheKey = `community-investor:user-registry:${this.componentWorldId}`;
+    try {
+      const cached = await this.runtime.getCache<UUID[]>(registryCacheKey);
+      if (cached && Array.isArray(cached)) {
+        this.userRegistry = new Set(cached);
+        logger.info(
+          `[CommunityInvestorService] Loaded ${this.userRegistry.size} users from registry cache at key ${registryCacheKey}. Users: [${Array.from(this.userRegistry).join(', ')}]`
+        );
+      } else {
+        logger.info(
+          `[CommunityInvestorService] No user registry found in cache at key ${registryCacheKey}, starting fresh.`
+        );
+      }
+    } catch (error) {
+      logger.warn(
+        `[CommunityInvestorService] Failed to load user registry from cache at key ${registryCacheKey}:`,
+        error
+      );
+    }
+  }
+
+  private async ensurePluginComponentContext(): Promise<void> {
+    try {
+      await this.runtime.ensureWorldExists({
+        id: this.componentWorldId,
+        name: `Community Investor Global World (Agent: ${this.runtime.agentId})`,
+        agentId: this.runtime.agentId,
+        serverId: TRUST_LEADERBOARD_WORLD_SEED,
+        metadata: {
+          plugin_managed: true,
+          description: 'World context for CommunityInvestor plugin components',
+        },
+      });
+      logger.info(
+        `[CommunityInvestorService] Ensured plugin component world ${this.componentWorldId} exists.`
+      );
+
+      await this.runtime.ensureRoomExists({
+        id: this.componentRoomId,
+        name: `Community Investor Global Room (Agent: ${this.runtime.agentId})`,
+        worldId: this.componentWorldId,
+        agentId: this.runtime.agentId,
+        channelId: TRUST_LEADERBOARD_WORLD_SEED,
+        source: 'plugin_internal',
+        type: ChannelType.API, // Use API as fallback channel type
+        metadata: {
+          plugin_managed: true,
+          description: 'Room context for CommunityInvestor plugin components',
+        },
+      });
+      logger.info(
+        `[CommunityInvestorService] Ensured plugin component room ${this.componentRoomId} in world ${this.componentWorldId} exists.`
+      );
+    } catch (error) {
+      logger.error(
+        `[CommunityInvestorService] FAILED to ensure plugin component world/room context (ID: ${this.componentWorldId}):`,
+        error
+      );
+      // Depending on the severity, you might want to throw this error or handle it
     }
   }
 }

@@ -1,71 +1,13 @@
 import type { Entity } from '@elizaos/core';
 import type {
+  PositionPerformance,
   PositionWithBalance,
-  Pretty,
   RecommenderMetrics,
   RecommenderMetricsHistory,
   TokenPerformance,
+  TradeMetrics,
   Transaction,
 } from './types';
-
-/**
- * Represents the metrics of a trade including total bought quantity, total bought value, total sold quantity,
- * total sold value, total transfer in quantity, total transfer out quantity, average entry price, average exit price,
- * realized profit and loss, realized profit and loss percentage, volume in USD, first trade time, and last trade time.
- * @typedef {Object} TradeMetrics
- * @property {number} totalBought - The total quantity bought
- * @property {number} totalBoughtValue - The total value of items bought
- * @property {number} totalSold - The total quantity sold
- * @property {number} totalSoldValue - The total value of items sold
- * @property {number} totalTransferIn - The total quantity transferred in
- * @property {number} totalTransferOut - The total quantity transferred out
- * @property {number} averageEntryPrice - The average price at which items were bought
- * @property {number} averageExitPrice - The average price at which items were sold
- * @property {number} realizedPnL - The realized profit and loss
- * @property {number} realizedPnLPercent - The realized profit and loss percentage
- * @property {number} volumeUsd - The volume in USD
- * @property {Date} firstTradeTime - The timestamp of the first trade
- * @property {Date} lastTradeTime - The timestamp of the last trade
- */
-type TradeMetrics = {
-  totalBought: number;
-  totalBoughtValue: number;
-  totalSold: number;
-  totalSoldValue: number;
-  totalTransferIn: number;
-  totalTransferOut: number;
-  averageEntryPrice: number;
-  averageExitPrice: number;
-  realizedPnL: number;
-  realizedPnLPercent: number;
-  volumeUsd: number;
-  firstTradeTime: Date;
-  lastTradeTime: Date;
-};
-
-/**
- * Type for position performance statistics.
- * Includes information about the position such as token, current value, initial value, profit/loss, profit/loss percentage,
- * price change, price change percentage, normalized balance, trade metrics, unrealized profit/loss, unrealized profit/loss percentage,
- * total profit/loss, and total profit/loss percentage.
- */
-type PositionPerformance = Pretty<
-  PositionWithBalance & {
-    token: TokenPerformance;
-    currentValue: number;
-    initialValue: number;
-    profitLoss: number;
-    profitLossPercentage: number;
-    priceChange: number;
-    priceChangePercentage: number;
-    normalizedBalance: number;
-    trades: TradeMetrics;
-    unrealizedPnL: number;
-    unrealizedPnLPercent: number;
-    totalPnL: number;
-    totalPnLPercent: number;
-  }
->;
 
 /**
  * Formats a price into a currency format.

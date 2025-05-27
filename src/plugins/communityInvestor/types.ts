@@ -1,5 +1,4 @@
-import type { Content, Entity as CoreEntity, UUID as CoreUUID, Memory } from '@elizaos/core';
-import type { MessageRecommendation } from './recommendations/schema';
+import type { Content, UUID as CoreUUID, IAgentRuntime, Memory } from '@elizaos/core';
 
 // Re-export UUID type for use in other files
 /**
@@ -463,6 +462,15 @@ export type TokenMarketData = {
   holders: number;
 };
 
+// Message recommendation extracted from text
+export interface MessageRecommendation {
+  tokenMentioned: string;
+  isTicker: boolean;
+  sentiment: 'positive' | 'negative' | 'neutral';
+  conviction: 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH';
+  quote: string;
+}
+
 export interface RecommendationMemory extends Memory {
   content: Content & {
     recommendation: MessageRecommendation & {
@@ -848,6 +856,178 @@ export interface TradePerformance {
   rapidDump: boolean;
 }
 
-export const ServiceType = {
-  COMMUNITY_INVESTOR: 'community_investor',
-} as const;
+/**
+ * Represents the metrics of a trade including total bought quantity, total bought value, total sold quantity,
+ * total sold value, total transfer in quantity, total transfer out quantity, average entry price, average exit price,
+ * realized profit and loss, realized profit and loss percentage, volume in USD, first trade time, and last trade time.
+ * @typedef {Object} TradeMetrics
+ * @property {number} totalBought - The total quantity bought
+ * @property {number} totalBoughtValue - The total value of items bought
+ * @property {number} totalSold - The total quantity sold
+ * @property {number} totalSoldValue - The total value of items sold
+ * @property {number} totalTransferIn - The total quantity transferred in
+ * @property {number} totalTransferOut - The total quantity transferred out
+ * @property {number} averageEntryPrice - The average price at which items were bought
+ * @property {number} averageExitPrice - The average price at which items were sold
+ * @property {number} realizedPnL - The realized profit and loss
+ * @property {number} realizedPnLPercent - The realized profit and loss percentage
+ * @property {number} volumeUsd - The volume in USD
+ * @property {Date} firstTradeTime - The timestamp of the first trade
+ * @property {Date} lastTradeTime - The timestamp of the last trade
+ */
+export type TradeMetrics = {
+  totalBought: number;
+  totalBoughtValue: number;
+  totalSold: number;
+  totalSoldValue: number;
+  totalTransferIn: number;
+  totalTransferOut: number;
+  averageEntryPrice: number;
+  averageExitPrice: number;
+  realizedPnL: number;
+  realizedPnLPercent: number;
+  volumeUsd: number;
+  firstTradeTime: Date;
+  lastTradeTime: Date;
+};
+
+/**
+ * Type for position performance statistics.
+ * Includes information about the position such as token, current value, initial value, profit/loss, profit/loss percentage,
+ * price change, price change percentage, normalized balance, trade metrics, unrealized profit/loss, unrealized profit/loss percentage,
+ * total profit/loss, and total profit/loss percentage.
+ */
+export type PositionPerformance = Pretty<
+  PositionWithBalance & {
+    token: TokenPerformance;
+    currentValue: number;
+    initialValue: number;
+    profitLoss: number;
+    profitLossPercentage: number;
+    priceChange: number;
+    priceChangePercentage: number;
+    normalizedBalance: number;
+    trades: TradeMetrics;
+    unrealizedPnL: number;
+    unrealizedPnLPercent: number;
+    totalPnL: number;
+    totalPnLPercent: number;
+  }
+>;
+
+// ServiceType Enum to identify the service within the runtime
+export enum ServiceType {
+  COMMUNITY_INVESTOR = 'community-investor',
+}
+
+// Supported cryptocurrency chains
+export enum SupportedChain {
+  SOLANA = 'SOLANA',
+  ETHEREUM = 'ETHEREUM',
+  BASE = 'BASE',
+  UNKNOWN = 'UNKNOWN', // For cases where chain can't be determined
+}
+
+// Metrics calculated after observing a recommendation's market performance
+export interface RecommendationMetric {
+  potentialProfitPercent?: number; // e.g., based on ATH after recommendation or price after X days for BUYs
+  avoidedLossPercent?: number; // For SELL/criticism, based on price drop avoided
+  isScamOrRug?: boolean; // Flagged based on heuristics
+  evaluationTimestamp: number; // When this metric was last calculated
+  notes?: string; // e.g., "Hit ATH 3 days later", "Rug pulled", "Low liquidity spike"
+}
+
+// Represents a single recommendation or criticism made by a user
+export interface Recommendation {
+  id: UUID; // Unique ID for this recommendation instance
+  userId: UUID; // Entity ID of the recommender
+  messageId: UUID; // Original message ID that sparked this recommendation
+  timestamp: number; // When the recommendation was made (from original message)
+  tokenTicker?: string; // e.g., "SOL", "BTC" (if identified as a ticker)
+  tokenAddress: string; // e.g., "So11111111111111111111111111111111111111112"
+  chain: SupportedChain; // The blockchain the token is on
+  recommendationType: 'BUY' | 'SELL'; // 'SELL' for criticisms
+  conviction: 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH'; // Sender's conviction level
+  rawMessageQuote: string; // The exact text snippet that is the recommendation/criticism
+  priceAtRecommendation?: number; // Price of the token when the recommendation was made
+  metrics?: RecommendationMetric; // Performance metrics, calculated later by a task
+  processedForTradeDecision?: boolean; // Has the PROCESS_TRADE_DECISION task run for this?
+}
+
+// Data structure for the component stored on an Entity
+export interface UserTrustProfile {
+  version: string; // Schema version, e.g., "1.0.0"
+  userId: UUID; // Entity ID this profile belongs to
+  trustScore: number; // Weighted average score from -100 to 100
+  lastTrustScoreCalculationTimestamp: number; // When trustScore was last calculated
+  lastTradeDecisionMadeTimestamp?: number; // For the 12-hour cooldown for *acting* on this user's recs
+  recommendations: Recommendation[]; // Array of recommendations made by this user
+}
+
+// Type alias for the data field within the ElizaOS Component
+export type TrustMarketplaceComponentData = UserTrustProfile;
+
+// Constant for the component type name used in runtime.getComponent/createComponent
+export const TRUST_MARKETPLACE_COMPONENT_TYPE = 'communityInvestorProfile';
+
+// Payload for the PROCESS_TRADE_DECISION task
+export interface TradeDecisionInput {
+  recommendationId: UUID;
+  userId: UUID;
+}
+
+// Structure for data fetched from external token APIs (e.g., Birdeye, DexScreener)
+export interface TokenAPIData {
+  name?: string;
+  symbol?: string;
+  currentPrice?: number;
+  ath?: number; // All-Time High
+  atl?: number; // All-Time Low
+  priceAtRecommendation?: number; // Price snapshot when the recommendation was made (if fetched at that time)
+  priceHistory?: Array<{ timestamp: number; price: number }>; // For historical analysis
+  liquidity?: number;
+  marketCap?: number;
+  isKnownScam?: boolean; // From external data sources if available
+}
+
+// Data structure for frontend leaderboard entries
+export interface LeaderboardEntry {
+  userId: UUID;
+  username?: string; // Display name for the user
+  trustScore: number;
+  rank?: number; // Calculated dynamically
+  recommendations: Recommendation[]; // Full recommendation history for drill-down
+}
+
+// Interface defining the methods our CommunityInvestorService will provide
+// This helps ensure the class implements all necessary functions.
+export interface ICommunityInvestorService {
+  initialize(runtime: IAgentRuntime): Promise<void>;
+  resolveTicker(
+    ticker: string,
+    chain: SupportedChain,
+    contextMessages: Memory[]
+  ): Promise<{ address: string; chain: SupportedChain; ticker?: string } | null>;
+  getTokenAPIData(address: string, chain: SupportedChain): Promise<TokenAPIData | null>;
+  isLikelyScamOrRug(tokenData: TokenAPIData, recommendationTimestamp: number): Promise<boolean>;
+  evaluateRecommendationPerformance(
+    recommendation: Recommendation,
+    tokenData: TokenAPIData
+  ): Promise<RecommendationMetric>;
+  calculateUserTrustScore(userId: UUID, runtime: IAgentRuntime): Promise<void>;
+  getRecencyWeight(recommendationTimestamp: number): number;
+  getConvictionWeight(conviction: Recommendation['conviction']): number;
+  getLeaderboardData(runtime: IAgentRuntime): Promise<LeaderboardEntry[]>;
+  // ensureTaskWorkersRegistered(runtime: IAgentRuntime): void; // Task registration is internal to constructor
+}
+
+// Adding MessageReceivedHandlerParams
+export interface MessageReceivedHandlerParams {
+  runtime: IAgentRuntime;
+  message: Memory;
+  callback: (
+    response: string | Record<string, any>,
+    metadata?: Record<string, any>
+  ) => Promise<void>;
+  onComplete?: () => void;
+}
