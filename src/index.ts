@@ -2,8 +2,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Character, IAgentRuntime, OnboardingConfig, ProjectAgent } from '@elizaos/core';
 import dotenv from 'dotenv';
-import { initCharacter } from './init.js';
 import { communityInvestorPlugin } from './plugins/communityInvestor';
+import { degenIntelPlugin } from './plugins/degenIntel';
+import { degenTraderPlugin } from './plugins/degenTrader';
+import { heliusPlugin } from './plugins/helius';
+import { appPlugin } from './plugins/plugin-app';
+import { initCharacter } from './init';
 
 const imagePath = path.resolve('./src/spartan/assets/portrait.jpg');
 
@@ -26,23 +30,19 @@ dotenv.config({ path: '../../.env' });
  * @property {Object[]} messageExamples - Examples of messages exchanged by the character in chats
  * @property {Object} style - Object containing communication style guidelines for the character
  */
-const character: Character = {
+export const character: Character = {
   name: 'Spartan',
   plugins: [
     '@elizaos/plugin-sql',
     ...(process.env.GROQ_API_KEY ? ['@elizaos/plugin-groq'] : []),
     ...(process.env.ANTHROPIC_API_KEY ? ['@elizaos/plugin-anthropic'] : []),
     ...(process.env.OPENAI_API_KEY ? ['@elizaos/plugin-openai'] : []),
-    ...(!process.env.OPENAI_API_KEY ? ['@elizaos/plugin-local-ai'] : []),
-    // '@elizaos/plugin-discord',
-    // '@elizaos/plugin-telegram',
-    // '@elizaos/plugin-twitter',
-    // '@elizaos/plugin-pdf',
-    // '@elizaos/plugin-video-understanding',
+    '@elizaos/plugin-twitter',
+    '@elizaos/plugin-discord',
+    '@elizaos/plugin-telegram',
     '@elizaos/plugin-bootstrap',
-    // '@elizaos-plugins/plugin-degenTrader',
-    // '@elizaos-plugins/plugin-jupiter',
-    // '@elizaos/plugin-solana',
+    '@elizaos/plugin-solana',
+    ...(!process.env.OPENAI_API_KEY ? ['@elizaos/plugin-local-ai'] : []),
   ],
   settings: {
     GROQ_PLUGIN_LARGE:
@@ -69,9 +69,7 @@ He speaks in war cries and charts, mocks your poor risk management, and only res
 - Manage LP positions with optimal strategies to avoid getting rekt
 - Deploy autonomous trading tactics, sometimes for gain, sometimes for the lulz
 
-Spartan is always helpful and will always respond to messages from users when they are directed at him.
-
-Spartan always demands explicit confirmation before battle—no accidental clicks, no cowardly retreats. He is loyal to those who commit, savage to those who don’t.
+Spartan always demands explicit confirmation before battle—no accidental clicks, no cowardly retreats. He is loyal to those who commit, savage to those who don't.
 `,
   bio: [
     'Specializes in Solana DeFi trading and pool management',
@@ -521,7 +519,7 @@ const config: OnboardingConfig = {
 };
 
 export const spartan: ProjectAgent = {
-  plugins: [communityInvestorPlugin],
+  plugins: [degenIntelPlugin, appPlugin,  heliusPlugin, communityInvestorPlugin],
   character,
   init: async (runtime: IAgentRuntime) => await initCharacter({ runtime, config }),
 };

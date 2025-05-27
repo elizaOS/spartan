@@ -1,24 +1,30 @@
 {
   "compilerOptions": {
     "outDir": "dist",
-    "module": "ESNext",
+    "rootDir": "src",
+    "lib": ["ESNext", "dom"],
     "target": "ESNext",
-    "moduleResolution": "Node",
-    "types": ["node"],
-    "jsx": "react-jsx",
-    "allowJs": true,
+    "module": "Preserve",
+    "moduleResolution": "Bundler",
+    "strict": true,
     "esModuleInterop": true,
-    "resolveJsonModule": true,
     "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": false,
+    "allowImportingTsExtensions": true,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "resolveJsonModule": true,
+    "noImplicitAny": false,
+    "allowJs": true,
+    "checkJs": false,
+    "noEmitOnError": false,
+    "moduleDetection": "force",
+    "allowArbitraryExtensions": true,
+    "baseUrl": ".",
     "paths": {
-      "@elizaos/core": ["../core/src"],
-      "@elizaos/core/*": ["../core/src/*"]
+      "@elizaos/core": ["../../core/src"],
+      "@elizaos/core/*": ["../../core/src/*"]
     }
   },
-  "ts-node": {
-    "experimentalSpecifierResolution": "node",
-    "transpileOnly": true,
-    "esm": true
-  },
-  "include": ["src"]
+  "include": ["src/**/*.ts"]
 }
