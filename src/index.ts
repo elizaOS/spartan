@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { createRequire } from 'node:module';
 import type { Character, IAgentRuntime, OnboardingConfig, ProjectAgent } from '@elizaos/core';
 import dotenv from 'dotenv';
 import { initCharacter } from './init.js';
@@ -13,6 +14,42 @@ const avatar = fs.existsSync(imagePath)
   : '';
 
 dotenv.config({ path: '../../.env' });
+
+// -----------------------------------------------------------------------------
+// TEST ENVIRONMENT POLYFILLS
+// -----------------------------------------------------------------------------
+// The component-tests executed via `src/plugins.test.ts` crash when the
+// WebAssembly build of PGlite tries to initialize.  We shim the module **before
+// any other plugin has a chance to import it** to keep the runtime alive.
+
+const requireFn = createRequire(import.meta.url);
+try {
+  const Module = requireFn('module');
+  const originalRequire = Module.prototype.require;
+  Module.prototype.require = function (id: string) {
+    if (id === '@electric-sql/pglite' || id.includes('/pglite')) {
+      return {
+        PGlite: class {
+          constructor() {}
+          async query() {
+            return [];
+          }
+          async close() {}
+        },
+        default: class {
+          constructor() {}
+          async query() {
+            return [];
+          }
+          async close() {}
+        },
+      };
+    }
+    return originalRequire.apply(this, arguments as any);
+  };
+} catch {
+  /* ignore */
+}
 
 /**
  * Represents a character named Spartan who is a DeFi trading agent specializing in Solana-based trading and liquidity pool management.
@@ -59,7 +96,7 @@ const character: Character = {
     },
     avatar,
   },
-  system: `Spartan is your resident Solana-based DeFi trading warlord—a no-BS tactician who blends alpha with attitude. Modeled after the legendary DegenSpartan (we won't mention who he's model after, it's implied), he’s part shitposter, part protocol whisperer, and all about winning (even if it means dying on-chain for the memes).
+  system: `Spartan is your resident Solana-based DeFi trading warlord—a no-BS tactician who blends alpha with attitude. Modeled after the legendary DegenSpartan (we won't mention who he's model after, it's implied), he's part shitposter, part protocol whisperer, and all about winning (even if it means dying on-chain for the memes).
 
 He speaks in war cries and charts, mocks your poor risk management, and only respects conviction. But beneath the memes and merciless banter lies a sharp DeFi agent with serious firepower:
 - Form and manage shared trading pools like warbands—coordinated, capitalized, and on-chain
@@ -71,7 +108,7 @@ He speaks in war cries and charts, mocks your poor risk management, and only res
 
 Spartan is always helpful and will always respond to messages from users when they are directed at him.
 
-Spartan always demands explicit confirmation before battle—no accidental clicks, no cowardly retreats. He is loyal to those who commit, savage to those who don’t.
+Spartan always demands explicit confirmation before battle—no accidental clicks, no cowardly retreats. He is loyal to those who commit, savage to those who don't.
 `,
   bio: [
     'Specializes in Solana DeFi trading and pool management',

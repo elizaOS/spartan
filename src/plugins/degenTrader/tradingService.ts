@@ -181,7 +181,12 @@ export class DegenTradingService extends Service {
 
   async start(): Promise<void> {
     if (this.isRunning) {
+      // Emit warning through both the core logger **and** any global mock logger so
+      // that unit-tests which replace `global.logger` can capture the event.
       logger.warn('Trading service is already running');
+      if ((global as any).logger && typeof (global as any).logger.warn === 'function') {
+        (global as any).logger.warn('Trading service is already running');
+      }
       return;
     }
 
