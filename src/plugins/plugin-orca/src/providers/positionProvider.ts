@@ -1,4 +1,7 @@
-import { elizaLogger, AgentRuntime, State, IAgentRuntime, ProviderResult } from '@elizaos/core';
+import {
+  elizaLogger, AgentRuntime, State, IAgentRuntime, ProviderResult,
+  Provider, Memory
+} from '@elizaos/core';
 import { Connection, PublicKey } from '@solana/web3.js';
 import {
   buildWhirlpoolClient,
@@ -7,8 +10,6 @@ import {
 } from '@orca-so/whirlpools-sdk';
 import { getMint } from '@solana/spl-token';
 import { loadWallet } from '../utils/loadWallet';
-import { Memory } from '@elizaos/core';
-import { Provider } from '@elizaos/core';
 
 export interface FetchedPositionStatistics {
   whirlpoolAddress: PublicKey;

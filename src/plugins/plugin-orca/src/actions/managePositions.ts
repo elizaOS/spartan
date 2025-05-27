@@ -10,6 +10,7 @@ import {
   composePromptFromState,
   UUID,
   Action,
+  Task
 } from '@elizaos/core';
 import {
   Keypair,
@@ -38,6 +39,7 @@ import {
 } from '@orca-so/whirlpools-sdk';
 import { Address } from '@solana/addresses';
 import { GetAccountInfoApi, GetMultipleAccountsApi, GetMinimumBalanceForRentExemptionApi, GetEpochInfoApi } from '@solana/rpc-api';
+import { acquireService } from '../utils/utils';
 
 interface FetchedPosition {
   whirlpoolAddress: string;
@@ -62,6 +64,19 @@ interface TransactionSigner {
   publicKey: PublicKey;
   signTransaction(tx: Transaction): Promise<Transaction>;
   signAllTransactions(txs: Transaction[]): Promise<Transaction[]>;
+}
+
+interface PositionService {
+  register_position: (position: FetchedPosition) => Promise<string>;
+  close_position: (positionId: string) => Promise<boolean>;
+  open_position: (params: OpenPositionParams) => Promise<string>;
+}
+
+interface OpenPositionParams {
+  whirlpoolAddress: string;
+  liquidityQuote: IncreaseLiquidityQuoteParam;
+  lowerPrice: number;
+  upperPrice: number;
 }
 
 // Create a wrapper type that combines Connection with Orca's required methods
@@ -91,24 +106,16 @@ export const managePositions: Action = {
     callback?: HandlerCallback
   ) => {
     elizaLogger.log('Start managing positions');
-    if (!state) {
-      state = (await runtime.composeState(message)) as State;
-    } else {
-      state = await runtime.composeState(message) as State;
-    }
-    const { repositionThresholdBps, slippageToleranceBps }: ManagePositionsInput =
-      await extractAndValidateConfiguration(message.content.text, runtime);
+
+    // Get configuration
+    const config: ManagePositionsInput = await extractAndValidateConfiguration(message.content.text, runtime);
     const fetchedPositions = await extractFetchedPositions(state.providers, runtime);
-    elizaLogger.log(
-      `Validated configuration: repositionThresholdBps=${repositionThresholdBps}, slippageTolerance=${slippageToleranceBps}`
-    );
-    elizaLogger.log('Fetched positions:', fetchedPositions);
 
     const { signer: wallet } = await loadWallet(runtime, true);
     const connection = new Connection(runtime.getSetting('SOLANA_RPC_URL')) as unknown as OrcaConnection;
-    setDefaultSlippageToleranceBps(slippageToleranceBps);
+    setDefaultSlippageToleranceBps(config.slippageToleranceBps);
 
-    // Create a TransactionSigner from the wallet
+    // Create transaction signer
     const transactionSigner: TransactionSigner = {
       publicKey: wallet.publicKey,
       signTransaction: async (tx: Transaction) => {
@@ -125,7 +132,37 @@ export const managePositions: Action = {
 
     setDefaultFunder(toAddress(transactionSigner.publicKey));
 
-    await handleRepositioning(fetchedPositions, repositionThresholdBps, connection, wallet);
+    // Initialize services
+    const positionService = await acquireService(runtime, 'POSITION_MANAGER', 'position management service');
+    const whirlpoolClient = buildWhirlpoolClient({
+      connection,
+      wallet: { publicKey: wallet.publicKey },
+    } as unknown as WhirlpoolContext);
+
+    // Register positions for monitoring
+    for (const position of fetchedPositions) {
+      const positionId = await positionService.register_position(position);
+
+      // Create rebalancing task
+      await runtime.createTask({
+        id: uuidv4() as UUID,
+        name: `monitor_position_${positionId}`,
+        type: 'MONITOR',
+        description: `Monitor and rebalance position ${positionId}`,
+        tags: ['queue', 'repeat', 'position', 'monitor'],
+        schedule: { interval: config.intervalSeconds * 1000 },
+        execute: async () => {
+          await checkAndRebalancePosition(
+            position,
+            config.repositionThresholdBps,
+            connection,
+            wallet,
+            whirlpoolClient,
+            positionService
+          );
+        }
+      } as Task);
+    }
 
     return true;
   },
@@ -246,126 +283,78 @@ function toPublicKey(address: Address): PublicKey {
   return new PublicKey(address);
 }
 
-async function handleRepositioning(
-  fetchedPositions: FetchedPosition[],
-  repositionThresholdBps: number,
+async function checkAndRebalancePosition(
+  position: FetchedPosition,
+  thresholdBps: number,
   connection: Connection,
-  wallet: Keypair
+  wallet: Keypair,
+  whirlpoolClient: ReturnType<typeof buildWhirlpoolClient>,
+  positionService: PositionService
 ) {
-  const client = buildWhirlpoolClient({
-    connection,
-    wallet: { publicKey: wallet.publicKey },
-  } as unknown as WhirlpoolContext);
+  const { inRange, distanceCenterPositionFromPoolPriceBps, positionWidthBps } = position;
 
-  return await Promise.all(
-    fetchedPositions.map(async (fetchedPosition) => {
-      const { inRange, distanceCenterPositionFromPoolPriceBps, positionWidthBps } = fetchedPosition;
-      if (!inRange || distanceCenterPositionFromPoolPriceBps > repositionThresholdBps) {
-        const positionMintPublicKey = new PublicKey(fetchedPosition.positionMint);
-        const pda = await getPositionAddress(toAddress(positionMintPublicKey));
-        const positionAddress = pda[0];
-        let position = await client.getPosition(positionAddress);
-        const whirlpoolAddress = position.getData().whirlpool;
-        let whirlpool = await client.getPool(whirlpoolAddress);
-        const mintA = await getMint(connection, whirlpool.getData().tokenMintA);
-        const mintB = await getMint(connection, whirlpool.getData().tokenMintB);
-        const newPriceBounds: NewPriceBounds = calculatePriceBounds(
-          whirlpool.getData().sqrtPrice,
-          mintA.decimals,
-          mintB.decimals,
-          positionWidthBps
-        );
-        let newLowerPrice = newPriceBounds.newLowerPrice;
-        let newUpperPrice = newPriceBounds.newUpperPrice;
+  if (!inRange || distanceCenterPositionFromPoolPriceBps > thresholdBps) {
+    try {
+      const positionMintPublicKey = new PublicKey(position.positionMint);
+      const pda = await getPositionAddress(toAddress(positionMintPublicKey));
+      const positionAddress = pda[0];
+      let whirlpoolPosition = await whirlpoolClient.getPosition(positionAddress);
+      const whirlpoolAddress = whirlpoolPosition.getData().whirlpool;
+      let whirlpool = await whirlpoolClient.getPool(whirlpoolAddress);
 
-        elizaLogger.log(`Repositioning position: ${positionMintPublicKey}`);
+      // Close existing position
+      const orcaConnection = {
+        ...connection,
+        getAccountInfo: (address: string) => connection.getAccountInfo(new PublicKey(address)),
+        getMultipleAccountsInfo: (addresses: string[]) =>
+          connection.getMultipleAccountsInfo(addresses.map(addr => new PublicKey(addr)))
+      } as Rpc;
 
-        let closeSuccess = false;
-        let closeTxId;
-        while (!closeSuccess) {
-          try {
-            // Create Orca RPC wrapper
-            const orcaConnection = {
-              ...connection,
-              getAccountInfo: (address: string) => connection.getAccountInfo(new PublicKey(address)),
-              getMultipleAccountsInfo: (addresses: string[]) =>
-                connection.getMultipleAccountsInfo(addresses.map(addr => new PublicKey(addr)))
-            } as Rpc;
+      const { instructions: closeInstructions, quote } = await closePositionInstructions(
+        orcaConnection,
+        toAddress(positionMintPublicKey)
+      );
+      const closeTxId = await sendTransaction(connection, closeInstructions, wallet);
 
-            // Use orcaConnection for Orca functions
-            const { instructions: closeInstructions, quote } = await closePositionInstructions(
-              orcaConnection,
-              toAddress(positionMintPublicKey)
-            );
-            closeTxId = await sendTransaction(connection, closeInstructions, wallet);
-            closeSuccess = closeTxId ? true : false;
-
-            // Prepare for open position
-            const increaseLiquidityQuoteParam: IncreaseLiquidityQuoteParam = {
-              liquidity: quote.liquidityDelta,
-            };
-            whirlpool = await client.getPool(whirlpoolAddress);
-            const newPriceBounds: NewPriceBounds = calculatePriceBounds(
-              whirlpool.getData().sqrtPrice,
-              mintA.decimals,
-              mintB.decimals,
-              positionWidthBps
-            );
-            newLowerPrice = newPriceBounds.newLowerPrice;
-            newUpperPrice = newPriceBounds.newUpperPrice;
-            let openSuccess = false;
-            let openTxId;
-            while (!openSuccess) {
-              try {
-                const { instructions: openInstructions, positionMint: newPositionMint } =
-                  await openPositionInstructions(
-                    orcaConnection,
-                    toAddress(whirlpoolAddress),
-                    increaseLiquidityQuoteParam,
-                    newLowerPrice,
-                    newUpperPrice
-                  );
-                openTxId = await sendTransaction(connection, openInstructions, wallet);
-                openSuccess = openTxId ? true : false;
-
-                elizaLogger.log(`Successfully reopened position with mint: ${newPositionMint}`);
-                return { positionMintAddress: positionMintPublicKey, closeTxId, openTxId };
-              } catch (openError) {
-                elizaLogger.warn(
-                  `Open position failed for ${positionMintPublicKey}, retrying. Error: ${openError}`
-                );
-                whirlpool = await client.getPool(whirlpoolAddress);
-                const newPriceBounds: NewPriceBounds = calculatePriceBounds(
-                  whirlpool.getData().sqrtPrice,
-                  mintA.decimals,
-                  mintB.decimals,
-                  positionWidthBps
-                );
-                newLowerPrice = newPriceBounds.newLowerPrice;
-                newUpperPrice = newPriceBounds.newUpperPrice;
-              }
-            }
-          } catch (closeError) {
-            elizaLogger.warn(
-              `Close position failed for ${positionMintPublicKey}, retrying after fetching new prices. Error: ${closeError}`
-            );
-            whirlpool = await client.getPool(whirlpoolAddress);
-            const newPriceBounds: NewPriceBounds = calculatePriceBounds(
-              whirlpool.getData().sqrtPrice,
-              mintA.decimals,
-              mintB.decimals,
-              positionWidthBps
-            );
-            newLowerPrice = newPriceBounds.newLowerPrice;
-            newUpperPrice = newPriceBounds.newUpperPrice;
-          }
-        }
-      } else {
-        elizaLogger.log(`Position ${fetchedPosition.positionMint} is in range, skipping.`);
-        return null;
+      if (!closeTxId) {
+        elizaLogger.warn(`Failed to close position ${position.positionMint}`);
+        return;
       }
-    })
-  );
+
+      // Calculate new position parameters
+      const mintA = await getMint(connection, whirlpool.getData().tokenMintA);
+      const mintB = await getMint(connection, whirlpool.getData().tokenMintB);
+      const newPriceBounds = calculatePriceBounds(
+        whirlpool.getData().sqrtPrice,
+        mintA.decimals,
+        mintB.decimals,
+        positionWidthBps
+      );
+
+      // Open new position
+      const increaseLiquidityQuoteParam: IncreaseLiquidityQuoteParam = {
+        liquidity: quote.liquidityDelta,
+      };
+
+      const { instructions: openInstructions, positionMint: newPositionMint } =
+        await openPositionInstructions(
+          orcaConnection,
+          toAddress(whirlpoolAddress),
+          increaseLiquidityQuoteParam,
+          newPriceBounds.newLowerPrice,
+          newPriceBounds.newUpperPrice
+        );
+
+      const openTxId = await sendTransaction(connection, openInstructions, wallet);
+
+      if (openTxId) {
+        elizaLogger.log(`Successfully rebalanced position. New position mint: ${newPositionMint}`);
+      }
+
+    } catch (error) {
+      elizaLogger.error(`Error rebalancing position ${position.positionMint}:`, error);
+    }
+  }
 }
 
 const address = (addressString: string) => new PublicKey(addressString);
