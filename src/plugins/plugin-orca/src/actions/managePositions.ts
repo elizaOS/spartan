@@ -18,7 +18,7 @@ import {
   TransactionSignature,
   Transaction,
   Signer,
-  Connection
+  Connection,
 } from '@solana/web3.js';
 import { getMint } from '@solana/spl-token';
 import { getPositionAddress } from '@orca-so/whirlpools-client';
@@ -225,13 +225,33 @@ function validateManagePositionsInput(obj: Record<string, any>): ManagePositions
 
 export async function extractAndValidateConfiguration(
   text: string,
-  runtime: IAgentRuntime
+  runtime: IAgentRuntime,
+  position?: FetchedPosition,
+  whirlpoolData?: any
 ): Promise<ManagePositionsInput | null> {
   elizaLogger.log('Extracting and validating configuration from text:', text);
 
-  const prompt = `Given this message: "${text}". Extract the reposition threshold value, time interval, and slippage tolerance.
+  // Default values for reference
+  const defaultConfig = {
+    repositionThresholdBps: 500, // 5% drift threshold
+    intervalSeconds: 300, // 5 minutes
+    slippageToleranceBps: 100 // 1% slippage tolerance
+  };
+
+  const prompt = `Given this message: "${text}". Extract or suggest the reposition threshold value, time interval, and slippage tolerance.
         The threshold value and the slippage tolerance can be given in percentages or bps. You will always respond with the reposition threshold in bps.
-        Very important: Add null values for each field that is not present in the message.
+        
+        Current position data:
+        ${position ? JSON.stringify(position, null, 2) : 'No position data available'}
+        
+        Current whirlpool data:
+        ${whirlpoolData ? JSON.stringify(whirlpoolData, null, 2) : 'No whirlpool data available'}
+        
+        If no values are provided in the message, suggest optimal values based on:
+        - Pool volatility and volume
+        - Current position width and range
+        - Default reference values: ${JSON.stringify(defaultConfig, null, 2)}
+        
         Return the response as a JSON object with the following structure:
         {
             "repositionThresholdBps": number (integer value),
@@ -240,21 +260,12 @@ export async function extractAndValidateConfiguration(
         }
     `;
 
-  const memory: Memory = {
-    id: uuidv4() as UUID,
-    entityId: runtime.agentId,
-    roomId: 'global' as UUID,
-    content: {
-      text: prompt,
-      type: 'text'
-    },
-    createdAt: Date.now(),
-  };
-
-  const state = await runtime.composeState(memory);
+  const json = await runtime.useModel(ModelType.TEXT_SMALL, { prompt })
+  console.log('json', json)
 
   try {
-    const configuration = parseJSONObjectFromText(state.content.text);
+    const configuration = parseJSONObjectFromText(json);
+    console.log('configuration', configuration)
     return validateManagePositionsInput(configuration);
   } catch (error) {
     elizaLogger.warn('Invalid configuration detected:', error);
@@ -356,5 +367,3 @@ async function checkAndRebalancePosition(
     }
   }
 }
-
-const address = (addressString: string) => new PublicKey(addressString);
