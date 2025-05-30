@@ -1,4 +1,4 @@
-import type { IAgentRuntime, Plugin } from '@elizaos/core';
+import type { IAgentRuntime, Plugin, Memory, State } from '@elizaos/core';
 import { positionProvider } from './providers/positionProvider';
 import { managePositionActionRetriggerEvaluator } from './evaluators/repositionEvaluator';
 import { managePositions } from './actions/managePositions';
@@ -14,10 +14,10 @@ export const orcaPlugin: Plugin = {
   init: async (_, runtime: IAgentRuntime) => {
     console.log('orca init');
 
-    new Promise(async resolve => {
+    new Promise<void>(async resolve => {
       resolve()
       const asking = 'orca';
-      const serviceType = 'chain_solana';
+      let serviceType = 'chain_solana';
       let traderChainService = runtime.getService(serviceType) as any;
       while (!traderChainService) {
         console.log(asking, 'waiting for', serviceType, 'service...');
@@ -34,14 +34,44 @@ export const orcaPlugin: Plugin = {
       };
       traderChainService.registerExchange(me);
 
+      serviceType = 'TRADER_LIQUIDITYPOOL';
+      let traderLpService = runtime.getService(serviceType) as any;
+      while (!traderLpService) {
+        console.log(asking, 'waiting for', serviceType, 'service...');
+        traderLpService = runtime.getService(serviceType) as any;
+        if (!traderLpService) {
+          await new Promise((waitResolve) => setTimeout(waitResolve, 1000));
+        } else {
+          console.log(asking, 'Acquired', serviceType, 'service...');
+        }
+      }
+
+    // first, get all tasks with tags "queue", "repeat", "orca" and delete them
+    const tasks = await runtime.getTasks({
+      tags: ['queue', 'repeat', 'orca'],
+    });
+
+    for (const task of tasks) {
+      await runtime.deleteTask(task.id);
+    }
+
     const worldId = runtime.agentId; // this is global data for the agent
+
     runtime.registerTaskWorker({
       name: 'ORCA_BALANCE',
       validate: async (_runtime, _message, _state) => {
         return true; // TODO: validate after certain time
       },
       execute: async (runtime, _options, task) => {
-        managePositions.handler(runtime, { content: { text: '' } }, {}, {})
+        const memory: Memory = {
+          entityId: worldId,
+          roomId: worldId,
+          content: {
+             text: '',
+          }
+        }
+        const state = await runtime.composeState(memory)
+        managePositions.handler(runtime, memory, state)
       },
     });
 

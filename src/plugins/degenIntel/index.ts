@@ -13,6 +13,7 @@ import { birdeyeTradePortfolioProvider } from './providers/birdeyeWallet';
 import { TradeChainService } from './services/srv_chain';
 import { TradeDataProviderService } from './services/srv_dataprovider';
 import { TradeStrategyService } from './services/srv_strategy';
+import { TradeLpService } from './services/srv_liquiditypooling';
 
 // create a new plugin
 export const degenIntelPlugin: Plugin = {
@@ -20,7 +21,7 @@ export const degenIntelPlugin: Plugin = {
   description: 'Spartan Intel plugin',
   routes,
   providers: [],
-  services: [TradeChainService, TradeDataProviderService, TradeStrategyService],
+  services: [TradeChainService, TradeDataProviderService, TradeStrategyService, TradeLpService],
   tests: [
     {
       name: 'test suite for intel',

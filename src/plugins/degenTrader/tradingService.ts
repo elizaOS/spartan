@@ -1,7 +1,7 @@
 // Combined DegenTradingService that integrates all functionality
 
 import { type IAgentRuntime, logger, Service, type UUID } from '@elizaos/core';
-import { Connection, VersionedTransaction } from '@solana/web3.js';
+import { VersionedTransaction } from '@solana/web3.js';
 import { v4 as uuidv4 } from 'uuid';
 import { REQUIRED_SETTINGS } from './config/config';
 import {

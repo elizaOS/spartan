@@ -7,7 +7,7 @@ import { SolanaService } from './service';
 
 
 export const solanaPlugin: Plugin = {
-  name: SOLANA_SERVICE_NAME,
+  name: 'solana',
   description: 'Solana Plugin for Eliza',
   actions: [transferToken, executeSwap],
   evaluators: [],

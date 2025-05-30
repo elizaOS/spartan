@@ -6,8 +6,9 @@ import { communityInvestorPlugin } from './plugins/communityInvestor';
 import { degenIntelPlugin } from './plugins/degenIntel';
 import { degenTraderPlugin } from './plugins/degenTrader';
 import { heliusPlugin } from './plugins/helius';
-import { appPlugin } from './plugins/plugin-app';
+//import { solanaPlugin } from './plugins/plugin-solana/src';
 import { initCharacter } from './init';
+//import orcaPlugin from './plugins/plugin-orca/src';
 
 const imagePath = path.resolve('./src/spartan/assets/portrait.jpg');
 
@@ -37,12 +38,13 @@ export const character: Character = {
     ...(process.env.GROQ_API_KEY ? ['@elizaos/plugin-groq'] : []),
     ...(process.env.ANTHROPIC_API_KEY ? ['@elizaos/plugin-anthropic'] : []),
     ...(process.env.OPENAI_API_KEY ? ['@elizaos/plugin-openai'] : []),
+    ...(!process.env.OPENAI_API_KEY ? ['@elizaos/plugin-local-ai'] : []),
     '@elizaos/plugin-twitter',
-    '@elizaos/plugin-discord',
-    '@elizaos/plugin-telegram',
+    //'@elizaos/plugin-discord',
+    //'@elizaos/plugin-telegram',
     '@elizaos/plugin-bootstrap',
     '@elizaos/plugin-solana',
-    ...(!process.env.OPENAI_API_KEY ? ['@elizaos/plugin-local-ai'] : []),
+    '@elizaos/plugin-orca',
   ],
   settings: {
     GROQ_PLUGIN_LARGE:
@@ -519,7 +521,14 @@ const config: OnboardingConfig = {
 };
 
 export const spartan: ProjectAgent = {
-  plugins: [degenIntelPlugin, appPlugin,  heliusPlugin, communityInvestorPlugin],
+  plugins: [
+    heliusPlugin,
+    //solanaPlugin,
+    //degenTraderPlugin, // can't load buffer issue
+    degenIntelPlugin,
+    //orcaPlugin,
+    // communityInvestorPlugin,
+  ],
   character,
   init: async (runtime: IAgentRuntime) => await initCharacter({ runtime, config }),
 };

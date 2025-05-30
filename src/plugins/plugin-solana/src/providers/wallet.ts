@@ -1,5 +1,5 @@
 import type { IAgentRuntime, Memory, Provider, State } from '@elizaos/core';
-import BigNumber from 'bignumber.js';
+import { BN as BigNumber } from '../bignumber';
 import { SOLANA_WALLET_DATA_CACHE_KEY } from '../constants';
 import type { WalletPortfolio } from '../types';
 

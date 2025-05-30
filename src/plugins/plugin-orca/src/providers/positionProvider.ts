@@ -2,121 +2,102 @@ import {
   elizaLogger, AgentRuntime, State, IAgentRuntime, ProviderResult,
   Provider, Memory
 } from '@elizaos/core';
-import { Connection, PublicKey } from '@solana/web3.js';
-import {
-  buildWhirlpoolClient,
-  WhirlpoolContext,
-  Position,
-} from '@orca-so/whirlpools-sdk';
-import { getMint } from '@solana/spl-token';
+import { Address, Rpc, SolanaRpcApi } from '@solana/kit';
+import { createSolanaRpc } from "@solana/kit";
 import { loadWallet } from '../utils/loadWallet';
+import { fetchPositionsForOwner, HydratedPosition } from "@orca-so/whirlpools"
+import { fetchWhirlpool, Whirlpool } from "@orca-so/whirlpools-client";
+import { sqrtPriceToPrice, tickIndexToPrice } from "@orca-so/whirlpools-core";
+import { fetchMint, Mint } from "@solana-program/token-2022"
+
 
 export interface FetchedPositionStatistics {
-  whirlpoolAddress: PublicKey;
-  positionMint: PublicKey;
+  whirlpoolAddress: string;
+  positionMint: string;
   inRange: boolean;
   distanceCenterPositionFromPoolPriceBps: number;
   positionWidthBps: number;
 }
 
 export const positionProvider: Provider = {
-  name: 'degen-lp-position-provider',
-  get: async (runtime: IAgentRuntime, message: Memory, state: State): Promise<ProviderResult> => {
+  description: 'Get liquidity positions for orca whirlpools',
+  dynamic: true,
+  get: async (
+    runtime: IAgentRuntime,
+    message: Memory,
+    state?: State
+  ) => {
+    console.log('positionProvider')
     if (!state) {
       state = (await runtime.composeState(message)) as State;
     } else {
       state = await runtime.composeState(message) as State;
     }
     try {
-      const { address: ownerAddress } = await loadWallet(runtime as AgentRuntime, false);
-      const connection = new Connection((runtime as AgentRuntime).getSetting('SOLANA_RPC_URL'));
-      const positions = await fetchPositions(connection, ownerAddress);
-      return { values: positions };
+      const { address: ownerAddress } = await loadWallet(
+        runtime as AgentRuntime,
+        false
+      );
+      const rpc = createSolanaRpc((runtime as AgentRuntime).getSetting('SOLANA_RPC_URL'));
+      const positions = await fetchPositions(rpc, ownerAddress);
+      const positionsString = JSON.stringify(positions);
+      return positionsString
     } catch (error) {
-      elizaLogger.error('Error in wallet provider:', error);
-      return { values: [] };
+      elizaLogger.error("Error in wallet provider:", error);
+      return null;
     }
   },
 };
 
-const fetchPositions = async (
-  connection: Connection,
-  ownerAddress: PublicKey
-): Promise<FetchedPositionStatistics[]> => {
+
+const fetchPositions = async (rpc: Rpc<SolanaRpcApi>, ownerAddress: Address): Promise<FetchedPositionStatistics[]> => {
   try {
-    const client = buildWhirlpoolClient({
-      connection,
-      wallet: { publicKey: ownerAddress },
-    } as WhirlpoolContext);
-    const positions = await client.getPositions([ownerAddress]);
-    const fetchedWhirlpools = new Map();
-    const fetchedMints = new Map();
-    const FetchedPositionsStatistics: FetchedPositionStatistics[] = await Promise.all(
-      Object.values(positions)
-        .filter((position): position is Position => position !== null)
-        .map(async (position: Position) => {
-          const positionData = position.getData();
-          const positionMint = position.getAddress();
-          const whirlpoolAddress = positionData.whirlpool;
+    const positions = await fetchPositionsForOwner(rpc, ownerAddress);
+    const fetchedWhirlpools: Map<string, Whirlpool> = new Map();
+    const fetchedMints: Map<string, Mint> = new Map();
+    const FetchedPositionsStatistics: FetchedPositionStatistics[] = await Promise.all(positions.map(async (position) => {
+      const positionData = (position as HydratedPosition).data;
+      const positionMint = positionData.positionMint
+      const whirlpoolAddress = positionData.whirlpool;
+      if (!fetchedWhirlpools.has(whirlpoolAddress)) {
+        const whirlpool = await fetchWhirlpool(rpc, whirlpoolAddress);
+        if (whirlpool) {
+          fetchedWhirlpools.set(whirlpoolAddress, whirlpool.data);
+        }
+      }
+      const whirlpool = fetchedWhirlpools.get(whirlpoolAddress);
+      const { tokenMintA, tokenMintB } = whirlpool;
+      if (!fetchedMints.has(tokenMintA)) {
+        const mintA = await fetchMint(rpc, tokenMintA);
+        fetchedMints.set(tokenMintA, mintA.data);
+      }
+      if (!fetchedMints.has(tokenMintB)) {
+        const mintB = await fetchMint(rpc, tokenMintB);
+        fetchedMints.set(tokenMintB, mintB.data);
+      }
+      const mintA = fetchedMints.get(tokenMintA);
+      const mintB = fetchedMints.get(tokenMintB);
+      const currentPrice = sqrtPriceToPrice(whirlpool.sqrtPrice, mintA.decimals, mintB.decimals);
+      const positionLowerPrice = tickIndexToPrice(positionData.tickLowerIndex, mintA.decimals, mintB.decimals);
+      const positionUpperPrice = tickIndexToPrice(positionData.tickUpperIndex, mintA.decimals, mintB.decimals);
 
-          if (!fetchedWhirlpools.has(whirlpoolAddress.toString())) {
-            const whirlpool = await client.getPool(whirlpoolAddress);
-            if (whirlpool) {
-              fetchedWhirlpools.set(whirlpoolAddress.toString(), whirlpool);
-            }
-          }
-          const whirlpool = fetchedWhirlpools.get(whirlpoolAddress.toString());
-          const tokenMintA = whirlpool.getTokenAMint();
-          const tokenMintB = whirlpool.getTokenBMint();
+      const inRange = whirlpool.tickCurrentIndex >= positionData.tickLowerIndex && whirlpool.tickCurrentIndex <= positionData.tickUpperIndex;
+      const positionCenterPrice = (positionLowerPrice + positionUpperPrice) / 2;
+      const distanceCenterPositionFromPoolPriceBps = Math.abs(currentPrice - positionCenterPrice) / currentPrice * 10000;
+      const positionWidthBps = ((positionUpperPrice - positionLowerPrice) / positionCenterPrice * 10000) / 2;
 
-          if (!fetchedMints.has(tokenMintA.toString())) {
-            const mintA = await getMint(connection, tokenMintA);
-            fetchedMints.set(tokenMintA.toString(), mintA);
-          }
-          if (!fetchedMints.has(tokenMintB.toString())) {
-            const mintB = await getMint(connection, tokenMintB);
-            fetchedMints.set(tokenMintB.toString(), mintB);
-          }
-          const mintA = fetchedMints.get(tokenMintA.toString());
-          const mintB = fetchedMints.get(tokenMintB.toString());
+      return {
+        whirlpoolAddress,
+        positionMint: positionMint,
+        inRange,
+        distanceCenterPositionFromPoolPriceBps,
+        positionWidthBps,
+      } as FetchedPositionStatistics;
+    }));
 
-          const currentPrice = whirlpool.sqrtPriceX64ToPrice(
-            whirlpool.getData().sqrtPrice,
-            mintA.decimals,
-            mintB.decimals
-          );
-          const positionLowerPrice = whirlpool.tickIndexToPrice(
-            positionData.tickLowerIndex,
-            mintA.decimals,
-            mintB.decimals
-          );
-          const positionUpperPrice = whirlpool.tickIndexToPrice(
-            positionData.tickUpperIndex,
-            mintA.decimals,
-            mintB.decimals
-          );
-
-          const currentTick = whirlpool.getData().tickCurrentIndex;
-          const inRange =
-            currentTick >= positionData.tickLowerIndex && currentTick <= positionData.tickUpperIndex;
-          const positionCenterPrice = (positionLowerPrice + positionUpperPrice) / 2;
-          const distanceCenterPositionFromPoolPriceBps =
-            (Math.abs(currentPrice - positionCenterPrice) / currentPrice) * 10000;
-          const positionWidthBps =
-            (((positionUpperPrice - positionLowerPrice) / positionCenterPrice) * 10000) / 2;
-
-          return {
-            whirlpoolAddress,
-            positionMint,
-            inRange,
-            distanceCenterPositionFromPoolPriceBps,
-            positionWidthBps,
-          } as FetchedPositionStatistics;
-        })
-    );
-
-    return FetchedPositionsStatistics;
+    return FetchedPositionsStatistics
   } catch (error) {
-    throw new Error('Error during fetching positions');
+    elizaLogger.error("Error during feching positions:", error);
+    throw new Error("Error during feching positions");
   }
-};
+}

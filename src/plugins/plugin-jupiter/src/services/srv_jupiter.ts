@@ -1,5 +1,7 @@
 import { Service, logger, type IAgentRuntime } from '@elizaos/core';
-import { Connection, PublicKey } from '@solana/web3.js';
+import { PublicKey } from '@solana/web3.js';
+import { address, createSolanaRpc } from "@solana/kit";
+
 import {
   createJupiterApiClient,
   type SwapApi,
@@ -466,11 +468,11 @@ export class JupiterService extends Service {
 
     try {
       logger.info('Starting Jupiter service...');
-      
+
       if (!this.connection) {
-        this.connection = new Connection(this.runtime.getSetting('SOLANA_RPC_URL') || 'https://api.mainnet-beta.solana.com', 'confirmed');
+        this.connection = createSolanaRpc(this.runtime.getSetting('SOLANA_RPC_URL') || 'https://api.mainnet-beta.solana.com', 'confirmed');
       }
-      
+
       this.swapApi = createJupiterApiClient();
 
       const platformFeeAccount = this.runtime.getSetting('JUPITER_FEE_ACCOUNT');

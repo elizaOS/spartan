@@ -11,12 +11,12 @@ import { WalletService } from '../walletService';
 
 import { AnchorProvider, Program } from '@coral-xyz/anchor';
 import {
-  ComputeBudgetProgram,
-  Connection,
   PublicKey,
   Transaction,
   VersionedTransaction,
 } from '@solana/web3.js';
+import { address, createSolanaRpc } from "@solana/kit";
+import { getSetComputeUnitLimitInstruction, getSetComputeUnitPriceInstruction } from '@solana-program/compute-budget'
 import { executeTrade } from '../../../degenTrader/utils/wallet';
 import IDL from '../../idl/autofun.json';
 import { Autofun } from '../../types/autofun';
@@ -515,7 +515,7 @@ export class BuyService extends BaseTradeService {
       },
     };
 
-    const connection = new Connection(this.runtime.getSetting('SOLANA_RPC_URL'));
+    const connection = createSolanaRpc(this.runtime.getSetting('SOLANA_RPC_URL'));
 
     const provider = new AnchorProvider(connection, walletAdapter, AnchorProvider.defaultOptions());
     // Use the imported IDL for typing, cast to any to bypass potential strict type mismatch
@@ -555,7 +555,10 @@ export class BuyService extends BaseTradeService {
     const solFee = 0.0005;
     const feeLamports = Math.floor(solFee * 1e9);
     ixs.push(
-      ComputeBudgetProgram.setComputeUnitPrice({
+      getSetComputeUnitLimitInstruction({
+        units: 1000000,
+      }),
+      getSetComputeUnitPriceInstruction({
         microLamports: feeLamports,
       })
     );
@@ -644,8 +647,7 @@ export class BuyService extends BaseTradeService {
 
     try {
       const quoteResponse = await fetch(
-        `https://quote-api.jup.ag/v6/quote?inputMint=So11111111111111111111111111111111111111112&outputMint=${
-          signal.tokenAddress
+        `https://quote-api.jup.ag/v6/quote?inputMint=So11111111111111111111111111111111111111112&outputMint=${signal.tokenAddress
         }&amount=${Math.round(Number(signal.tradeAmount) * 1e9)}&slippageBps=0`
       );
 
