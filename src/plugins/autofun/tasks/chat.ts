@@ -13,8 +13,8 @@ import {
   stringToUuid,
   Service,
 } from '@elizaos/core';
-import { Connection, Keypair, VersionedTransaction, PublicKey } from '@solana/web3.js';
-
+import { Keypair, VersionedTransaction, PublicKey } from '@solana/web3.js';
+import { address, createSolanaRpc } from "@solana/kit";
 interface ChatService extends Service {
   getClientKey(clientId: UUID, agentId: UUID): string;
   clients: Map<string, any>;
@@ -182,7 +182,7 @@ export default class Chat {
     const privateKeyString = this.runtime.getSetting('SOLANA_PRIVATE_KEY');
     const privateKeyBytes = decodeBase58(privateKeyString);
     const walletKeypair = Keypair.fromSecretKey(privateKeyBytes);
-    const connection = new Connection(this.runtime.getSetting('SOLANA_RPC_URL'));
+    const connection = createSolanaRpc(this.runtime.getSetting('SOLANA_RPC_URL'));
     const balance = await connection.getBalance(walletKeypair.publicKey);
     const solBalance = balance / 1e9;
 

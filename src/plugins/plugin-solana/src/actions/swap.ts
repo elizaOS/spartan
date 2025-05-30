@@ -10,11 +10,14 @@ import {
   logger,
   parseJSONObjectFromText,
 } from '@elizaos/core';
-import { Connection, PublicKey, VersionedTransaction } from '@solana/web3.js';
-import BigNumber from 'bignumber.js';
+import { PublicKey, VersionedTransaction } from '@solana/web3.js';
+import { BN as BigNumber } from '../bignumber';
 import { SOLANA_SERVICE_NAME } from '../constants';
 import { getWalletKey } from '../keypairUtils';
 import type { SolanaService } from '../service';
+import { Address, address } from '@solana/addresses';
+import { Rpc, KeyPairSigner } from '@solana/kit'; // Added Rpc, KeyPairSigner
+import { SolanaRpcApi } from '@solana/rpc-api';
 
 import type { Item } from '../types';
 /**

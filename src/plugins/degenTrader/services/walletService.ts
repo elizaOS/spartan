@@ -1,8 +1,8 @@
 import { type IAgentRuntime, logger } from '@elizaos/core';
-import { Connection, Keypair, VersionedTransaction } from '@solana/web3.js';
+import { Keypair, VersionedTransaction } from '@solana/web3.js';
 import { calculateDynamicSlippage } from '../utils/analyzeTrade';
 import bs58 from 'bs58';
-
+import { address, createSolanaRpc } from "@solana/kit";
 export interface WalletOperationResult {
   success: boolean;
   signature?: string;
@@ -35,7 +35,7 @@ export class WalletService {
       if (!rpcUrl) {
         throw new Error('Solana RPC URL not configured');
       }
-      this.connection = new Connection(rpcUrl);
+      this.connection = createSolanaRpc(rpcUrl);
 
       // Initialize wallet
       const privateKey = this.runtime.getSetting('SOLANA_PRIVATE_KEY');
@@ -129,8 +129,7 @@ export class WalletService {
           })
           */
           const quoteResponse = await fetch(
-            `https://public.jupiterapi.com/quote?inputMint=${inputTokenCA}&outputMint=${
-              outputTokenCA
+            `https://public.jupiterapi.com/quote?inputMint=${inputTokenCA}&outputMint=${outputTokenCA
             }&amount=${swapAmount}&slippageBps=${Math.floor(slippage * 10000)}&platformFeeBps=200`
           );
 

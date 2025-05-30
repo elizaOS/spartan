@@ -4,13 +4,14 @@ import {
   TransactionMessage,
   VersionedTransaction,
   PublicKey,
-  SolanaRpcConnection,
   Keypair,
-} from '@solana/kit';
-import { ComputeBudgetProgram } from '@solana-program/compute-budget'
+} from '@solana/web3.js';
+import { address, createSolanaRpc } from "@solana/kit";
+import { getSetComputeUnitLimitInstruction, getSetComputeUnitPriceInstruction } from '@solana-program/compute-budget'
+
 // For more information: https://orca-so.github.io/whirlpools/Whirlpools%20SDKs/Whirlpools/Send%20Transaction
 export async function sendTransaction(
-  connection: SolanaRpcConnection,
+  connection: Connection,
   instructions: Array<any>,
   wallet: Keypair
 ): Promise<string> {
@@ -38,8 +39,8 @@ export async function sendTransaction(
 
   // Add compute budget instructions
   const computeBudgetInstructions = [
-    ComputeBudgetProgram.setComputeUnitLimit({ units: safeComputeUnits }),
-    ComputeBudgetProgram.setComputeUnitPrice({ microLamports: prioritizationFee }),
+    getSetComputeUnitLimitInstruction({ units: safeComputeUnits }),
+    getSetComputeUnitPriceInstruction({ microLamports: prioritizationFee }),
   ];
 
   // Create final transaction

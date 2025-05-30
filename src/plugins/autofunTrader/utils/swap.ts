@@ -1,12 +1,11 @@
 import {
-  type Connection,
   PublicKey,
   Transaction,
   type TransactionInstruction,
   SystemProgram,
   LAMPORTS_PER_SOL,
 } from '@solana/web3.js';
-
+import { address, createSolanaRpc } from "@solana/kit";
 export interface SwapParams {
   fromToken: string;
   toToken: string;
