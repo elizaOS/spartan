@@ -3,7 +3,14 @@ import { positionProvider } from './providers/positionProvider';
 import { managePositionActionRetriggerEvaluator } from './evaluators/repositionEvaluator';
 import { managePositions } from './actions/managePositions';
 import { OrcaService } from './services/srv_orca';
+import { FetchedPosition, OpenPositionParams } from './types';
 
+interface PositionService {
+  register_position: (position: FetchedPosition) => Promise<string>;
+  close_position: (positionId: string) => Promise<boolean>;
+  open_position: (params: OpenPositionParams) => Promise<string>;
+  get_positions: () => Promise<FetchedPosition[]>;
+}
 export const orcaPlugin: Plugin = {
   name: 'Orca LP Plugin',
   description: 'Orca LP plugin',
@@ -46,46 +53,46 @@ export const orcaPlugin: Plugin = {
         }
       }
 
-    // first, get all tasks with tags "queue", "repeat", "orca" and delete them
-    const tasks = await runtime.getTasks({
-      tags: ['queue', 'repeat', 'orca'],
-    });
+      // first, get all tasks with tags "queue", "repeat", "orca" and delete them
+      const tasks = await runtime.getTasks({
+        tags: ['queue', 'repeat', 'orca'],
+      });
 
-    for (const task of tasks) {
-      await runtime.deleteTask(task.id);
-    }
+      for (const task of tasks) {
+        await runtime.deleteTask(task.id);
+      }
 
-    const worldId = runtime.agentId; // this is global data for the agent
+      const worldId = runtime.agentId; // this is global data for the agent
 
-    runtime.registerTaskWorker({
-      name: 'ORCA_BALANCE',
-      validate: async (_runtime, _message, _state) => {
-        return true; // TODO: validate after certain time
-      },
-      execute: async (runtime, _options, task) => {
-        const memory: Memory = {
-          entityId: worldId,
-          roomId: worldId,
-          content: {
-             text: '',
+      runtime.registerTaskWorker({
+        name: 'ORCA_BALANCE',
+        validate: async (_runtime, _message, _state) => {
+          return true; // TODO: validate after certain time
+        },
+        execute: async (runtime, _options, task) => {
+          const memory: Memory = {
+            entityId: worldId,
+            roomId: worldId,
+            content: {
+              text: '',
+            }
           }
-        }
-        const state = await runtime.composeState(memory)
-        managePositions.handler(runtime, memory, state)
-      },
-    });
+          const state = await runtime.composeState(memory)
+          managePositions.handler(runtime, memory, state)
+        },
+      });
 
-    runtime.createTask({
-      name: 'ORCA_BALANCE',
-      description: 'Balance orca pools',
-      worldId,
-      metadata: {
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        updateInterval: 1000 * 60 * 5, // 5 minutes
-      },
-      tags: ['queue', 'repeat', 'orca', 'immediate'],
-    });
+      runtime.createTask({
+        name: 'ORCA_BALANCE',
+        description: 'Balance orca pools',
+        worldId,
+        metadata: {
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          updateInterval: 1000 * 60 * 5, // 5 minutes
+        },
+        tags: ['queue', 'repeat', 'orca', 'immediate'],
+      });
 
       console.log('orca init done');
     })

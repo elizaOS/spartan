@@ -63,6 +63,21 @@ export interface PositionMetrics {
   tokenBAmount: number;
 }
 
+export interface FetchedPosition {
+  whirlpoolAddress: string;
+  positionMint: string;
+  inRange: boolean;
+  distanceCenterPositionFromPoolPriceBps: number;
+  positionWidthBps: number;
+}
+
+export interface OpenPositionParams {
+  whirlpoolAddress: string;
+  lowerTick: number;
+  upperTick: number;
+  tokenAmount?: number;
+}
+
 export const ServiceTypes = {
   LP_TRADING: 'lp_trader',
 } as const;

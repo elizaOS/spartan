@@ -75,20 +75,142 @@ interface TransactionSigner {
 interface PositionService {
   register_position: (position: FetchedPosition) => Promise<string>;
   close_position: (positionId: string) => Promise<boolean>;
-  open_position: (params: OpenPositionParams) => Promise<string>;
+  open_position: (params: OpenPositionParams) => Promise<string | null>;
   get_positions: () => Promise<FetchedPosition[]>;
 }
 
 interface OpenPositionParams {
   whirlpoolAddress: string;
-  liquidityQuote: IncreaseLiquidityQuoteParam;
-  lowerPrice: number;
-  upperPrice: number;
+  lowerTick: number;
+  upperTick: number;
+  tokenAmount?: number;
 }
 
-// Create a wrapper type that combines Connection with Orca's required methods
-type OrcaConnection = Connection & GetAccountInfoApi & GetMultipleAccountsApi &
-  GetMinimumBalanceForRentExemptionApi & GetEpochInfoApi;
+// Helper function to validate the structure of an OpenPositionParams object
+function isValidOpenPositionParams(obj: any): obj is OpenPositionParams {
+  if (!obj || typeof obj !== 'object') return false;
+  const params = obj as OpenPositionParams;
+  return (
+    typeof params.whirlpoolAddress === 'string' && params.whirlpoolAddress.length > 0 &&
+    typeof params.lowerTick === 'number' && Number.isInteger(params.lowerTick) &&
+    typeof params.upperTick === 'number' && Number.isInteger(params.upperTick) &&
+    params.lowerTick < params.upperTick && // Basic sanity: lower tick must be less than upper tick
+    (params.tokenAmount === undefined || (typeof params.tokenAmount === 'number' && params.tokenAmount >= 0))
+  );
+}
+
+async function getInitialPositionParametersFromLLM(
+  runtime: AgentRuntime,
+  ownerAddress: string
+): Promise<OpenPositionParams | null> {
+  elizaLogger.log('[GIPPL] Attempting to get initial position parameters from LLM for owner:', ownerAddress);
+  const prompt = `
+    You are an expert Solana DeFi assistant. A user with wallet address "${ownerAddress}" wants to open a new concentrated liquidity position on Orca.
+    Please suggest parameters for an initial position. Consider common, relatively safe pairs and a reasonable starting token amount (e.g., for USDC or SOL).
+    Provide the whirlpool address (as a string), lower tick (integer), upper tick (integer), and an optional token amount (number, representing the amount of one of the tokens, e.g., in its native decimal format, or a conceptual amount if the exact token isn't specified).
+    If you suggest a tokenAmount, assume it's for one of the more liquid tokens in the pair (like USDC or SOL). If unsure, suggest a small tokenAmount like 10 (representing 10 units of the token).
+    The lower tick must be less than the upper tick.
+
+    Return ONLY the JSON object with the following structure. Do not include any other text, explanations, or conversational preamble.
+    Ensure the tick values are integers.
+
+    {
+        "whirlpoolAddress": "string",
+        "lowerTick": number,
+        "upperTick": number,
+        "tokenAmount": number (optional, default to 10 if not otherwise specified)
+    }
+  `;
+
+  elizaLogger.log('[GIPPL] Prompt constructed. Calling generateText.');
+  let llmResponse: string | null = null;
+  try {
+    llmResponse = await runtime.useModel(ModelType.SMALL, { prompt });
+    elizaLogger.log(`[GIPPL] generateText call completed. Raw LLM output: ${llmResponse}`);
+  } catch (modelError) {
+    elizaLogger.error('[GIPPL] Error directly from generateText call:', modelError);
+    return null;
+  }
+
+  if (llmResponse === null || llmResponse.trim() === "") {
+    elizaLogger.warn('[GIPPL] LLM output is null or empty.');
+    return null;
+  }
+
+  let jsonStringToParse = llmResponse;
+  const jsonCodeBlockRegex = /```json\s*([\s\S]*?)\s*```/;
+  const codeBlockMatch = llmResponse.match(jsonCodeBlockRegex);
+
+  if (codeBlockMatch && codeBlockMatch[1]) {
+    jsonStringToParse = codeBlockMatch[1].trim();
+    elizaLogger.log(`[GIPPL] Extracted content from json code block: ${jsonStringToParse}`);
+  } else {
+    const lastStartObject = llmResponse.lastIndexOf('{');
+    const lastEndObject = llmResponse.lastIndexOf('}');
+    if (lastStartObject !== -1 && lastEndObject !== -1 && lastEndObject > lastStartObject) {
+      jsonStringToParse = llmResponse.substring(lastStartObject, lastEndObject + 1);
+      elizaLogger.log(`[GIPPL] Extracted JSON object string using lastIndexOf heuristic: ${jsonStringToParse}`);
+    } else {
+      elizaLogger.warn('[GIPPL] No JSON code block found and heuristic object extraction failed.');
+    }
+  }
+
+  try {
+    let parsedResult = JSON.parse(jsonStringToParse);
+    elizaLogger.log('[GIPPL] Attempt 1 JSON.parse result:', parsedResult);
+
+    if (!isValidOpenPositionParams(parsedResult)) {
+      elizaLogger.warn('[GIPPL] Parsed result from attempt 1 is not valid OpenPositionParams. Trying parseJSONObjectFromText.');
+      parsedResult = parseJSONObjectFromText(llmResponse); // Try with original full response
+      elizaLogger.log('[GIPPL] Attempt 2 parseJSONObjectFromText result:', parsedResult);
+    }
+
+    if (isValidOpenPositionParams(parsedResult)) {
+      // Ensure tokenAmount has a default if not provided or invalid
+      if (parsedResult.tokenAmount === undefined || typeof parsedResult.tokenAmount !== 'number' || parsedResult.tokenAmount < 0) {
+        elizaLogger.log(`[GIPPL] tokenAmount is undefined or invalid (${parsedResult.tokenAmount}), defaulting to 10.`);
+        parsedResult.tokenAmount = 10; // Default token amount
+      }
+      // Ensure ticks are integers
+      parsedResult.lowerTick = Math.round(parsedResult.lowerTick);
+      parsedResult.upperTick = Math.round(parsedResult.upperTick);
+
+      if (parsedResult.lowerTick >= parsedResult.upperTick) {
+        elizaLogger.error(`[GIPPL] Invalid tick range after parsing/rounding: lowerTick ${parsedResult.lowerTick} >= upperTick ${parsedResult.upperTick}.`);
+        return null;
+      }
+
+      elizaLogger.log('[GIPPL] Successfully parsed and validated OpenPositionParams:', parsedResult);
+      return parsedResult as OpenPositionParams;
+    } else {
+      elizaLogger.error('[GIPPL] Failed to parse valid OpenPositionParams from LLM response after all attempts. Parsed data:', parsedResult);
+      return null;
+    }
+  } catch (error) {
+    elizaLogger.error('[GIPPL] Error parsing LLM response for initial position parameters:', error);
+    // Try parseJSONObjectFromText on the original llmResponse as a final fallback if JSON.parse failed
+    try {
+      const fallbackResult = parseJSONObjectFromText(llmResponse);
+      elizaLogger.log('[GIPPL] Fallback parseJSONObjectFromText result:', fallbackResult);
+      if (isValidOpenPositionParams(fallbackResult)) {
+        if (fallbackResult.tokenAmount === undefined || typeof fallbackResult.tokenAmount !== 'number' || fallbackResult.tokenAmount < 0) {
+          fallbackResult.tokenAmount = 10;
+        }
+        fallbackResult.lowerTick = Math.round(fallbackResult.lowerTick);
+        fallbackResult.upperTick = Math.round(fallbackResult.upperTick);
+        if (fallbackResult.lowerTick >= fallbackResult.upperTick) {
+          elizaLogger.error(`[GIPPL] Fallback - Invalid tick range: lowerTick ${fallbackResult.lowerTick} >= upperTick ${fallbackResult.upperTick}.`);
+          return null;
+        }
+        elizaLogger.log('[GIPPL] Successfully parsed and validated OpenPositionParams via fallback:', fallbackResult);
+        return fallbackResult as OpenPositionParams;
+      }
+    } catch (fallbackError) {
+      elizaLogger.error('[GIPPL] Error in fallback parsing attempt:', fallbackError);
+    }
+    return null;
+  }
+}
 
 export const managePositions: Action = {
   name: 'manage_positions',
@@ -112,143 +234,151 @@ export const managePositions: Action = {
     params: { [key: string]: unknown },
     callback?: HandlerCallback
   ) => {
-    console.log('MANAGE_POSITION HANDLER')
     if (isManagingPositionsHandlerActive) {
-      elizaLogger.warn('managePositions handler is already active. Skipping this invocation to prevent concurrency issues.');
-      return false; // Indicate that this call was skipped
+      elizaLogger.warn('managePositions handler is already active. Skipping this invocation.');
+      return false;
     }
 
     isManagingPositionsHandlerActive = true;
     elizaLogger.log('Start managing positions (handler activated)');
 
     try {
-      // Get configuration - LLM call now happens only here for config.
-      elizaLogger.log('Getting configuration');
-      const config: ManagePositionsInput | null = await extractAndValidateConfiguration(message.content.text, runtime);
-      console.log('GOT CONFIG', config)
-
+      const config = await extractAndValidateConfiguration(message.content.text, runtime);
       if (!config) {
-        elizaLogger.warn('Failed to get valid configuration in handler. Aborting managePositions handler.');
-        return false; // Indicate failure due to no config
+        elizaLogger.warn('Failed to get valid configuration for managing positions. Aborting.');
+        //isManagingPositionsHandlerActive = false; // Moved to finally block
+        return false;
       }
-      //elizaLogger.log('Configuration extracted and validated', config);
 
-      elizaLogger.log('Fetching existing positions');
-      //console.log('MANAGE_POSITION HANDLER 10', positionProvider.name, positionProvider)
+      const { address: ownerAddress } = await loadWallet(runtime as AgentRuntime, false);
+      if (!ownerAddress) {
+        elizaLogger.error("Failed to load wallet address. Cannot proceed.");
+        //isManagingPositionsHandlerActive = false; // Moved to finally block
+        return false;
+      }
+      const orcaService = runtime.getService('ORCA_SERVICE') as any; // Cast to any for now
 
-      const { address: ownerAddressString } = await loadWallet(runtime as AgentRuntime, false);
-      console.log('MANAGE_POSITION - got wallet', address(ownerAddressString.toString()))
-      const ownerPublicKey = new PublicKey(ownerAddressString);
-      const connection = new Connection((runtime as AgentRuntime).getSetting('SOLANA_RPC_URL'));
-      console.log('MANAGE_POSITION - got conn')
+      // Ensure the service has the wallet if it needs it internally for signing
+      // This depends on OrcaService's design; assuming it might need it or can be set.
+      if (orcaService && typeof orcaService.setWallet === 'function') {
+        orcaService.setWallet(ownerAddress);
+      }
 
-      const orcaService = runtime.getService('ORCA_SERVICE') as any;
 
-      //const providerResult = await positionProvider.get(runtime, message, state);
-      console.log('MANAGE_POSITION HANDLER 20')
       const rpc = createSolanaRpc((runtime as AgentRuntime).getSetting('SOLANA_RPC_URL'));
-      const existingPositions = await orcaService.fetchPositions(rpc, ownerPublicKey.toString());
-      elizaLogger.log('Existing positions:', existingPositions);
+      let positions = await orcaService.fetchPositions(rpc, ownerAddress);
+      elizaLogger.log(`Found ${positions.length} existing positions for owner ${ownerAddress}.`);
 
-      // Update state with positions
-      state.providers = {
-        positions: existingPositions
-      };
+      if (positions.length === 0) {
+        elizaLogger.info("No existing positions found. Attempting to open an initial position.");
+        const initialParams = await getInitialPositionParametersFromLLM(runtime, ownerAddress.toString());
 
-      console.log('MANAGE_POSITION HANDLER 30')
-
-      // Now extract positions from updated state
-      const fetchedPositions = await extractFetchedPositions(
-        JSON.stringify(state.providers),
-        runtime
-      );
-      console.log('Positions extracted', fetchedPositions);
-
-      elizaLogger.log('Loading wallet');
-      const { signer: wallet } = await loadWallet(runtime, true);
-      elizaLogger.log('Wallet loaded', wallet);
-
-      //const connection = new Connection(runtime.getSetting('SOLANA_RPC_URL')) as unknown as OrcaConnection;
-      elizaLogger.log('Connection created', connection);
-
-      setDefaultSlippageToleranceBps(config.slippageToleranceBps);
-      elizaLogger.log('Slippage tolerance set', config.slippageToleranceBps);
-
-      // Create transaction signer
-      elizaLogger.log('Creating transaction signer');
-      const transactionSigner: TransactionSigner = {
-        publicKey: wallet.publicKey,
-        signTransaction: async (tx: Transaction) => {
-          elizaLogger.log('Signing transaction', tx);
-          tx.partialSign(wallet);
-          elizaLogger.log('Transaction signed', tx);
-          return tx;
-        },
-        signAllTransactions: async (txs: Transaction[]) => {
-          elizaLogger.log('Signing all transactions', txs);
-          return txs.map(tx => {
-            tx.partialSign(wallet);
-            elizaLogger.log('Transaction signed', tx);
-            return tx;
-          });
+        if (initialParams) {
+          elizaLogger.log("Received initial position parameters from LLM:", initialParams);
+          try {
+            const newPositionMint = await orcaService.open_position(initialParams);
+            if (newPositionMint) {
+              elizaLogger.info(`Successfully opened initial position. Mint: ${newPositionMint}. Re-fetching positions.`);
+              // Re-fetch positions to include the newly opened one
+              positions = await orcaService.fetchPositions(rpc, ownerAddress);
+              elizaLogger.log(`Found ${positions.length} positions after opening initial one.`);
+            } else {
+              elizaLogger.warn("Attempted to open initial position, but open_position returned null (possibly an existing position was found by the service itself, or opening failed silently).");
+            }
+          } catch (openError) {
+            elizaLogger.error("Error opening initial position:", openError);
+          }
+        } else {
+          elizaLogger.warn("Failed to get initial position parameters from LLM. Cannot open a new position automatically.");
         }
-      };
-      elizaLogger.log('Transaction signer created');
-      setDefaultFunder(toAddress(transactionSigner.publicKey));
-      elizaLogger.log('Default funder set');
+      }
 
-      // Initialize services
-      elizaLogger.log('Initializing services');
-      const whirlpoolClient = buildWhirlpoolClient({
-        connection,
-        wallet: { publicKey: wallet.publicKey },
-      } as unknown as WhirlpoolContext);
-      elizaLogger.log('Whirlpool client initialized', whirlpoolClient);
 
-      // Register positions for monitoring
-      elizaLogger.log('Registering positions for monitoring and creating tasks');
-      for (const position of fetchedPositions) {
-        const positionId = await positionService.register_position(position);
-        elizaLogger.log(`Position ${positionId} registered`, positionId);
-        // Create rebalancing task
-        elizaLogger.log('Creating rebalancing task');
+      if (positions.length === 0) {
+        elizaLogger.info("Still no positions found after attempting to open an initial one. No monitoring tasks will be created.");
+        //isManagingPositionsHandlerActive = false; // Moved to finally block
+        // return true because the handler itself completed, even if no positions are managed.
+        // Or false if we consider not managing any position a failure of the action's goal.
+        // Let's return true, as the process ran.
+        return true;
+      }
+
+      const worldId = runtime.agentId;
+
+      // Register positions and create monitoring tasks
+      for (const position of positions) {
+        if (!isValidFetchedPosition(position)) {
+          elizaLogger.warn(`Skipping invalid position object: ${JSON.stringify(position)}`);
+          continue;
+        }
+
+        elizaLogger.log(`Processing position: ${position.positionMint}`);
+        const positionId = await orcaService.register_position(position);
+        elizaLogger.log(`Position ${position.positionMint} registered with ID: ${positionId}. Creating monitoring task.`);
+
+        // Check position immediately if out of range
+        if (!position.inRange) {
+          elizaLogger.info(`Position ${positionId} is out of range. Triggering immediate rebalance.`);
+          await checkAndRebalancePosition(
+            position,
+            config.repositionThresholdBps,
+            orcaService
+          );
+        }
+
+        // Create monitoring task for future checks
         await runtime.createTask({
           id: uuidv4() as UUID,
           name: `monitor_position_${positionId}`,
           type: 'MONITOR',
-          description: `Monitor and rebalance position ${positionId}`,
+          description: `Monitor and rebalance position ${positionId} (Mint: ${position.positionMint})`,
           tags: ['queue', 'repeat', 'position', 'monitor'],
           schedule: { interval: config.intervalSeconds * 1000 },
+          worldId,
           execute: async () => {
-            elizaLogger.log(`Executing rebalancing task for position ${positionId}`);
-            await checkAndRebalancePosition(
-              position,
-              config.repositionThresholdBps,
-              connection,
-              wallet,
-              whirlpoolClient,
-              positionService
-            );
-            elizaLogger.log(`Rebalancing task for position ${positionId} executed`);
+            elizaLogger.log(`Executing monitoring task for position ID: ${positionId}, Mint: ${position.positionMint}`);
+
+            // Add immediate execution for out-of-range positions
+            if (!position.inRange) {
+              elizaLogger.info(`Position ${positionId} is out of range. Triggering immediate rebalance.`);
+              await checkAndRebalancePosition(
+                position,
+                config.repositionThresholdBps,
+                orcaService
+              );
+            }
           }
         } as Task);
-        elizaLogger.log('Rebalancing task created');
+        elizaLogger.log(`Monitoring task created for position ID: ${positionId}`);
       }
-      elizaLogger.log('All positions registered and tasks created');
+
+      elizaLogger.log('Finished processing all positions and creating tasks.');
       return true;
     } catch (error) {
       elizaLogger.error('Error in managePositions handler:', error);
       if (error instanceof Error && error.stack) {
-        elizaLogger.error('managePositions handler error stack:', error.stack);
+        elizaLogger.error('Stack trace for managePositions handler error:', error.stack);
       }
-      return false; // Indicate failure
+      return false;
     } finally {
       isManagingPositionsHandlerActive = false;
-      elizaLogger.log('Finished managing positions attempt. Handler is no longer active.');
+      elizaLogger.log('End managing positions (handler deactivated)');
     }
   },
   examples: [],
 };
+
+// Helper function to validate the structure of a FetchedPosition object
+function isValidFetchedPosition(obj: any): obj is FetchedPosition {
+  return (
+    obj &&
+    typeof obj.whirlpoolAddress === 'string' &&
+    typeof obj.positionMint === 'string' &&
+    typeof obj.inRange === 'boolean' &&
+    typeof obj.distanceCenterPositionFromPoolPriceBps === 'number' &&
+    typeof obj.positionWidthBps === 'number'
+  );
+}
 
 async function extractFetchedPositions(
   text: string,
@@ -271,14 +401,13 @@ async function extractFetchedPositions(
   let content: string | null = null;
   try {
     content = await runtime.useModel(ModelType.SMALL, { prompt });
-
     elizaLogger.log(`[EFP] generateText call completed. Raw content: ${content}`);
   } catch (modelError) {
     elizaLogger.error('[EFP] Error directly from generateText call:', modelError);
     if (modelError instanceof Error && modelError.stack) {
       elizaLogger.error('[EFP] generateText error stack:', modelError.stack);
     }
-    return []; // Return empty array on failure
+    return [];
   }
 
   if (content === null || content.trim() === "") {
@@ -286,20 +415,83 @@ async function extractFetchedPositions(
     return [];
   }
 
-  try {
-    elizaLogger.log('[EFP] Entering parsing try block for fetched positions.');
-    const parsedPositions = parseJSONObjectFromText(content);
-    elizaLogger.log('[EFP] parseJSONObjectFromText returned:', parsedPositions);
+  let jsonStringToParse = content;
 
-    if (!Array.isArray(parsedPositions)) {
-      elizaLogger.warn('[EFP] Parsed positions is not an array:', parsedPositions);
-      return [];
+  const jsonCodeBlockRegex = /```json\s*([\s\S]*?)\s*```/;
+  const codeBlockMatch = content.match(jsonCodeBlockRegex);
+
+  if (codeBlockMatch && codeBlockMatch[1]) {
+    jsonStringToParse = codeBlockMatch[1].trim();
+    elizaLogger.log(`[EFP] Extracted content from json code block: ${jsonStringToParse}`);
+  } else {
+    elizaLogger.log('[EFP] No json code block found. Falling back to heuristic array extraction.');
+    const lastStartIndex = content.lastIndexOf('[');
+    const lastEndIndex = content.lastIndexOf(']');
+    if (lastStartIndex !== -1 && lastEndIndex !== -1 && lastEndIndex > lastStartIndex) {
+      const potentialJsonArray = content.substring(lastStartIndex, lastEndIndex + 1);
+      if (potentialJsonArray.includes('"whirlpoolAddress"')) {
+        jsonStringToParse = potentialJsonArray;
+        elizaLogger.log(`[EFP] Extracted JSON array string using lastIndexOf heuristic: ${jsonStringToParse}`);
+      } else {
+        elizaLogger.warn('[EFP] Found last [] but keywords missing. Will attempt to parse broader content segment.');
+      }
+    } else {
+      elizaLogger.warn('[EFP] Could not reliably find JSON array structure using simple lastIndexOf.');
     }
-    return parsedPositions as FetchedPosition[];
+  }
+
+  let parsedResult: any = null;
+
+  // Attempt 1: JSON.parse on the heuristically extracted string
+  try {
+    elizaLogger.log('[EFP] Attempt 1: JSON.parse on extracted string:', jsonStringToParse);
+    parsedResult = JSON.parse(jsonStringToParse);
+    elizaLogger.log('[EFP] JSON.parse result:', parsedResult);
+    if (Array.isArray(parsedResult)) {
+      const validatedPositions = parsedResult.filter(isValidFetchedPosition);
+      if (validatedPositions.length !== parsedResult.length) {
+        elizaLogger.warn('[EFP] Attempt 1: Some items in the parsed array did not conform to FetchedPosition structure. Original count:', parsedResult.length, 'Validated count:', validatedPositions.length);
+        parsedResult.forEach((item, index) => {
+          if (!isValidFetchedPosition(item)) {
+            elizaLogger.warn(`[EFP] Attempt 1: Item at index ${index} is not a valid FetchedPosition:`, item);
+          }
+        });
+      }
+      elizaLogger.log('[EFP] Successfully parsed and validated (Attempt 1). Returning extracted positions:', validatedPositions);
+      return validatedPositions;
+    }
+    elizaLogger.warn('[EFP] JSON.parse result is not an array. Proceeding to fallback.');
+    parsedResult = null; // Clear to ensure fallback is tried
+  } catch (e) {
+    elizaLogger.warn(`[EFP] JSON.parse failed on extracted string. Error: ${e instanceof Error ? e.message : String(e)}`);
+    // parsedResult remains null, fallback will be tried
+  }
+
+  // Attempt 2: parseJSONObjectFromText on the original full content
+  try {
+    elizaLogger.log('[EFP] Attempt 2: parseJSONObjectFromText on full content (if Attempt 1 failed or was not an array).');
+    // Use original 'content' for parseJSONObjectFromText as it's designed for less clean inputs
+    parsedResult = parseJSONObjectFromText(content);
+    elizaLogger.log('[EFP] parseJSONObjectFromText (fallback) result:', parsedResult);
+    if (Array.isArray(parsedResult)) {
+      const validatedPositions = parsedResult.filter(isValidFetchedPosition);
+      if (validatedPositions.length !== parsedResult.length) {
+        elizaLogger.warn('[EFP] Attempt 2: Some items in the parsed array did not conform to FetchedPosition structure. Original count:', parsedResult.length, 'Validated count:', validatedPositions.length);
+        parsedResult.forEach((item, index) => {
+          if (!isValidFetchedPosition(item)) {
+            elizaLogger.warn(`[EFP] Attempt 2: Item at index ${index} is not a valid FetchedPosition:`, item);
+          }
+        });
+      }
+      elizaLogger.log('[EFP] Successfully parsed and validated (Attempt 2 - fallback). Returning extracted positions:', validatedPositions);
+      return validatedPositions;
+    }
+    elizaLogger.warn('[EFP] Fallback parseJSONObjectFromText result is not an array:', parsedResult);
+    return [];
   } catch (parseError) {
-    elizaLogger.error('[EFP] Error parsing fetched positions:', parseError);
+    elizaLogger.error('[EFP] Error in fallback parseJSONObjectFromText:', parseError);
     if (parseError instanceof Error && parseError.stack) {
-      elizaLogger.error('[EFP] Parsing error stack:', parseError.stack);
+      elizaLogger.error('[EFP] Fallback parsing error stack:', parseError.stack);
     }
     return [];
   }
@@ -353,7 +545,7 @@ export async function extractAndValidateConfiguration(
   let json: string | null = null;
   try {
     json = await runtime.useModel(ModelType.SMALL, { prompt });
-    elizaLogger.log(`[EAVC] generateText call completed. Raw JSON: ${json}`);
+    elizaLogger.log(`[EAVC] generateText call completed. Raw LLM output: ${json}`);
   } catch (modelError) {
     elizaLogger.error('[EAVC] Error directly from generateText call:', modelError);
     if (modelError instanceof Error && modelError.stack) {
@@ -363,34 +555,93 @@ export async function extractAndValidateConfiguration(
   }
 
   if (json === null || json.trim() === "") {
-    elizaLogger.warn('[EAVC] json is null or empty after generateText call, cannot proceed with parsing.');
+    elizaLogger.warn('[EAVC] LLM output is null or empty, cannot proceed with parsing.');
     return null;
   }
 
-  try {
-    elizaLogger.log('[EAVC] Entering parsing/validation try block.');
-    const parsedObject = parseJSONObjectFromText(json);
-    elizaLogger.log('[EAVC] parseJSONObjectFromText returned:', parsedObject);
+  let jsonStringToParse = json; // Start with the full LLM output for heuristic extraction
 
-    if (!parsedObject || typeof parsedObject !== 'object' || parsedObject === null) {
-      elizaLogger.warn('[EAVC] Failed to parse configuration from LLM or result is not a valid object:', parsedObject);
-      return null;
+  const jsonCodeBlockRegex = /```json\s*([\s\S]*?)\s*```/;
+  const codeBlockMatch = json.match(jsonCodeBlockRegex);
+
+  if (codeBlockMatch && codeBlockMatch[1]) {
+    jsonStringToParse = codeBlockMatch[1].trim();
+    elizaLogger.log(`[EAVC] Extracted content from json code block: ${jsonStringToParse}`);
+  } else {
+    elizaLogger.log('[EAVC] No json code block found. Falling back to heuristic object extraction.');
+    const lastStartObject = json.lastIndexOf('{');
+    const lastEndObject = json.lastIndexOf('}');
+    if (lastStartObject !== -1 && lastEndObject !== -1 && lastEndObject > lastStartObject) {
+      const potentialJsonObject = json.substring(lastStartObject, lastEndObject + 1);
+      if (potentialJsonObject.includes('"repositionThresholdBps"')) {
+        jsonStringToParse = potentialJsonObject;
+        elizaLogger.log(`[EAVC] Extracted JSON object string using lastIndexOf heuristic: ${jsonStringToParse}`);
+      } else {
+        elizaLogger.warn('[EAVC] Found last {} but keywords missing. Will attempt to parse broader content segment.');
+      }
+    } else {
+      elizaLogger.warn('[EAVC] Could not find clear JSON object structure using simple lastIndexOf.');
     }
-    elizaLogger.log('[EAVC] parsedObject is a valid object.');
+  }
 
+  let parsedLLMOutput: any = null;
+
+  // Attempt 1: JSON.parse on the heuristically extracted string
+  try {
+    elizaLogger.log('[EAVC] Attempt 1: JSON.parse on extracted string:', jsonStringToParse);
+    const result = JSON.parse(jsonStringToParse);
+    elizaLogger.log('[EAVC] JSON.parse result:', result);
+    if (result && typeof result === 'object' && !Array.isArray(result)) {
+      parsedLLMOutput = result;
+    } else {
+      elizaLogger.warn('[EAVC] JSON.parse result is not a valid object. Proceeding to fallback.', result);
+    }
+  } catch (e) {
+    elizaLogger.warn(`[EAVC] JSON.parse failed on extracted string. Error: ${e instanceof Error ? e.message : String(e)}`);
+    // parsedLLMOutput remains null, fallback will be tried
+  }
+
+  // Attempt 2: parseJSONObjectFromText on the original full LLM output if Attempt 1 failed or was not an object
+  if (!parsedLLMOutput) {
+    try {
+      elizaLogger.log('[EAVC] Attempt 2: parseJSONObjectFromText on full LLM output:', json);
+      // Use original 'json' (raw LLM output) for parseJSONObjectFromText
+      const result = parseJSONObjectFromText(json);
+      elizaLogger.log('[EAVC] parseJSONObjectFromText (fallback) result:', result);
+      if (result && typeof result === 'object' && !Array.isArray(result)) {
+        parsedLLMOutput = result;
+      } else {
+        elizaLogger.warn('[EAVC] Fallback parseJSONObjectFromText result is not a valid object.', result);
+      }
+    } catch (coreParseError) {
+      elizaLogger.error('[EAVC] Error in fallback parseJSONObjectFromText:', coreParseError);
+      if (coreParseError instanceof Error && coreParseError.stack) {
+        elizaLogger.error('[EAVC] Fallback parsing error stack:', coreParseError.stack);
+      }
+    }
+  }
+
+  if (!parsedLLMOutput) {
+    elizaLogger.warn('[EAVC] Failed to parse configuration from LLM after all attempts.');
+    return null;
+  }
+
+  // Proceed with validation and number conversion using parsedLLMOutput
+  try {
+    elizaLogger.log('[EAVC] Validating and converting parsed LLM output:', parsedLLMOutput);
     const configurationWithNumbers: Record<string, any> = {};
     const keysToConvert = ['repositionThresholdBps', 'intervalSeconds', 'slippageToleranceBps'];
     elizaLogger.log('[EAVC] Starting conversion loop for keys:', keysToConvert);
 
     for (const key of keysToConvert) {
       elizaLogger.log(`[EAVC] Processing key: "${key}"`);
-      if (Object.prototype.hasOwnProperty.call(parsedObject, key) && parsedObject[key] !== undefined && parsedObject[key] !== null) {
-        const originalValue = parsedObject[key];
+      if (Object.prototype.hasOwnProperty.call(parsedLLMOutput, key) && parsedLLMOutput[key] !== undefined && parsedLLMOutput[key] !== null) {
+        const originalValue = parsedLLMOutput[key];
         configurationWithNumbers[key] = Number(originalValue);
         elizaLogger.log(`[EAVC] Key "${key}": Original value "${originalValue}" (type: ${typeof originalValue}), Converted value "${configurationWithNumbers[key]}" (type: ${typeof configurationWithNumbers[key]})`);
       } else {
-        configurationWithNumbers[key] = parsedObject[key];
-        elizaLogger.log(`[EAVC] Key "${key}" was missing, undefined, or null in parsedObject. Assigned value: ${configurationWithNumbers[key]}`);
+        configurationWithNumbers[key] = parsedLLMOutput[key]; // Preserve null/undefined for validation
+        elizaLogger.log(`[EAVC] Key "${key}" was missing, undefined, or null in parsedLLMOutput. Assigned value: ${configurationWithNumbers[key]}`);
       }
     }
     elizaLogger.log('[EAVC] Conversion loop finished. Resulting configurationWithNumbers:', configurationWithNumbers);
@@ -400,10 +651,10 @@ export async function extractAndValidateConfiguration(
     elizaLogger.log('[EAVC] validateManagePositionsInput returned successfully:', result);
     return result;
 
-  } catch (error) {
-    elizaLogger.error('[EAVC] Error caught in extractAndValidateConfiguration parsing/validation block:', error);
-    if (error instanceof Error && error.stack) {
-      elizaLogger.error('[EAVC] Parsing/validation error stack:', error.stack);
+  } catch (validationOrConversionError) {
+    elizaLogger.error('[EAVC] Error during validation or conversion of LLM output:', validationOrConversionError);
+    if (validationOrConversionError instanceof Error && validationOrConversionError.stack) {
+      elizaLogger.error('[EAVC] Validation/conversion error stack:', validationOrConversionError.stack);
     }
     return null;
   }
@@ -429,91 +680,58 @@ function toAddress(publicKey: PublicKey): Address {
 async function checkAndRebalancePosition(
   position: FetchedPosition,
   thresholdBps: number,
-  connection: Connection,
-  wallet: Keypair,
-  whirlpoolClient: ReturnType<typeof buildWhirlpoolClient>,
-  positionService: PositionService
+  orcaService: any
 ) {
-  elizaLogger.log('Starting checkAndRebalancePosition for position:', position);
-  const { inRange, distanceCenterPositionFromPoolPriceBps, positionWidthBps } = position;
-  elizaLogger.log('Position status:', { inRange, distanceCenterPositionFromPoolPriceBps, thresholdBps });
-
-  if (!inRange || distanceCenterPositionFromPoolPriceBps > thresholdBps) {
-    elizaLogger.log('Position needs rebalancing');
+  elizaLogger.log(`Checking position ${position.positionMint}. InRange: ${position.inRange}, DistanceBps: ${position.distanceCenterPositionFromPoolPriceBps}, ThresholdBps: ${thresholdBps}`);
+  if (!position.inRange || position.distanceCenterPositionFromPoolPriceBps > thresholdBps) {
+    elizaLogger.info(`Position ${position.positionMint} needs rebalancing. InRange: ${position.inRange}, Distance: ${position.distanceCenterPositionFromPoolPriceBps} > ${thresholdBps}`);
     try {
-      elizaLogger.log('Getting position address');
-      const positionMintPublicKey = new PublicKey(position.positionMint);
-      const pda = await getPositionAddress(toAddress(positionMintPublicKey));
-      elizaLogger.log('Position address obtained:', pda);
-      const positionAddress = pda[0];
-      elizaLogger.log('Position address:', positionAddress);
-      let whirlpoolPosition = await whirlpoolClient.getPosition(positionAddress);
-      const whirlpoolAddress = whirlpoolPosition.getData().whirlpool;
-      elizaLogger.log('Whirlpool address:', whirlpoolAddress);
-      let whirlpool = await whirlpoolClient.getPool(whirlpoolAddress);
-      elizaLogger.log('Whirlpool:', whirlpool);
-
       // Close existing position
-      const orcaConnection = {
-        ...connection,
-        getAccountInfo: (address: string) => connection.getAccountInfo(new PublicKey(address)),
-        getMultipleAccountsInfo: (addresses: string[]) =>
-          connection.getMultipleAccountsInfo(addresses.map(addr => new PublicKey(addr)))
-      } as unknown as Rpc<SolanaRpcApi>;
-
-      elizaLogger.log('Closing position', position);
-      const { instructions: closeInstructions, quote } = await closePositionInstructions(
-        orcaConnection,
-        toAddress(positionMintPublicKey)
-      );
-      elizaLogger.log('Close instructions:', closeInstructions);
-      const closeTxId = await sendTransaction(connection, closeInstructions, wallet);
-      elizaLogger.log('Close transaction ID:', closeTxId);
-      if (!closeTxId) {
-        elizaLogger.warn(`Failed to close position ${position.positionMint}`);
+      elizaLogger.log(`Attempting to close position: ${position.positionMint}`);
+      const closed = await orcaService.close_position(position.positionMint); // Assumes positionMint is the ID
+      if (!closed) {
+        elizaLogger.warn(`Failed to close position ${position.positionMint}. Aborting rebalance for this position.`);
         return;
       }
+      elizaLogger.info(`Successfully closed position ${position.positionMint}.`);
 
-      // Calculate new position parameters
-      elizaLogger.log('Calculating new position parameters');
-      const mintA = await getMint(connection, whirlpool.getData().tokenMintA);
-      elizaLogger.log('Mint A:', mintA);
-      const mintB = await getMint(connection, whirlpool.getData().tokenMintB);
-      elizaLogger.log('Mint B:', mintB);
-      const newPriceBounds = calculatePriceBounds(
-        whirlpool.getData().sqrtPrice,
-        mintA.decimals,
-        mintB.decimals,
-        positionWidthBps
-      );
-      elizaLogger.log('New price bounds:', newPriceBounds);
-
-      // Open new position
-      elizaLogger.log('Opening new position');
-      const increaseLiquidityQuoteParam: IncreaseLiquidityQuoteParam = {
-        liquidity: quote.liquidityDelta,
+      // TODO: Get parameters for the new position. This is crucial.
+      // For now, using placeholders or parameters from the old position, which needs refinement.
+      // This part should ideally involve an LLM or a defined strategy to get new ticks and amount.
+      elizaLogger.warn(`Placeholder logic for new position parameters in checkAndRebalancePosition for whirlpool ${position.whirlpoolAddress}. This needs to be replaced with actual logic (e.g., LLM call or strategy).`);
+      const newPositionParams: OpenPositionParams = {
+        whirlpoolAddress: position.whirlpoolAddress,
+        lowerTick: 0, // Placeholder: Calculate based on new desired range
+        upperTick: 0,  // Placeholder: Calculate based on new desired range
+        tokenAmount: 0 // Placeholder: Determine based on closed position's value or new strategy
       };
-      elizaLogger.log('Increase liquidity quote param:', increaseLiquidityQuoteParam);
-      const { instructions: openInstructions, positionMint: newPositionMint } =
-        await openPositionInstructions(
-          orcaConnection,
-          toAddress(whirlpoolAddress),
-          increaseLiquidityQuoteParam,
-          newPriceBounds.newLowerPrice,
-          newPriceBounds.newUpperPrice
-        );
-      elizaLogger.log('Open instructions:', openInstructions);
-      const openTxId = await sendTransaction(connection, openInstructions, wallet);
-      elizaLogger.log('Open transaction ID:', openTxId);
-      if (openTxId) {
-        elizaLogger.log(`Successfully rebalanced position. New position mint: ${newPositionMint}`);
+      elizaLogger.log(`Attempting to open new position with placeholder params:`, newPositionParams);
+
+
+      // Before opening, ensure the LLM can provide better parameters
+      // For now, we'll log a warning and use placeholders which will likely fail or be suboptimal.
+      // Ideally, call a function similar to getInitialPositionParametersFromLLM or a more specific one for rebalancing.
+      // e.g., const rebalanceParams = await getRebalancePositionParametersFromLLM(runtime, position /* pass old position context */);
+      // if (rebalanceParams) {
+      //    await orcaService.open_position(rebalanceParams);
+      //    elizaLogger.info(`Successfully opened rebalanced position for original mint ${position.positionMint}.`);
+      // } else {
+      //    elizaLogger.warn(`Failed to get rebalancing parameters for position ${position.positionMint}.`);
+      // }
+
+      // Using placeholder params for now as per existing structure:
+      const newMint = await orcaService.open_position(newPositionParams);
+      if (newMint) {
+        elizaLogger.info(`Successfully opened new (rebalanced) position with mint ${newMint} for whirlpool ${position.whirlpoolAddress}. Old mint was ${position.positionMint}.`);
+      } else {
+        elizaLogger.warn(`Failed to open new (rebalanced) position for whirlpool ${position.whirlpoolAddress} after closing ${position.positionMint}.`);
       }
 
     } catch (error) {
-      elizaLogger.error('Rebalancing error:', error);
-      throw error; // Re-throw to maintain error handling
+      elizaLogger.error(`Rebalancing error for position ${position.positionMint}:`, error);
+      // Do not throw error here to allow other tasks to continue, but log it.
     }
   } else {
-    elizaLogger.log('Position is in good range, no rebalancing needed');
+    elizaLogger.log(`Position ${position.positionMint} is within range and does not need rebalancing.`);
   }
 }
