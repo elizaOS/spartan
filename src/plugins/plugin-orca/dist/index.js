@@ -1,1911 +1,2927 @@
+var __create = Object.create;
+var __defProp = Object.defineProperty;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __getProtoOf = Object.getPrototypeOf;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x, {
+  get: (a, b) => (typeof require !== "undefined" ? require : a)[b]
+}) : x)(function(x) {
+  if (typeof require !== "undefined") return require.apply(this, arguments);
+  throw Error('Dynamic require of "' + x + '" is not supported');
+});
+var __commonJS = (cb, mod) => function __require2() {
+  return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+};
+var __copyProps = (to, from, except, desc) => {
+  if (from && typeof from === "object" || typeof from === "function") {
+    for (let key of __getOwnPropNames(from))
+      if (!__hasOwnProp.call(to, key) && key !== except)
+        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+  }
+  return to;
+};
+var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
+  // If the importer is in node compatibility mode or this is not an ESM
+  // file that has been converted to a CommonJS file using a Babel-
+  // compatible transform (i.e. "__esModule" has not been set), then set
+  // "default" to the CommonJS "module.exports" for node compatibility.
+  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
+  mod
+));
+
+// node_modules/bn.js/lib/bn.js
+var require_bn = __commonJS({
+  "node_modules/bn.js/lib/bn.js"(exports, module) {
+    (function(module2, exports2) {
+      "use strict";
+      function assert(val, msg) {
+        if (!val) throw new Error(msg || "Assertion failed");
+      }
+      function inherits(ctor, superCtor) {
+        ctor.super_ = superCtor;
+        var TempCtor = function() {
+        };
+        TempCtor.prototype = superCtor.prototype;
+        ctor.prototype = new TempCtor();
+        ctor.prototype.constructor = ctor;
+      }
+      function BN2(number, base, endian) {
+        if (BN2.isBN(number)) {
+          return number;
+        }
+        this.negative = 0;
+        this.words = null;
+        this.length = 0;
+        this.red = null;
+        if (number !== null) {
+          if (base === "le" || base === "be") {
+            endian = base;
+            base = 10;
+          }
+          this._init(number || 0, base || 10, endian || "be");
+        }
+      }
+      if (typeof module2 === "object") {
+        module2.exports = BN2;
+      } else {
+        exports2.BN = BN2;
+      }
+      BN2.BN = BN2;
+      BN2.wordSize = 26;
+      var Buffer2;
+      try {
+        if (typeof window !== "undefined" && typeof window.Buffer !== "undefined") {
+          Buffer2 = window.Buffer;
+        } else {
+          Buffer2 = __require("buffer").Buffer;
+        }
+      } catch (e) {
+      }
+      BN2.isBN = function isBN(num) {
+        if (num instanceof BN2) {
+          return true;
+        }
+        return num !== null && typeof num === "object" && num.constructor.wordSize === BN2.wordSize && Array.isArray(num.words);
+      };
+      BN2.max = function max(left, right) {
+        if (left.cmp(right) > 0) return left;
+        return right;
+      };
+      BN2.min = function min(left, right) {
+        if (left.cmp(right) < 0) return left;
+        return right;
+      };
+      BN2.prototype._init = function init(number, base, endian) {
+        if (typeof number === "number") {
+          return this._initNumber(number, base, endian);
+        }
+        if (typeof number === "object") {
+          return this._initArray(number, base, endian);
+        }
+        if (base === "hex") {
+          base = 16;
+        }
+        assert(base === (base | 0) && base >= 2 && base <= 36);
+        number = number.toString().replace(/\s+/g, "");
+        var start = 0;
+        if (number[0] === "-") {
+          start++;
+          this.negative = 1;
+        }
+        if (start < number.length) {
+          if (base === 16) {
+            this._parseHex(number, start, endian);
+          } else {
+            this._parseBase(number, base, start);
+            if (endian === "le") {
+              this._initArray(this.toArray(), base, endian);
+            }
+          }
+        }
+      };
+      BN2.prototype._initNumber = function _initNumber(number, base, endian) {
+        if (number < 0) {
+          this.negative = 1;
+          number = -number;
+        }
+        if (number < 67108864) {
+          this.words = [number & 67108863];
+          this.length = 1;
+        } else if (number < 4503599627370496) {
+          this.words = [
+            number & 67108863,
+            number / 67108864 & 67108863
+          ];
+          this.length = 2;
+        } else {
+          assert(number < 9007199254740992);
+          this.words = [
+            number & 67108863,
+            number / 67108864 & 67108863,
+            1
+          ];
+          this.length = 3;
+        }
+        if (endian !== "le") return;
+        this._initArray(this.toArray(), base, endian);
+      };
+      BN2.prototype._initArray = function _initArray(number, base, endian) {
+        assert(typeof number.length === "number");
+        if (number.length <= 0) {
+          this.words = [0];
+          this.length = 1;
+          return this;
+        }
+        this.length = Math.ceil(number.length / 3);
+        this.words = new Array(this.length);
+        for (var i = 0; i < this.length; i++) {
+          this.words[i] = 0;
+        }
+        var j, w;
+        var off = 0;
+        if (endian === "be") {
+          for (i = number.length - 1, j = 0; i >= 0; i -= 3) {
+            w = number[i] | number[i - 1] << 8 | number[i - 2] << 16;
+            this.words[j] |= w << off & 67108863;
+            this.words[j + 1] = w >>> 26 - off & 67108863;
+            off += 24;
+            if (off >= 26) {
+              off -= 26;
+              j++;
+            }
+          }
+        } else if (endian === "le") {
+          for (i = 0, j = 0; i < number.length; i += 3) {
+            w = number[i] | number[i + 1] << 8 | number[i + 2] << 16;
+            this.words[j] |= w << off & 67108863;
+            this.words[j + 1] = w >>> 26 - off & 67108863;
+            off += 24;
+            if (off >= 26) {
+              off -= 26;
+              j++;
+            }
+          }
+        }
+        return this._strip();
+      };
+      function parseHex4Bits(string, index) {
+        var c = string.charCodeAt(index);
+        if (c >= 48 && c <= 57) {
+          return c - 48;
+        } else if (c >= 65 && c <= 70) {
+          return c - 55;
+        } else if (c >= 97 && c <= 102) {
+          return c - 87;
+        } else {
+          assert(false, "Invalid character in " + string);
+        }
+      }
+      function parseHexByte(string, lowerBound, index) {
+        var r = parseHex4Bits(string, index);
+        if (index - 1 >= lowerBound) {
+          r |= parseHex4Bits(string, index - 1) << 4;
+        }
+        return r;
+      }
+      BN2.prototype._parseHex = function _parseHex(number, start, endian) {
+        this.length = Math.ceil((number.length - start) / 6);
+        this.words = new Array(this.length);
+        for (var i = 0; i < this.length; i++) {
+          this.words[i] = 0;
+        }
+        var off = 0;
+        var j = 0;
+        var w;
+        if (endian === "be") {
+          for (i = number.length - 1; i >= start; i -= 2) {
+            w = parseHexByte(number, start, i) << off;
+            this.words[j] |= w & 67108863;
+            if (off >= 18) {
+              off -= 18;
+              j += 1;
+              this.words[j] |= w >>> 26;
+            } else {
+              off += 8;
+            }
+          }
+        } else {
+          var parseLength = number.length - start;
+          for (i = parseLength % 2 === 0 ? start + 1 : start; i < number.length; i += 2) {
+            w = parseHexByte(number, start, i) << off;
+            this.words[j] |= w & 67108863;
+            if (off >= 18) {
+              off -= 18;
+              j += 1;
+              this.words[j] |= w >>> 26;
+            } else {
+              off += 8;
+            }
+          }
+        }
+        this._strip();
+      };
+      function parseBase(str, start, end, mul) {
+        var r = 0;
+        var b = 0;
+        var len = Math.min(str.length, end);
+        for (var i = start; i < len; i++) {
+          var c = str.charCodeAt(i) - 48;
+          r *= mul;
+          if (c >= 49) {
+            b = c - 49 + 10;
+          } else if (c >= 17) {
+            b = c - 17 + 10;
+          } else {
+            b = c;
+          }
+          assert(c >= 0 && b < mul, "Invalid character");
+          r += b;
+        }
+        return r;
+      }
+      BN2.prototype._parseBase = function _parseBase(number, base, start) {
+        this.words = [0];
+        this.length = 1;
+        for (var limbLen = 0, limbPow = 1; limbPow <= 67108863; limbPow *= base) {
+          limbLen++;
+        }
+        limbLen--;
+        limbPow = limbPow / base | 0;
+        var total = number.length - start;
+        var mod = total % limbLen;
+        var end = Math.min(total, total - mod) + start;
+        var word = 0;
+        for (var i = start; i < end; i += limbLen) {
+          word = parseBase(number, i, i + limbLen, base);
+          this.imuln(limbPow);
+          if (this.words[0] + word < 67108864) {
+            this.words[0] += word;
+          } else {
+            this._iaddn(word);
+          }
+        }
+        if (mod !== 0) {
+          var pow = 1;
+          word = parseBase(number, i, number.length, base);
+          for (i = 0; i < mod; i++) {
+            pow *= base;
+          }
+          this.imuln(pow);
+          if (this.words[0] + word < 67108864) {
+            this.words[0] += word;
+          } else {
+            this._iaddn(word);
+          }
+        }
+        this._strip();
+      };
+      BN2.prototype.copy = function copy(dest) {
+        dest.words = new Array(this.length);
+        for (var i = 0; i < this.length; i++) {
+          dest.words[i] = this.words[i];
+        }
+        dest.length = this.length;
+        dest.negative = this.negative;
+        dest.red = this.red;
+      };
+      function move(dest, src) {
+        dest.words = src.words;
+        dest.length = src.length;
+        dest.negative = src.negative;
+        dest.red = src.red;
+      }
+      BN2.prototype._move = function _move(dest) {
+        move(dest, this);
+      };
+      BN2.prototype.clone = function clone() {
+        var r = new BN2(null);
+        this.copy(r);
+        return r;
+      };
+      BN2.prototype._expand = function _expand(size) {
+        while (this.length < size) {
+          this.words[this.length++] = 0;
+        }
+        return this;
+      };
+      BN2.prototype._strip = function strip() {
+        while (this.length > 1 && this.words[this.length - 1] === 0) {
+          this.length--;
+        }
+        return this._normSign();
+      };
+      BN2.prototype._normSign = function _normSign() {
+        if (this.length === 1 && this.words[0] === 0) {
+          this.negative = 0;
+        }
+        return this;
+      };
+      if (typeof Symbol !== "undefined" && typeof Symbol.for === "function") {
+        try {
+          BN2.prototype[Symbol.for("nodejs.util.inspect.custom")] = inspect;
+        } catch (e) {
+          BN2.prototype.inspect = inspect;
+        }
+      } else {
+        BN2.prototype.inspect = inspect;
+      }
+      function inspect() {
+        return (this.red ? "<BN-R: " : "<BN: ") + this.toString(16) + ">";
+      }
+      var zeros = [
+        "",
+        "0",
+        "00",
+        "000",
+        "0000",
+        "00000",
+        "000000",
+        "0000000",
+        "00000000",
+        "000000000",
+        "0000000000",
+        "00000000000",
+        "000000000000",
+        "0000000000000",
+        "00000000000000",
+        "000000000000000",
+        "0000000000000000",
+        "00000000000000000",
+        "000000000000000000",
+        "0000000000000000000",
+        "00000000000000000000",
+        "000000000000000000000",
+        "0000000000000000000000",
+        "00000000000000000000000",
+        "000000000000000000000000",
+        "0000000000000000000000000"
+      ];
+      var groupSizes = [
+        0,
+        0,
+        25,
+        16,
+        12,
+        11,
+        10,
+        9,
+        8,
+        8,
+        7,
+        7,
+        7,
+        7,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        5,
+        5,
+        5,
+        5,
+        5,
+        5,
+        5,
+        5,
+        5,
+        5,
+        5,
+        5,
+        5,
+        5,
+        5,
+        5
+      ];
+      var groupBases = [
+        0,
+        0,
+        33554432,
+        43046721,
+        16777216,
+        48828125,
+        60466176,
+        40353607,
+        16777216,
+        43046721,
+        1e7,
+        19487171,
+        35831808,
+        62748517,
+        7529536,
+        11390625,
+        16777216,
+        24137569,
+        34012224,
+        47045881,
+        64e6,
+        4084101,
+        5153632,
+        6436343,
+        7962624,
+        9765625,
+        11881376,
+        14348907,
+        17210368,
+        20511149,
+        243e5,
+        28629151,
+        33554432,
+        39135393,
+        45435424,
+        52521875,
+        60466176
+      ];
+      BN2.prototype.toString = function toString(base, padding) {
+        base = base || 10;
+        padding = padding | 0 || 1;
+        var out;
+        if (base === 16 || base === "hex") {
+          out = "";
+          var off = 0;
+          var carry = 0;
+          for (var i = 0; i < this.length; i++) {
+            var w = this.words[i];
+            var word = ((w << off | carry) & 16777215).toString(16);
+            carry = w >>> 24 - off & 16777215;
+            off += 2;
+            if (off >= 26) {
+              off -= 26;
+              i--;
+            }
+            if (carry !== 0 || i !== this.length - 1) {
+              out = zeros[6 - word.length] + word + out;
+            } else {
+              out = word + out;
+            }
+          }
+          if (carry !== 0) {
+            out = carry.toString(16) + out;
+          }
+          while (out.length % padding !== 0) {
+            out = "0" + out;
+          }
+          if (this.negative !== 0) {
+            out = "-" + out;
+          }
+          return out;
+        }
+        if (base === (base | 0) && base >= 2 && base <= 36) {
+          var groupSize = groupSizes[base];
+          var groupBase = groupBases[base];
+          out = "";
+          var c = this.clone();
+          c.negative = 0;
+          while (!c.isZero()) {
+            var r = c.modrn(groupBase).toString(base);
+            c = c.idivn(groupBase);
+            if (!c.isZero()) {
+              out = zeros[groupSize - r.length] + r + out;
+            } else {
+              out = r + out;
+            }
+          }
+          if (this.isZero()) {
+            out = "0" + out;
+          }
+          while (out.length % padding !== 0) {
+            out = "0" + out;
+          }
+          if (this.negative !== 0) {
+            out = "-" + out;
+          }
+          return out;
+        }
+        assert(false, "Base should be between 2 and 36");
+      };
+      BN2.prototype.toNumber = function toNumber() {
+        var ret = this.words[0];
+        if (this.length === 2) {
+          ret += this.words[1] * 67108864;
+        } else if (this.length === 3 && this.words[2] === 1) {
+          ret += 4503599627370496 + this.words[1] * 67108864;
+        } else if (this.length > 2) {
+          assert(false, "Number can only safely store up to 53 bits");
+        }
+        return this.negative !== 0 ? -ret : ret;
+      };
+      BN2.prototype.toJSON = function toJSON() {
+        return this.toString(16, 2);
+      };
+      if (Buffer2) {
+        BN2.prototype.toBuffer = function toBuffer(endian, length) {
+          return this.toArrayLike(Buffer2, endian, length);
+        };
+      }
+      BN2.prototype.toArray = function toArray(endian, length) {
+        return this.toArrayLike(Array, endian, length);
+      };
+      var allocate = function allocate2(ArrayType, size) {
+        if (ArrayType.allocUnsafe) {
+          return ArrayType.allocUnsafe(size);
+        }
+        return new ArrayType(size);
+      };
+      BN2.prototype.toArrayLike = function toArrayLike(ArrayType, endian, length) {
+        this._strip();
+        var byteLength = this.byteLength();
+        var reqLength = length || Math.max(1, byteLength);
+        assert(byteLength <= reqLength, "byte array longer than desired length");
+        assert(reqLength > 0, "Requested array length <= 0");
+        var res = allocate(ArrayType, reqLength);
+        var postfix = endian === "le" ? "LE" : "BE";
+        this["_toArrayLike" + postfix](res, byteLength);
+        return res;
+      };
+      BN2.prototype._toArrayLikeLE = function _toArrayLikeLE(res, byteLength) {
+        var position = 0;
+        var carry = 0;
+        for (var i = 0, shift = 0; i < this.length; i++) {
+          var word = this.words[i] << shift | carry;
+          res[position++] = word & 255;
+          if (position < res.length) {
+            res[position++] = word >> 8 & 255;
+          }
+          if (position < res.length) {
+            res[position++] = word >> 16 & 255;
+          }
+          if (shift === 6) {
+            if (position < res.length) {
+              res[position++] = word >> 24 & 255;
+            }
+            carry = 0;
+            shift = 0;
+          } else {
+            carry = word >>> 24;
+            shift += 2;
+          }
+        }
+        if (position < res.length) {
+          res[position++] = carry;
+          while (position < res.length) {
+            res[position++] = 0;
+          }
+        }
+      };
+      BN2.prototype._toArrayLikeBE = function _toArrayLikeBE(res, byteLength) {
+        var position = res.length - 1;
+        var carry = 0;
+        for (var i = 0, shift = 0; i < this.length; i++) {
+          var word = this.words[i] << shift | carry;
+          res[position--] = word & 255;
+          if (position >= 0) {
+            res[position--] = word >> 8 & 255;
+          }
+          if (position >= 0) {
+            res[position--] = word >> 16 & 255;
+          }
+          if (shift === 6) {
+            if (position >= 0) {
+              res[position--] = word >> 24 & 255;
+            }
+            carry = 0;
+            shift = 0;
+          } else {
+            carry = word >>> 24;
+            shift += 2;
+          }
+        }
+        if (position >= 0) {
+          res[position--] = carry;
+          while (position >= 0) {
+            res[position--] = 0;
+          }
+        }
+      };
+      if (Math.clz32) {
+        BN2.prototype._countBits = function _countBits(w) {
+          return 32 - Math.clz32(w);
+        };
+      } else {
+        BN2.prototype._countBits = function _countBits(w) {
+          var t = w;
+          var r = 0;
+          if (t >= 4096) {
+            r += 13;
+            t >>>= 13;
+          }
+          if (t >= 64) {
+            r += 7;
+            t >>>= 7;
+          }
+          if (t >= 8) {
+            r += 4;
+            t >>>= 4;
+          }
+          if (t >= 2) {
+            r += 2;
+            t >>>= 2;
+          }
+          return r + t;
+        };
+      }
+      BN2.prototype._zeroBits = function _zeroBits(w) {
+        if (w === 0) return 26;
+        var t = w;
+        var r = 0;
+        if ((t & 8191) === 0) {
+          r += 13;
+          t >>>= 13;
+        }
+        if ((t & 127) === 0) {
+          r += 7;
+          t >>>= 7;
+        }
+        if ((t & 15) === 0) {
+          r += 4;
+          t >>>= 4;
+        }
+        if ((t & 3) === 0) {
+          r += 2;
+          t >>>= 2;
+        }
+        if ((t & 1) === 0) {
+          r++;
+        }
+        return r;
+      };
+      BN2.prototype.bitLength = function bitLength() {
+        var w = this.words[this.length - 1];
+        var hi = this._countBits(w);
+        return (this.length - 1) * 26 + hi;
+      };
+      function toBitArray(num) {
+        var w = new Array(num.bitLength());
+        for (var bit = 0; bit < w.length; bit++) {
+          var off = bit / 26 | 0;
+          var wbit = bit % 26;
+          w[bit] = num.words[off] >>> wbit & 1;
+        }
+        return w;
+      }
+      BN2.prototype.zeroBits = function zeroBits() {
+        if (this.isZero()) return 0;
+        var r = 0;
+        for (var i = 0; i < this.length; i++) {
+          var b = this._zeroBits(this.words[i]);
+          r += b;
+          if (b !== 26) break;
+        }
+        return r;
+      };
+      BN2.prototype.byteLength = function byteLength() {
+        return Math.ceil(this.bitLength() / 8);
+      };
+      BN2.prototype.toTwos = function toTwos(width) {
+        if (this.negative !== 0) {
+          return this.abs().inotn(width).iaddn(1);
+        }
+        return this.clone();
+      };
+      BN2.prototype.fromTwos = function fromTwos(width) {
+        if (this.testn(width - 1)) {
+          return this.notn(width).iaddn(1).ineg();
+        }
+        return this.clone();
+      };
+      BN2.prototype.isNeg = function isNeg() {
+        return this.negative !== 0;
+      };
+      BN2.prototype.neg = function neg() {
+        return this.clone().ineg();
+      };
+      BN2.prototype.ineg = function ineg() {
+        if (!this.isZero()) {
+          this.negative ^= 1;
+        }
+        return this;
+      };
+      BN2.prototype.iuor = function iuor(num) {
+        while (this.length < num.length) {
+          this.words[this.length++] = 0;
+        }
+        for (var i = 0; i < num.length; i++) {
+          this.words[i] = this.words[i] | num.words[i];
+        }
+        return this._strip();
+      };
+      BN2.prototype.ior = function ior(num) {
+        assert((this.negative | num.negative) === 0);
+        return this.iuor(num);
+      };
+      BN2.prototype.or = function or(num) {
+        if (this.length > num.length) return this.clone().ior(num);
+        return num.clone().ior(this);
+      };
+      BN2.prototype.uor = function uor(num) {
+        if (this.length > num.length) return this.clone().iuor(num);
+        return num.clone().iuor(this);
+      };
+      BN2.prototype.iuand = function iuand(num) {
+        var b;
+        if (this.length > num.length) {
+          b = num;
+        } else {
+          b = this;
+        }
+        for (var i = 0; i < b.length; i++) {
+          this.words[i] = this.words[i] & num.words[i];
+        }
+        this.length = b.length;
+        return this._strip();
+      };
+      BN2.prototype.iand = function iand(num) {
+        assert((this.negative | num.negative) === 0);
+        return this.iuand(num);
+      };
+      BN2.prototype.and = function and(num) {
+        if (this.length > num.length) return this.clone().iand(num);
+        return num.clone().iand(this);
+      };
+      BN2.prototype.uand = function uand(num) {
+        if (this.length > num.length) return this.clone().iuand(num);
+        return num.clone().iuand(this);
+      };
+      BN2.prototype.iuxor = function iuxor(num) {
+        var a;
+        var b;
+        if (this.length > num.length) {
+          a = this;
+          b = num;
+        } else {
+          a = num;
+          b = this;
+        }
+        for (var i = 0; i < b.length; i++) {
+          this.words[i] = a.words[i] ^ b.words[i];
+        }
+        if (this !== a) {
+          for (; i < a.length; i++) {
+            this.words[i] = a.words[i];
+          }
+        }
+        this.length = a.length;
+        return this._strip();
+      };
+      BN2.prototype.ixor = function ixor(num) {
+        assert((this.negative | num.negative) === 0);
+        return this.iuxor(num);
+      };
+      BN2.prototype.xor = function xor(num) {
+        if (this.length > num.length) return this.clone().ixor(num);
+        return num.clone().ixor(this);
+      };
+      BN2.prototype.uxor = function uxor(num) {
+        if (this.length > num.length) return this.clone().iuxor(num);
+        return num.clone().iuxor(this);
+      };
+      BN2.prototype.inotn = function inotn(width) {
+        assert(typeof width === "number" && width >= 0);
+        var bytesNeeded = Math.ceil(width / 26) | 0;
+        var bitsLeft = width % 26;
+        this._expand(bytesNeeded);
+        if (bitsLeft > 0) {
+          bytesNeeded--;
+        }
+        for (var i = 0; i < bytesNeeded; i++) {
+          this.words[i] = ~this.words[i] & 67108863;
+        }
+        if (bitsLeft > 0) {
+          this.words[i] = ~this.words[i] & 67108863 >> 26 - bitsLeft;
+        }
+        return this._strip();
+      };
+      BN2.prototype.notn = function notn(width) {
+        return this.clone().inotn(width);
+      };
+      BN2.prototype.setn = function setn(bit, val) {
+        assert(typeof bit === "number" && bit >= 0);
+        var off = bit / 26 | 0;
+        var wbit = bit % 26;
+        this._expand(off + 1);
+        if (val) {
+          this.words[off] = this.words[off] | 1 << wbit;
+        } else {
+          this.words[off] = this.words[off] & ~(1 << wbit);
+        }
+        return this._strip();
+      };
+      BN2.prototype.iadd = function iadd(num) {
+        var r;
+        if (this.negative !== 0 && num.negative === 0) {
+          this.negative = 0;
+          r = this.isub(num);
+          this.negative ^= 1;
+          return this._normSign();
+        } else if (this.negative === 0 && num.negative !== 0) {
+          num.negative = 0;
+          r = this.isub(num);
+          num.negative = 1;
+          return r._normSign();
+        }
+        var a, b;
+        if (this.length > num.length) {
+          a = this;
+          b = num;
+        } else {
+          a = num;
+          b = this;
+        }
+        var carry = 0;
+        for (var i = 0; i < b.length; i++) {
+          r = (a.words[i] | 0) + (b.words[i] | 0) + carry;
+          this.words[i] = r & 67108863;
+          carry = r >>> 26;
+        }
+        for (; carry !== 0 && i < a.length; i++) {
+          r = (a.words[i] | 0) + carry;
+          this.words[i] = r & 67108863;
+          carry = r >>> 26;
+        }
+        this.length = a.length;
+        if (carry !== 0) {
+          this.words[this.length] = carry;
+          this.length++;
+        } else if (a !== this) {
+          for (; i < a.length; i++) {
+            this.words[i] = a.words[i];
+          }
+        }
+        return this;
+      };
+      BN2.prototype.add = function add(num) {
+        var res;
+        if (num.negative !== 0 && this.negative === 0) {
+          num.negative = 0;
+          res = this.sub(num);
+          num.negative ^= 1;
+          return res;
+        } else if (num.negative === 0 && this.negative !== 0) {
+          this.negative = 0;
+          res = num.sub(this);
+          this.negative = 1;
+          return res;
+        }
+        if (this.length > num.length) return this.clone().iadd(num);
+        return num.clone().iadd(this);
+      };
+      BN2.prototype.isub = function isub(num) {
+        if (num.negative !== 0) {
+          num.negative = 0;
+          var r = this.iadd(num);
+          num.negative = 1;
+          return r._normSign();
+        } else if (this.negative !== 0) {
+          this.negative = 0;
+          this.iadd(num);
+          this.negative = 1;
+          return this._normSign();
+        }
+        var cmp = this.cmp(num);
+        if (cmp === 0) {
+          this.negative = 0;
+          this.length = 1;
+          this.words[0] = 0;
+          return this;
+        }
+        var a, b;
+        if (cmp > 0) {
+          a = this;
+          b = num;
+        } else {
+          a = num;
+          b = this;
+        }
+        var carry = 0;
+        for (var i = 0; i < b.length; i++) {
+          r = (a.words[i] | 0) - (b.words[i] | 0) + carry;
+          carry = r >> 26;
+          this.words[i] = r & 67108863;
+        }
+        for (; carry !== 0 && i < a.length; i++) {
+          r = (a.words[i] | 0) + carry;
+          carry = r >> 26;
+          this.words[i] = r & 67108863;
+        }
+        if (carry === 0 && i < a.length && a !== this) {
+          for (; i < a.length; i++) {
+            this.words[i] = a.words[i];
+          }
+        }
+        this.length = Math.max(this.length, i);
+        if (a !== this) {
+          this.negative = 1;
+        }
+        return this._strip();
+      };
+      BN2.prototype.sub = function sub(num) {
+        return this.clone().isub(num);
+      };
+      function smallMulTo(self, num, out) {
+        out.negative = num.negative ^ self.negative;
+        var len = self.length + num.length | 0;
+        out.length = len;
+        len = len - 1 | 0;
+        var a = self.words[0] | 0;
+        var b = num.words[0] | 0;
+        var r = a * b;
+        var lo = r & 67108863;
+        var carry = r / 67108864 | 0;
+        out.words[0] = lo;
+        for (var k = 1; k < len; k++) {
+          var ncarry = carry >>> 26;
+          var rword = carry & 67108863;
+          var maxJ = Math.min(k, num.length - 1);
+          for (var j = Math.max(0, k - self.length + 1); j <= maxJ; j++) {
+            var i = k - j | 0;
+            a = self.words[i] | 0;
+            b = num.words[j] | 0;
+            r = a * b + rword;
+            ncarry += r / 67108864 | 0;
+            rword = r & 67108863;
+          }
+          out.words[k] = rword | 0;
+          carry = ncarry | 0;
+        }
+        if (carry !== 0) {
+          out.words[k] = carry | 0;
+        } else {
+          out.length--;
+        }
+        return out._strip();
+      }
+      var comb10MulTo = function comb10MulTo2(self, num, out) {
+        var a = self.words;
+        var b = num.words;
+        var o = out.words;
+        var c = 0;
+        var lo;
+        var mid;
+        var hi;
+        var a0 = a[0] | 0;
+        var al0 = a0 & 8191;
+        var ah0 = a0 >>> 13;
+        var a1 = a[1] | 0;
+        var al1 = a1 & 8191;
+        var ah1 = a1 >>> 13;
+        var a2 = a[2] | 0;
+        var al2 = a2 & 8191;
+        var ah2 = a2 >>> 13;
+        var a3 = a[3] | 0;
+        var al3 = a3 & 8191;
+        var ah3 = a3 >>> 13;
+        var a4 = a[4] | 0;
+        var al4 = a4 & 8191;
+        var ah4 = a4 >>> 13;
+        var a5 = a[5] | 0;
+        var al5 = a5 & 8191;
+        var ah5 = a5 >>> 13;
+        var a6 = a[6] | 0;
+        var al6 = a6 & 8191;
+        var ah6 = a6 >>> 13;
+        var a7 = a[7] | 0;
+        var al7 = a7 & 8191;
+        var ah7 = a7 >>> 13;
+        var a8 = a[8] | 0;
+        var al8 = a8 & 8191;
+        var ah8 = a8 >>> 13;
+        var a9 = a[9] | 0;
+        var al9 = a9 & 8191;
+        var ah9 = a9 >>> 13;
+        var b0 = b[0] | 0;
+        var bl0 = b0 & 8191;
+        var bh0 = b0 >>> 13;
+        var b1 = b[1] | 0;
+        var bl1 = b1 & 8191;
+        var bh1 = b1 >>> 13;
+        var b2 = b[2] | 0;
+        var bl2 = b2 & 8191;
+        var bh2 = b2 >>> 13;
+        var b3 = b[3] | 0;
+        var bl3 = b3 & 8191;
+        var bh3 = b3 >>> 13;
+        var b4 = b[4] | 0;
+        var bl4 = b4 & 8191;
+        var bh4 = b4 >>> 13;
+        var b5 = b[5] | 0;
+        var bl5 = b5 & 8191;
+        var bh5 = b5 >>> 13;
+        var b6 = b[6] | 0;
+        var bl6 = b6 & 8191;
+        var bh6 = b6 >>> 13;
+        var b7 = b[7] | 0;
+        var bl7 = b7 & 8191;
+        var bh7 = b7 >>> 13;
+        var b8 = b[8] | 0;
+        var bl8 = b8 & 8191;
+        var bh8 = b8 >>> 13;
+        var b9 = b[9] | 0;
+        var bl9 = b9 & 8191;
+        var bh9 = b9 >>> 13;
+        out.negative = self.negative ^ num.negative;
+        out.length = 19;
+        lo = Math.imul(al0, bl0);
+        mid = Math.imul(al0, bh0);
+        mid = mid + Math.imul(ah0, bl0) | 0;
+        hi = Math.imul(ah0, bh0);
+        var w0 = (c + lo | 0) + ((mid & 8191) << 13) | 0;
+        c = (hi + (mid >>> 13) | 0) + (w0 >>> 26) | 0;
+        w0 &= 67108863;
+        lo = Math.imul(al1, bl0);
+        mid = Math.imul(al1, bh0);
+        mid = mid + Math.imul(ah1, bl0) | 0;
+        hi = Math.imul(ah1, bh0);
+        lo = lo + Math.imul(al0, bl1) | 0;
+        mid = mid + Math.imul(al0, bh1) | 0;
+        mid = mid + Math.imul(ah0, bl1) | 0;
+        hi = hi + Math.imul(ah0, bh1) | 0;
+        var w1 = (c + lo | 0) + ((mid & 8191) << 13) | 0;
+        c = (hi + (mid >>> 13) | 0) + (w1 >>> 26) | 0;
+        w1 &= 67108863;
+        lo = Math.imul(al2, bl0);
+        mid = Math.imul(al2, bh0);
+        mid = mid + Math.imul(ah2, bl0) | 0;
+        hi = Math.imul(ah2, bh0);
+        lo = lo + Math.imul(al1, bl1) | 0;
+        mid = mid + Math.imul(al1, bh1) | 0;
+        mid = mid + Math.imul(ah1, bl1) | 0;
+        hi = hi + Math.imul(ah1, bh1) | 0;
+        lo = lo + Math.imul(al0, bl2) | 0;
+        mid = mid + Math.imul(al0, bh2) | 0;
+        mid = mid + Math.imul(ah0, bl2) | 0;
+        hi = hi + Math.imul(ah0, bh2) | 0;
+        var w2 = (c + lo | 0) + ((mid & 8191) << 13) | 0;
+        c = (hi + (mid >>> 13) | 0) + (w2 >>> 26) | 0;
+        w2 &= 67108863;
+        lo = Math.imul(al3, bl0);
+        mid = Math.imul(al3, bh0);
+        mid = mid + Math.imul(ah3, bl0) | 0;
+        hi = Math.imul(ah3, bh0);
+        lo = lo + Math.imul(al2, bl1) | 0;
+        mid = mid + Math.imul(al2, bh1) | 0;
+        mid = mid + Math.imul(ah2, bl1) | 0;
+        hi = hi + Math.imul(ah2, bh1) | 0;
+        lo = lo + Math.imul(al1, bl2) | 0;
+        mid = mid + Math.imul(al1, bh2) | 0;
+        mid = mid + Math.imul(ah1, bl2) | 0;
+        hi = hi + Math.imul(ah1, bh2) | 0;
+        lo = lo + Math.imul(al0, bl3) | 0;
+        mid = mid + Math.imul(al0, bh3) | 0;
+        mid = mid + Math.imul(ah0, bl3) | 0;
+        hi = hi + Math.imul(ah0, bh3) | 0;
+        var w3 = (c + lo | 0) + ((mid & 8191) << 13) | 0;
+        c = (hi + (mid >>> 13) | 0) + (w3 >>> 26) | 0;
+        w3 &= 67108863;
+        lo = Math.imul(al4, bl0);
+        mid = Math.imul(al4, bh0);
+        mid = mid + Math.imul(ah4, bl0) | 0;
+        hi = Math.imul(ah4, bh0);
+        lo = lo + Math.imul(al3, bl1) | 0;
+        mid = mid + Math.imul(al3, bh1) | 0;
+        mid = mid + Math.imul(ah3, bl1) | 0;
+        hi = hi + Math.imul(ah3, bh1) | 0;
+        lo = lo + Math.imul(al2, bl2) | 0;
+        mid = mid + Math.imul(al2, bh2) | 0;
+        mid = mid + Math.imul(ah2, bl2) | 0;
+        hi = hi + Math.imul(ah2, bh2) | 0;
+        lo = lo + Math.imul(al1, bl3) | 0;
+        mid = mid + Math.imul(al1, bh3) | 0;
+        mid = mid + Math.imul(ah1, bl3) | 0;
+        hi = hi + Math.imul(ah1, bh3) | 0;
+        lo = lo + Math.imul(al0, bl4) | 0;
+        mid = mid + Math.imul(al0, bh4) | 0;
+        mid = mid + Math.imul(ah0, bl4) | 0;
+        hi = hi + Math.imul(ah0, bh4) | 0;
+        var w4 = (c + lo | 0) + ((mid & 8191) << 13) | 0;
+        c = (hi + (mid >>> 13) | 0) + (w4 >>> 26) | 0;
+        w4 &= 67108863;
+        lo = Math.imul(al5, bl0);
+        mid = Math.imul(al5, bh0);
+        mid = mid + Math.imul(ah5, bl0) | 0;
+        hi = Math.imul(ah5, bh0);
+        lo = lo + Math.imul(al4, bl1) | 0;
+        mid = mid + Math.imul(al4, bh1) | 0;
+        mid = mid + Math.imul(ah4, bl1) | 0;
+        hi = hi + Math.imul(ah4, bh1) | 0;
+        lo = lo + Math.imul(al3, bl2) | 0;
+        mid = mid + Math.imul(al3, bh2) | 0;
+        mid = mid + Math.imul(ah3, bl2) | 0;
+        hi = hi + Math.imul(ah3, bh2) | 0;
+        lo = lo + Math.imul(al2, bl3) | 0;
+        mid = mid + Math.imul(al2, bh3) | 0;
+        mid = mid + Math.imul(ah2, bl3) | 0;
+        hi = hi + Math.imul(ah2, bh3) | 0;
+        lo = lo + Math.imul(al1, bl4) | 0;
+        mid = mid + Math.imul(al1, bh4) | 0;
+        mid = mid + Math.imul(ah1, bl4) | 0;
+        hi = hi + Math.imul(ah1, bh4) | 0;
+        lo = lo + Math.imul(al0, bl5) | 0;
+        mid = mid + Math.imul(al0, bh5) | 0;
+        mid = mid + Math.imul(ah0, bl5) | 0;
+        hi = hi + Math.imul(ah0, bh5) | 0;
+        var w5 = (c + lo | 0) + ((mid & 8191) << 13) | 0;
+        c = (hi + (mid >>> 13) | 0) + (w5 >>> 26) | 0;
+        w5 &= 67108863;
+        lo = Math.imul(al6, bl0);
+        mid = Math.imul(al6, bh0);
+        mid = mid + Math.imul(ah6, bl0) | 0;
+        hi = Math.imul(ah6, bh0);
+        lo = lo + Math.imul(al5, bl1) | 0;
+        mid = mid + Math.imul(al5, bh1) | 0;
+        mid = mid + Math.imul(ah5, bl1) | 0;
+        hi = hi + Math.imul(ah5, bh1) | 0;
+        lo = lo + Math.imul(al4, bl2) | 0;
+        mid = mid + Math.imul(al4, bh2) | 0;
+        mid = mid + Math.imul(ah4, bl2) | 0;
+        hi = hi + Math.imul(ah4, bh2) | 0;
+        lo = lo + Math.imul(al3, bl3) | 0;
+        mid = mid + Math.imul(al3, bh3) | 0;
+        mid = mid + Math.imul(ah3, bl3) | 0;
+        hi = hi + Math.imul(ah3, bh3) | 0;
+        lo = lo + Math.imul(al2, bl4) | 0;
+        mid = mid + Math.imul(al2, bh4) | 0;
+        mid = mid + Math.imul(ah2, bl4) | 0;
+        hi = hi + Math.imul(ah2, bh4) | 0;
+        lo = lo + Math.imul(al1, bl5) | 0;
+        mid = mid + Math.imul(al1, bh5) | 0;
+        mid = mid + Math.imul(ah1, bl5) | 0;
+        hi = hi + Math.imul(ah1, bh5) | 0;
+        lo = lo + Math.imul(al0, bl6) | 0;
+        mid = mid + Math.imul(al0, bh6) | 0;
+        mid = mid + Math.imul(ah0, bl6) | 0;
+        hi = hi + Math.imul(ah0, bh6) | 0;
+        var w6 = (c + lo | 0) + ((mid & 8191) << 13) | 0;
+        c = (hi + (mid >>> 13) | 0) + (w6 >>> 26) | 0;
+        w6 &= 67108863;
+        lo = Math.imul(al7, bl0);
+        mid = Math.imul(al7, bh0);
+        mid = mid + Math.imul(ah7, bl0) | 0;
+        hi = Math.imul(ah7, bh0);
+        lo = lo + Math.imul(al6, bl1) | 0;
+        mid = mid + Math.imul(al6, bh1) | 0;
+        mid = mid + Math.imul(ah6, bl1) | 0;
+        hi = hi + Math.imul(ah6, bh1) | 0;
+        lo = lo + Math.imul(al5, bl2) | 0;
+        mid = mid + Math.imul(al5, bh2) | 0;
+        mid = mid + Math.imul(ah5, bl2) | 0;
+        hi = hi + Math.imul(ah5, bh2) | 0;
+        lo = lo + Math.imul(al4, bl3) | 0;
+        mid = mid + Math.imul(al4, bh3) | 0;
+        mid = mid + Math.imul(ah4, bl3) | 0;
+        hi = hi + Math.imul(ah4, bh3) | 0;
+        lo = lo + Math.imul(al3, bl4) | 0;
+        mid = mid + Math.imul(al3, bh4) | 0;
+        mid = mid + Math.imul(ah3, bl4) | 0;
+        hi = hi + Math.imul(ah3, bh4) | 0;
+        lo = lo + Math.imul(al2, bl5) | 0;
+        mid = mid + Math.imul(al2, bh5) | 0;
+        mid = mid + Math.imul(ah2, bl5) | 0;
+        hi = hi + Math.imul(ah2, bh5) | 0;
+        lo = lo + Math.imul(al1, bl6) | 0;
+        mid = mid + Math.imul(al1, bh6) | 0;
+        mid = mid + Math.imul(ah1, bl6) | 0;
+        hi = hi + Math.imul(ah1, bh6) | 0;
+        lo = lo + Math.imul(al0, bl7) | 0;
+        mid = mid + Math.imul(al0, bh7) | 0;
+        mid = mid + Math.imul(ah0, bl7) | 0;
+        hi = hi + Math.imul(ah0, bh7) | 0;
+        var w7 = (c + lo | 0) + ((mid & 8191) << 13) | 0;
+        c = (hi + (mid >>> 13) | 0) + (w7 >>> 26) | 0;
+        w7 &= 67108863;
+        lo = Math.imul(al8, bl0);
+        mid = Math.imul(al8, bh0);
+        mid = mid + Math.imul(ah8, bl0) | 0;
+        hi = Math.imul(ah8, bh0);
+        lo = lo + Math.imul(al7, bl1) | 0;
+        mid = mid + Math.imul(al7, bh1) | 0;
+        mid = mid + Math.imul(ah7, bl1) | 0;
+        hi = hi + Math.imul(ah7, bh1) | 0;
+        lo = lo + Math.imul(al6, bl2) | 0;
+        mid = mid + Math.imul(al6, bh2) | 0;
+        mid = mid + Math.imul(ah6, bl2) | 0;
+        hi = hi + Math.imul(ah6, bh2) | 0;
+        lo = lo + Math.imul(al5, bl3) | 0;
+        mid = mid + Math.imul(al5, bh3) | 0;
+        mid = mid + Math.imul(ah5, bl3) | 0;
+        hi = hi + Math.imul(ah5, bh3) | 0;
+        lo = lo + Math.imul(al4, bl4) | 0;
+        mid = mid + Math.imul(al4, bh4) | 0;
+        mid = mid + Math.imul(ah4, bl4) | 0;
+        hi = hi + Math.imul(ah4, bh4) | 0;
+        lo = lo + Math.imul(al3, bl5) | 0;
+        mid = mid + Math.imul(al3, bh5) | 0;
+        mid = mid + Math.imul(ah3, bl5) | 0;
+        hi = hi + Math.imul(ah3, bh5) | 0;
+        lo = lo + Math.imul(al2, bl6) | 0;
+        mid = mid + Math.imul(al2, bh6) | 0;
+        mid = mid + Math.imul(ah2, bl6) | 0;
+        hi = hi + Math.imul(ah2, bh6) | 0;
+        lo = lo + Math.imul(al1, bl7) | 0;
+        mid = mid + Math.imul(al1, bh7) | 0;
+        mid = mid + Math.imul(ah1, bl7) | 0;
+        hi = hi + Math.imul(ah1, bh7) | 0;
+        lo = lo + Math.imul(al0, bl8) | 0;
+        mid = mid + Math.imul(al0, bh8) | 0;
+        mid = mid + Math.imul(ah0, bl8) | 0;
+        hi = hi + Math.imul(ah0, bh8) | 0;
+        var w8 = (c + lo | 0) + ((mid & 8191) << 13) | 0;
+        c = (hi + (mid >>> 13) | 0) + (w8 >>> 26) | 0;
+        w8 &= 67108863;
+        lo = Math.imul(al9, bl0);
+        mid = Math.imul(al9, bh0);
+        mid = mid + Math.imul(ah9, bl0) | 0;
+        hi = Math.imul(ah9, bh0);
+        lo = lo + Math.imul(al8, bl1) | 0;
+        mid = mid + Math.imul(al8, bh1) | 0;
+        mid = mid + Math.imul(ah8, bl1) | 0;
+        hi = hi + Math.imul(ah8, bh1) | 0;
+        lo = lo + Math.imul(al7, bl2) | 0;
+        mid = mid + Math.imul(al7, bh2) | 0;
+        mid = mid + Math.imul(ah7, bl2) | 0;
+        hi = hi + Math.imul(ah7, bh2) | 0;
+        lo = lo + Math.imul(al6, bl3) | 0;
+        mid = mid + Math.imul(al6, bh3) | 0;
+        mid = mid + Math.imul(ah6, bl3) | 0;
+        hi = hi + Math.imul(ah6, bh3) | 0;
+        lo = lo + Math.imul(al5, bl4) | 0;
+        mid = mid + Math.imul(al5, bh4) | 0;
+        mid = mid + Math.imul(ah5, bl4) | 0;
+        hi = hi + Math.imul(ah5, bh4) | 0;
+        lo = lo + Math.imul(al4, bl5) | 0;
+        mid = mid + Math.imul(al4, bh5) | 0;
+        mid = mid + Math.imul(ah4, bl5) | 0;
+        hi = hi + Math.imul(ah4, bh5) | 0;
+        lo = lo + Math.imul(al3, bl6) | 0;
+        mid = mid + Math.imul(al3, bh6) | 0;
+        mid = mid + Math.imul(ah3, bl6) | 0;
+        hi = hi + Math.imul(ah3, bh6) | 0;
+        lo = lo + Math.imul(al2, bl7) | 0;
+        mid = mid + Math.imul(al2, bh7) | 0;
+        mid = mid + Math.imul(ah2, bl7) | 0;
+        hi = hi + Math.imul(ah2, bh7) | 0;
+        lo = lo + Math.imul(al1, bl8) | 0;
+        mid = mid + Math.imul(al1, bh8) | 0;
+        mid = mid + Math.imul(ah1, bl8) | 0;
+        hi = hi + Math.imul(ah1, bh8) | 0;
+        lo = lo + Math.imul(al0, bl9) | 0;
+        mid = mid + Math.imul(al0, bh9) | 0;
+        mid = mid + Math.imul(ah0, bl9) | 0;
+        hi = hi + Math.imul(ah0, bh9) | 0;
+        var w9 = (c + lo | 0) + ((mid & 8191) << 13) | 0;
+        c = (hi + (mid >>> 13) | 0) + (w9 >>> 26) | 0;
+        w9 &= 67108863;
+        lo = Math.imul(al9, bl1);
+        mid = Math.imul(al9, bh1);
+        mid = mid + Math.imul(ah9, bl1) | 0;
+        hi = Math.imul(ah9, bh1);
+        lo = lo + Math.imul(al8, bl2) | 0;
+        mid = mid + Math.imul(al8, bh2) | 0;
+        mid = mid + Math.imul(ah8, bl2) | 0;
+        hi = hi + Math.imul(ah8, bh2) | 0;
+        lo = lo + Math.imul(al7, bl3) | 0;
+        mid = mid + Math.imul(al7, bh3) | 0;
+        mid = mid + Math.imul(ah7, bl3) | 0;
+        hi = hi + Math.imul(ah7, bh3) | 0;
+        lo = lo + Math.imul(al6, bl4) | 0;
+        mid = mid + Math.imul(al6, bh4) | 0;
+        mid = mid + Math.imul(ah6, bl4) | 0;
+        hi = hi + Math.imul(ah6, bh4) | 0;
+        lo = lo + Math.imul(al5, bl5) | 0;
+        mid = mid + Math.imul(al5, bh5) | 0;
+        mid = mid + Math.imul(ah5, bl5) | 0;
+        hi = hi + Math.imul(ah5, bh5) | 0;
+        lo = lo + Math.imul(al4, bl6) | 0;
+        mid = mid + Math.imul(al4, bh6) | 0;
+        mid = mid + Math.imul(ah4, bl6) | 0;
+        hi = hi + Math.imul(ah4, bh6) | 0;
+        lo = lo + Math.imul(al3, bl7) | 0;
+        mid = mid + Math.imul(al3, bh7) | 0;
+        mid = mid + Math.imul(ah3, bl7) | 0;
+        hi = hi + Math.imul(ah3, bh7) | 0;
+        lo = lo + Math.imul(al2, bl8) | 0;
+        mid = mid + Math.imul(al2, bh8) | 0;
+        mid = mid + Math.imul(ah2, bl8) | 0;
+        hi = hi + Math.imul(ah2, bh8) | 0;
+        lo = lo + Math.imul(al1, bl9) | 0;
+        mid = mid + Math.imul(al1, bh9) | 0;
+        mid = mid + Math.imul(ah1, bl9) | 0;
+        hi = hi + Math.imul(ah1, bh9) | 0;
+        var w10 = (c + lo | 0) + ((mid & 8191) << 13) | 0;
+        c = (hi + (mid >>> 13) | 0) + (w10 >>> 26) | 0;
+        w10 &= 67108863;
+        lo = Math.imul(al9, bl2);
+        mid = Math.imul(al9, bh2);
+        mid = mid + Math.imul(ah9, bl2) | 0;
+        hi = Math.imul(ah9, bh2);
+        lo = lo + Math.imul(al8, bl3) | 0;
+        mid = mid + Math.imul(al8, bh3) | 0;
+        mid = mid + Math.imul(ah8, bl3) | 0;
+        hi = hi + Math.imul(ah8, bh3) | 0;
+        lo = lo + Math.imul(al7, bl4) | 0;
+        mid = mid + Math.imul(al7, bh4) | 0;
+        mid = mid + Math.imul(ah7, bl4) | 0;
+        hi = hi + Math.imul(ah7, bh4) | 0;
+        lo = lo + Math.imul(al6, bl5) | 0;
+        mid = mid + Math.imul(al6, bh5) | 0;
+        mid = mid + Math.imul(ah6, bl5) | 0;
+        hi = hi + Math.imul(ah6, bh5) | 0;
+        lo = lo + Math.imul(al5, bl6) | 0;
+        mid = mid + Math.imul(al5, bh6) | 0;
+        mid = mid + Math.imul(ah5, bl6) | 0;
+        hi = hi + Math.imul(ah5, bh6) | 0;
+        lo = lo + Math.imul(al4, bl7) | 0;
+        mid = mid + Math.imul(al4, bh7) | 0;
+        mid = mid + Math.imul(ah4, bl7) | 0;
+        hi = hi + Math.imul(ah4, bh7) | 0;
+        lo = lo + Math.imul(al3, bl8) | 0;
+        mid = mid + Math.imul(al3, bh8) | 0;
+        mid = mid + Math.imul(ah3, bl8) | 0;
+        hi = hi + Math.imul(ah3, bh8) | 0;
+        lo = lo + Math.imul(al2, bl9) | 0;
+        mid = mid + Math.imul(al2, bh9) | 0;
+        mid = mid + Math.imul(ah2, bl9) | 0;
+        hi = hi + Math.imul(ah2, bh9) | 0;
+        var w11 = (c + lo | 0) + ((mid & 8191) << 13) | 0;
+        c = (hi + (mid >>> 13) | 0) + (w11 >>> 26) | 0;
+        w11 &= 67108863;
+        lo = Math.imul(al9, bl3);
+        mid = Math.imul(al9, bh3);
+        mid = mid + Math.imul(ah9, bl3) | 0;
+        hi = Math.imul(ah9, bh3);
+        lo = lo + Math.imul(al8, bl4) | 0;
+        mid = mid + Math.imul(al8, bh4) | 0;
+        mid = mid + Math.imul(ah8, bl4) | 0;
+        hi = hi + Math.imul(ah8, bh4) | 0;
+        lo = lo + Math.imul(al7, bl5) | 0;
+        mid = mid + Math.imul(al7, bh5) | 0;
+        mid = mid + Math.imul(ah7, bl5) | 0;
+        hi = hi + Math.imul(ah7, bh5) | 0;
+        lo = lo + Math.imul(al6, bl6) | 0;
+        mid = mid + Math.imul(al6, bh6) | 0;
+        mid = mid + Math.imul(ah6, bl6) | 0;
+        hi = hi + Math.imul(ah6, bh6) | 0;
+        lo = lo + Math.imul(al5, bl7) | 0;
+        mid = mid + Math.imul(al5, bh7) | 0;
+        mid = mid + Math.imul(ah5, bl7) | 0;
+        hi = hi + Math.imul(ah5, bh7) | 0;
+        lo = lo + Math.imul(al4, bl8) | 0;
+        mid = mid + Math.imul(al4, bh8) | 0;
+        mid = mid + Math.imul(ah4, bl8) | 0;
+        hi = hi + Math.imul(ah4, bh8) | 0;
+        lo = lo + Math.imul(al3, bl9) | 0;
+        mid = mid + Math.imul(al3, bh9) | 0;
+        mid = mid + Math.imul(ah3, bl9) | 0;
+        hi = hi + Math.imul(ah3, bh9) | 0;
+        var w12 = (c + lo | 0) + ((mid & 8191) << 13) | 0;
+        c = (hi + (mid >>> 13) | 0) + (w12 >>> 26) | 0;
+        w12 &= 67108863;
+        lo = Math.imul(al9, bl4);
+        mid = Math.imul(al9, bh4);
+        mid = mid + Math.imul(ah9, bl4) | 0;
+        hi = Math.imul(ah9, bh4);
+        lo = lo + Math.imul(al8, bl5) | 0;
+        mid = mid + Math.imul(al8, bh5) | 0;
+        mid = mid + Math.imul(ah8, bl5) | 0;
+        hi = hi + Math.imul(ah8, bh5) | 0;
+        lo = lo + Math.imul(al7, bl6) | 0;
+        mid = mid + Math.imul(al7, bh6) | 0;
+        mid = mid + Math.imul(ah7, bl6) | 0;
+        hi = hi + Math.imul(ah7, bh6) | 0;
+        lo = lo + Math.imul(al6, bl7) | 0;
+        mid = mid + Math.imul(al6, bh7) | 0;
+        mid = mid + Math.imul(ah6, bl7) | 0;
+        hi = hi + Math.imul(ah6, bh7) | 0;
+        lo = lo + Math.imul(al5, bl8) | 0;
+        mid = mid + Math.imul(al5, bh8) | 0;
+        mid = mid + Math.imul(ah5, bl8) | 0;
+        hi = hi + Math.imul(ah5, bh8) | 0;
+        lo = lo + Math.imul(al4, bl9) | 0;
+        mid = mid + Math.imul(al4, bh9) | 0;
+        mid = mid + Math.imul(ah4, bl9) | 0;
+        hi = hi + Math.imul(ah4, bh9) | 0;
+        var w13 = (c + lo | 0) + ((mid & 8191) << 13) | 0;
+        c = (hi + (mid >>> 13) | 0) + (w13 >>> 26) | 0;
+        w13 &= 67108863;
+        lo = Math.imul(al9, bl5);
+        mid = Math.imul(al9, bh5);
+        mid = mid + Math.imul(ah9, bl5) | 0;
+        hi = Math.imul(ah9, bh5);
+        lo = lo + Math.imul(al8, bl6) | 0;
+        mid = mid + Math.imul(al8, bh6) | 0;
+        mid = mid + Math.imul(ah8, bl6) | 0;
+        hi = hi + Math.imul(ah8, bh6) | 0;
+        lo = lo + Math.imul(al7, bl7) | 0;
+        mid = mid + Math.imul(al7, bh7) | 0;
+        mid = mid + Math.imul(ah7, bl7) | 0;
+        hi = hi + Math.imul(ah7, bh7) | 0;
+        lo = lo + Math.imul(al6, bl8) | 0;
+        mid = mid + Math.imul(al6, bh8) | 0;
+        mid = mid + Math.imul(ah6, bl8) | 0;
+        hi = hi + Math.imul(ah6, bh8) | 0;
+        lo = lo + Math.imul(al5, bl9) | 0;
+        mid = mid + Math.imul(al5, bh9) | 0;
+        mid = mid + Math.imul(ah5, bl9) | 0;
+        hi = hi + Math.imul(ah5, bh9) | 0;
+        var w14 = (c + lo | 0) + ((mid & 8191) << 13) | 0;
+        c = (hi + (mid >>> 13) | 0) + (w14 >>> 26) | 0;
+        w14 &= 67108863;
+        lo = Math.imul(al9, bl6);
+        mid = Math.imul(al9, bh6);
+        mid = mid + Math.imul(ah9, bl6) | 0;
+        hi = Math.imul(ah9, bh6);
+        lo = lo + Math.imul(al8, bl7) | 0;
+        mid = mid + Math.imul(al8, bh7) | 0;
+        mid = mid + Math.imul(ah8, bl7) | 0;
+        hi = hi + Math.imul(ah8, bh7) | 0;
+        lo = lo + Math.imul(al7, bl8) | 0;
+        mid = mid + Math.imul(al7, bh8) | 0;
+        mid = mid + Math.imul(ah7, bl8) | 0;
+        hi = hi + Math.imul(ah7, bh8) | 0;
+        lo = lo + Math.imul(al6, bl9) | 0;
+        mid = mid + Math.imul(al6, bh9) | 0;
+        mid = mid + Math.imul(ah6, bl9) | 0;
+        hi = hi + Math.imul(ah6, bh9) | 0;
+        var w15 = (c + lo | 0) + ((mid & 8191) << 13) | 0;
+        c = (hi + (mid >>> 13) | 0) + (w15 >>> 26) | 0;
+        w15 &= 67108863;
+        lo = Math.imul(al9, bl7);
+        mid = Math.imul(al9, bh7);
+        mid = mid + Math.imul(ah9, bl7) | 0;
+        hi = Math.imul(ah9, bh7);
+        lo = lo + Math.imul(al8, bl8) | 0;
+        mid = mid + Math.imul(al8, bh8) | 0;
+        mid = mid + Math.imul(ah8, bl8) | 0;
+        hi = hi + Math.imul(ah8, bh8) | 0;
+        lo = lo + Math.imul(al7, bl9) | 0;
+        mid = mid + Math.imul(al7, bh9) | 0;
+        mid = mid + Math.imul(ah7, bl9) | 0;
+        hi = hi + Math.imul(ah7, bh9) | 0;
+        var w16 = (c + lo | 0) + ((mid & 8191) << 13) | 0;
+        c = (hi + (mid >>> 13) | 0) + (w16 >>> 26) | 0;
+        w16 &= 67108863;
+        lo = Math.imul(al9, bl8);
+        mid = Math.imul(al9, bh8);
+        mid = mid + Math.imul(ah9, bl8) | 0;
+        hi = Math.imul(ah9, bh8);
+        lo = lo + Math.imul(al8, bl9) | 0;
+        mid = mid + Math.imul(al8, bh9) | 0;
+        mid = mid + Math.imul(ah8, bl9) | 0;
+        hi = hi + Math.imul(ah8, bh9) | 0;
+        var w17 = (c + lo | 0) + ((mid & 8191) << 13) | 0;
+        c = (hi + (mid >>> 13) | 0) + (w17 >>> 26) | 0;
+        w17 &= 67108863;
+        lo = Math.imul(al9, bl9);
+        mid = Math.imul(al9, bh9);
+        mid = mid + Math.imul(ah9, bl9) | 0;
+        hi = Math.imul(ah9, bh9);
+        var w18 = (c + lo | 0) + ((mid & 8191) << 13) | 0;
+        c = (hi + (mid >>> 13) | 0) + (w18 >>> 26) | 0;
+        w18 &= 67108863;
+        o[0] = w0;
+        o[1] = w1;
+        o[2] = w2;
+        o[3] = w3;
+        o[4] = w4;
+        o[5] = w5;
+        o[6] = w6;
+        o[7] = w7;
+        o[8] = w8;
+        o[9] = w9;
+        o[10] = w10;
+        o[11] = w11;
+        o[12] = w12;
+        o[13] = w13;
+        o[14] = w14;
+        o[15] = w15;
+        o[16] = w16;
+        o[17] = w17;
+        o[18] = w18;
+        if (c !== 0) {
+          o[19] = c;
+          out.length++;
+        }
+        return out;
+      };
+      if (!Math.imul) {
+        comb10MulTo = smallMulTo;
+      }
+      function bigMulTo(self, num, out) {
+        out.negative = num.negative ^ self.negative;
+        out.length = self.length + num.length;
+        var carry = 0;
+        var hncarry = 0;
+        for (var k = 0; k < out.length - 1; k++) {
+          var ncarry = hncarry;
+          hncarry = 0;
+          var rword = carry & 67108863;
+          var maxJ = Math.min(k, num.length - 1);
+          for (var j = Math.max(0, k - self.length + 1); j <= maxJ; j++) {
+            var i = k - j;
+            var a = self.words[i] | 0;
+            var b = num.words[j] | 0;
+            var r = a * b;
+            var lo = r & 67108863;
+            ncarry = ncarry + (r / 67108864 | 0) | 0;
+            lo = lo + rword | 0;
+            rword = lo & 67108863;
+            ncarry = ncarry + (lo >>> 26) | 0;
+            hncarry += ncarry >>> 26;
+            ncarry &= 67108863;
+          }
+          out.words[k] = rword;
+          carry = ncarry;
+          ncarry = hncarry;
+        }
+        if (carry !== 0) {
+          out.words[k] = carry;
+        } else {
+          out.length--;
+        }
+        return out._strip();
+      }
+      function jumboMulTo(self, num, out) {
+        return bigMulTo(self, num, out);
+      }
+      BN2.prototype.mulTo = function mulTo(num, out) {
+        var res;
+        var len = this.length + num.length;
+        if (this.length === 10 && num.length === 10) {
+          res = comb10MulTo(this, num, out);
+        } else if (len < 63) {
+          res = smallMulTo(this, num, out);
+        } else if (len < 1024) {
+          res = bigMulTo(this, num, out);
+        } else {
+          res = jumboMulTo(this, num, out);
+        }
+        return res;
+      };
+      function FFTM(x, y) {
+        this.x = x;
+        this.y = y;
+      }
+      FFTM.prototype.makeRBT = function makeRBT(N) {
+        var t = new Array(N);
+        var l = BN2.prototype._countBits(N) - 1;
+        for (var i = 0; i < N; i++) {
+          t[i] = this.revBin(i, l, N);
+        }
+        return t;
+      };
+      FFTM.prototype.revBin = function revBin(x, l, N) {
+        if (x === 0 || x === N - 1) return x;
+        var rb = 0;
+        for (var i = 0; i < l; i++) {
+          rb |= (x & 1) << l - i - 1;
+          x >>= 1;
+        }
+        return rb;
+      };
+      FFTM.prototype.permute = function permute(rbt, rws, iws, rtws, itws, N) {
+        for (var i = 0; i < N; i++) {
+          rtws[i] = rws[rbt[i]];
+          itws[i] = iws[rbt[i]];
+        }
+      };
+      FFTM.prototype.transform = function transform(rws, iws, rtws, itws, N, rbt) {
+        this.permute(rbt, rws, iws, rtws, itws, N);
+        for (var s = 1; s < N; s <<= 1) {
+          var l = s << 1;
+          var rtwdf = Math.cos(2 * Math.PI / l);
+          var itwdf = Math.sin(2 * Math.PI / l);
+          for (var p = 0; p < N; p += l) {
+            var rtwdf_ = rtwdf;
+            var itwdf_ = itwdf;
+            for (var j = 0; j < s; j++) {
+              var re = rtws[p + j];
+              var ie = itws[p + j];
+              var ro = rtws[p + j + s];
+              var io = itws[p + j + s];
+              var rx = rtwdf_ * ro - itwdf_ * io;
+              io = rtwdf_ * io + itwdf_ * ro;
+              ro = rx;
+              rtws[p + j] = re + ro;
+              itws[p + j] = ie + io;
+              rtws[p + j + s] = re - ro;
+              itws[p + j + s] = ie - io;
+              if (j !== l) {
+                rx = rtwdf * rtwdf_ - itwdf * itwdf_;
+                itwdf_ = rtwdf * itwdf_ + itwdf * rtwdf_;
+                rtwdf_ = rx;
+              }
+            }
+          }
+        }
+      };
+      FFTM.prototype.guessLen13b = function guessLen13b(n, m) {
+        var N = Math.max(m, n) | 1;
+        var odd = N & 1;
+        var i = 0;
+        for (N = N / 2 | 0; N; N = N >>> 1) {
+          i++;
+        }
+        return 1 << i + 1 + odd;
+      };
+      FFTM.prototype.conjugate = function conjugate(rws, iws, N) {
+        if (N <= 1) return;
+        for (var i = 0; i < N / 2; i++) {
+          var t = rws[i];
+          rws[i] = rws[N - i - 1];
+          rws[N - i - 1] = t;
+          t = iws[i];
+          iws[i] = -iws[N - i - 1];
+          iws[N - i - 1] = -t;
+        }
+      };
+      FFTM.prototype.normalize13b = function normalize13b(ws, N) {
+        var carry = 0;
+        for (var i = 0; i < N / 2; i++) {
+          var w = Math.round(ws[2 * i + 1] / N) * 8192 + Math.round(ws[2 * i] / N) + carry;
+          ws[i] = w & 67108863;
+          if (w < 67108864) {
+            carry = 0;
+          } else {
+            carry = w / 67108864 | 0;
+          }
+        }
+        return ws;
+      };
+      FFTM.prototype.convert13b = function convert13b(ws, len, rws, N) {
+        var carry = 0;
+        for (var i = 0; i < len; i++) {
+          carry = carry + (ws[i] | 0);
+          rws[2 * i] = carry & 8191;
+          carry = carry >>> 13;
+          rws[2 * i + 1] = carry & 8191;
+          carry = carry >>> 13;
+        }
+        for (i = 2 * len; i < N; ++i) {
+          rws[i] = 0;
+        }
+        assert(carry === 0);
+        assert((carry & ~8191) === 0);
+      };
+      FFTM.prototype.stub = function stub(N) {
+        var ph = new Array(N);
+        for (var i = 0; i < N; i++) {
+          ph[i] = 0;
+        }
+        return ph;
+      };
+      FFTM.prototype.mulp = function mulp(x, y, out) {
+        var N = 2 * this.guessLen13b(x.length, y.length);
+        var rbt = this.makeRBT(N);
+        var _ = this.stub(N);
+        var rws = new Array(N);
+        var rwst = new Array(N);
+        var iwst = new Array(N);
+        var nrws = new Array(N);
+        var nrwst = new Array(N);
+        var niwst = new Array(N);
+        var rmws = out.words;
+        rmws.length = N;
+        this.convert13b(x.words, x.length, rws, N);
+        this.convert13b(y.words, y.length, nrws, N);
+        this.transform(rws, _, rwst, iwst, N, rbt);
+        this.transform(nrws, _, nrwst, niwst, N, rbt);
+        for (var i = 0; i < N; i++) {
+          var rx = rwst[i] * nrwst[i] - iwst[i] * niwst[i];
+          iwst[i] = rwst[i] * niwst[i] + iwst[i] * nrwst[i];
+          rwst[i] = rx;
+        }
+        this.conjugate(rwst, iwst, N);
+        this.transform(rwst, iwst, rmws, _, N, rbt);
+        this.conjugate(rmws, _, N);
+        this.normalize13b(rmws, N);
+        out.negative = x.negative ^ y.negative;
+        out.length = x.length + y.length;
+        return out._strip();
+      };
+      BN2.prototype.mul = function mul(num) {
+        var out = new BN2(null);
+        out.words = new Array(this.length + num.length);
+        return this.mulTo(num, out);
+      };
+      BN2.prototype.mulf = function mulf(num) {
+        var out = new BN2(null);
+        out.words = new Array(this.length + num.length);
+        return jumboMulTo(this, num, out);
+      };
+      BN2.prototype.imul = function imul(num) {
+        return this.clone().mulTo(num, this);
+      };
+      BN2.prototype.imuln = function imuln(num) {
+        var isNegNum = num < 0;
+        if (isNegNum) num = -num;
+        assert(typeof num === "number");
+        assert(num < 67108864);
+        var carry = 0;
+        for (var i = 0; i < this.length; i++) {
+          var w = (this.words[i] | 0) * num;
+          var lo = (w & 67108863) + (carry & 67108863);
+          carry >>= 26;
+          carry += w / 67108864 | 0;
+          carry += lo >>> 26;
+          this.words[i] = lo & 67108863;
+        }
+        if (carry !== 0) {
+          this.words[i] = carry;
+          this.length++;
+        }
+        this.length = num === 0 ? 1 : this.length;
+        return isNegNum ? this.ineg() : this;
+      };
+      BN2.prototype.muln = function muln(num) {
+        return this.clone().imuln(num);
+      };
+      BN2.prototype.sqr = function sqr() {
+        return this.mul(this);
+      };
+      BN2.prototype.isqr = function isqr() {
+        return this.imul(this.clone());
+      };
+      BN2.prototype.pow = function pow(num) {
+        var w = toBitArray(num);
+        if (w.length === 0) return new BN2(1);
+        var res = this;
+        for (var i = 0; i < w.length; i++, res = res.sqr()) {
+          if (w[i] !== 0) break;
+        }
+        if (++i < w.length) {
+          for (var q = res.sqr(); i < w.length; i++, q = q.sqr()) {
+            if (w[i] === 0) continue;
+            res = res.mul(q);
+          }
+        }
+        return res;
+      };
+      BN2.prototype.iushln = function iushln(bits) {
+        assert(typeof bits === "number" && bits >= 0);
+        var r = bits % 26;
+        var s = (bits - r) / 26;
+        var carryMask = 67108863 >>> 26 - r << 26 - r;
+        var i;
+        if (r !== 0) {
+          var carry = 0;
+          for (i = 0; i < this.length; i++) {
+            var newCarry = this.words[i] & carryMask;
+            var c = (this.words[i] | 0) - newCarry << r;
+            this.words[i] = c | carry;
+            carry = newCarry >>> 26 - r;
+          }
+          if (carry) {
+            this.words[i] = carry;
+            this.length++;
+          }
+        }
+        if (s !== 0) {
+          for (i = this.length - 1; i >= 0; i--) {
+            this.words[i + s] = this.words[i];
+          }
+          for (i = 0; i < s; i++) {
+            this.words[i] = 0;
+          }
+          this.length += s;
+        }
+        return this._strip();
+      };
+      BN2.prototype.ishln = function ishln(bits) {
+        assert(this.negative === 0);
+        return this.iushln(bits);
+      };
+      BN2.prototype.iushrn = function iushrn(bits, hint, extended) {
+        assert(typeof bits === "number" && bits >= 0);
+        var h;
+        if (hint) {
+          h = (hint - hint % 26) / 26;
+        } else {
+          h = 0;
+        }
+        var r = bits % 26;
+        var s = Math.min((bits - r) / 26, this.length);
+        var mask = 67108863 ^ 67108863 >>> r << r;
+        var maskedWords = extended;
+        h -= s;
+        h = Math.max(0, h);
+        if (maskedWords) {
+          for (var i = 0; i < s; i++) {
+            maskedWords.words[i] = this.words[i];
+          }
+          maskedWords.length = s;
+        }
+        if (s === 0) {
+        } else if (this.length > s) {
+          this.length -= s;
+          for (i = 0; i < this.length; i++) {
+            this.words[i] = this.words[i + s];
+          }
+        } else {
+          this.words[0] = 0;
+          this.length = 1;
+        }
+        var carry = 0;
+        for (i = this.length - 1; i >= 0 && (carry !== 0 || i >= h); i--) {
+          var word = this.words[i] | 0;
+          this.words[i] = carry << 26 - r | word >>> r;
+          carry = word & mask;
+        }
+        if (maskedWords && carry !== 0) {
+          maskedWords.words[maskedWords.length++] = carry;
+        }
+        if (this.length === 0) {
+          this.words[0] = 0;
+          this.length = 1;
+        }
+        return this._strip();
+      };
+      BN2.prototype.ishrn = function ishrn(bits, hint, extended) {
+        assert(this.negative === 0);
+        return this.iushrn(bits, hint, extended);
+      };
+      BN2.prototype.shln = function shln(bits) {
+        return this.clone().ishln(bits);
+      };
+      BN2.prototype.ushln = function ushln(bits) {
+        return this.clone().iushln(bits);
+      };
+      BN2.prototype.shrn = function shrn(bits) {
+        return this.clone().ishrn(bits);
+      };
+      BN2.prototype.ushrn = function ushrn(bits) {
+        return this.clone().iushrn(bits);
+      };
+      BN2.prototype.testn = function testn(bit) {
+        assert(typeof bit === "number" && bit >= 0);
+        var r = bit % 26;
+        var s = (bit - r) / 26;
+        var q = 1 << r;
+        if (this.length <= s) return false;
+        var w = this.words[s];
+        return !!(w & q);
+      };
+      BN2.prototype.imaskn = function imaskn(bits) {
+        assert(typeof bits === "number" && bits >= 0);
+        var r = bits % 26;
+        var s = (bits - r) / 26;
+        assert(this.negative === 0, "imaskn works only with positive numbers");
+        if (this.length <= s) {
+          return this;
+        }
+        if (r !== 0) {
+          s++;
+        }
+        this.length = Math.min(s, this.length);
+        if (r !== 0) {
+          var mask = 67108863 ^ 67108863 >>> r << r;
+          this.words[this.length - 1] &= mask;
+        }
+        return this._strip();
+      };
+      BN2.prototype.maskn = function maskn(bits) {
+        return this.clone().imaskn(bits);
+      };
+      BN2.prototype.iaddn = function iaddn(num) {
+        assert(typeof num === "number");
+        assert(num < 67108864);
+        if (num < 0) return this.isubn(-num);
+        if (this.negative !== 0) {
+          if (this.length === 1 && (this.words[0] | 0) <= num) {
+            this.words[0] = num - (this.words[0] | 0);
+            this.negative = 0;
+            return this;
+          }
+          this.negative = 0;
+          this.isubn(num);
+          this.negative = 1;
+          return this;
+        }
+        return this._iaddn(num);
+      };
+      BN2.prototype._iaddn = function _iaddn(num) {
+        this.words[0] += num;
+        for (var i = 0; i < this.length && this.words[i] >= 67108864; i++) {
+          this.words[i] -= 67108864;
+          if (i === this.length - 1) {
+            this.words[i + 1] = 1;
+          } else {
+            this.words[i + 1]++;
+          }
+        }
+        this.length = Math.max(this.length, i + 1);
+        return this;
+      };
+      BN2.prototype.isubn = function isubn(num) {
+        assert(typeof num === "number");
+        assert(num < 67108864);
+        if (num < 0) return this.iaddn(-num);
+        if (this.negative !== 0) {
+          this.negative = 0;
+          this.iaddn(num);
+          this.negative = 1;
+          return this;
+        }
+        this.words[0] -= num;
+        if (this.length === 1 && this.words[0] < 0) {
+          this.words[0] = -this.words[0];
+          this.negative = 1;
+        } else {
+          for (var i = 0; i < this.length && this.words[i] < 0; i++) {
+            this.words[i] += 67108864;
+            this.words[i + 1] -= 1;
+          }
+        }
+        return this._strip();
+      };
+      BN2.prototype.addn = function addn(num) {
+        return this.clone().iaddn(num);
+      };
+      BN2.prototype.subn = function subn(num) {
+        return this.clone().isubn(num);
+      };
+      BN2.prototype.iabs = function iabs() {
+        this.negative = 0;
+        return this;
+      };
+      BN2.prototype.abs = function abs() {
+        return this.clone().iabs();
+      };
+      BN2.prototype._ishlnsubmul = function _ishlnsubmul(num, mul, shift) {
+        var len = num.length + shift;
+        var i;
+        this._expand(len);
+        var w;
+        var carry = 0;
+        for (i = 0; i < num.length; i++) {
+          w = (this.words[i + shift] | 0) + carry;
+          var right = (num.words[i] | 0) * mul;
+          w -= right & 67108863;
+          carry = (w >> 26) - (right / 67108864 | 0);
+          this.words[i + shift] = w & 67108863;
+        }
+        for (; i < this.length - shift; i++) {
+          w = (this.words[i + shift] | 0) + carry;
+          carry = w >> 26;
+          this.words[i + shift] = w & 67108863;
+        }
+        if (carry === 0) return this._strip();
+        assert(carry === -1);
+        carry = 0;
+        for (i = 0; i < this.length; i++) {
+          w = -(this.words[i] | 0) + carry;
+          carry = w >> 26;
+          this.words[i] = w & 67108863;
+        }
+        this.negative = 1;
+        return this._strip();
+      };
+      BN2.prototype._wordDiv = function _wordDiv(num, mode) {
+        var shift = this.length - num.length;
+        var a = this.clone();
+        var b = num;
+        var bhi = b.words[b.length - 1] | 0;
+        var bhiBits = this._countBits(bhi);
+        shift = 26 - bhiBits;
+        if (shift !== 0) {
+          b = b.ushln(shift);
+          a.iushln(shift);
+          bhi = b.words[b.length - 1] | 0;
+        }
+        var m = a.length - b.length;
+        var q;
+        if (mode !== "mod") {
+          q = new BN2(null);
+          q.length = m + 1;
+          q.words = new Array(q.length);
+          for (var i = 0; i < q.length; i++) {
+            q.words[i] = 0;
+          }
+        }
+        var diff = a.clone()._ishlnsubmul(b, 1, m);
+        if (diff.negative === 0) {
+          a = diff;
+          if (q) {
+            q.words[m] = 1;
+          }
+        }
+        for (var j = m - 1; j >= 0; j--) {
+          var qj = (a.words[b.length + j] | 0) * 67108864 + (a.words[b.length + j - 1] | 0);
+          qj = Math.min(qj / bhi | 0, 67108863);
+          a._ishlnsubmul(b, qj, j);
+          while (a.negative !== 0) {
+            qj--;
+            a.negative = 0;
+            a._ishlnsubmul(b, 1, j);
+            if (!a.isZero()) {
+              a.negative ^= 1;
+            }
+          }
+          if (q) {
+            q.words[j] = qj;
+          }
+        }
+        if (q) {
+          q._strip();
+        }
+        a._strip();
+        if (mode !== "div" && shift !== 0) {
+          a.iushrn(shift);
+        }
+        return {
+          div: q || null,
+          mod: a
+        };
+      };
+      BN2.prototype.divmod = function divmod(num, mode, positive) {
+        assert(!num.isZero());
+        if (this.isZero()) {
+          return {
+            div: new BN2(0),
+            mod: new BN2(0)
+          };
+        }
+        var div, mod, res;
+        if (this.negative !== 0 && num.negative === 0) {
+          res = this.neg().divmod(num, mode);
+          if (mode !== "mod") {
+            div = res.div.neg();
+          }
+          if (mode !== "div") {
+            mod = res.mod.neg();
+            if (positive && mod.negative !== 0) {
+              mod.iadd(num);
+            }
+          }
+          return {
+            div,
+            mod
+          };
+        }
+        if (this.negative === 0 && num.negative !== 0) {
+          res = this.divmod(num.neg(), mode);
+          if (mode !== "mod") {
+            div = res.div.neg();
+          }
+          return {
+            div,
+            mod: res.mod
+          };
+        }
+        if ((this.negative & num.negative) !== 0) {
+          res = this.neg().divmod(num.neg(), mode);
+          if (mode !== "div") {
+            mod = res.mod.neg();
+            if (positive && mod.negative !== 0) {
+              mod.isub(num);
+            }
+          }
+          return {
+            div: res.div,
+            mod
+          };
+        }
+        if (num.length > this.length || this.cmp(num) < 0) {
+          return {
+            div: new BN2(0),
+            mod: this
+          };
+        }
+        if (num.length === 1) {
+          if (mode === "div") {
+            return {
+              div: this.divn(num.words[0]),
+              mod: null
+            };
+          }
+          if (mode === "mod") {
+            return {
+              div: null,
+              mod: new BN2(this.modrn(num.words[0]))
+            };
+          }
+          return {
+            div: this.divn(num.words[0]),
+            mod: new BN2(this.modrn(num.words[0]))
+          };
+        }
+        return this._wordDiv(num, mode);
+      };
+      BN2.prototype.div = function div(num) {
+        return this.divmod(num, "div", false).div;
+      };
+      BN2.prototype.mod = function mod(num) {
+        return this.divmod(num, "mod", false).mod;
+      };
+      BN2.prototype.umod = function umod(num) {
+        return this.divmod(num, "mod", true).mod;
+      };
+      BN2.prototype.divRound = function divRound(num) {
+        var dm = this.divmod(num);
+        if (dm.mod.isZero()) return dm.div;
+        var mod = dm.div.negative !== 0 ? dm.mod.isub(num) : dm.mod;
+        var half = num.ushrn(1);
+        var r2 = num.andln(1);
+        var cmp = mod.cmp(half);
+        if (cmp < 0 || r2 === 1 && cmp === 0) return dm.div;
+        return dm.div.negative !== 0 ? dm.div.isubn(1) : dm.div.iaddn(1);
+      };
+      BN2.prototype.modrn = function modrn(num) {
+        var isNegNum = num < 0;
+        if (isNegNum) num = -num;
+        assert(num <= 67108863);
+        var p = (1 << 26) % num;
+        var acc = 0;
+        for (var i = this.length - 1; i >= 0; i--) {
+          acc = (p * acc + (this.words[i] | 0)) % num;
+        }
+        return isNegNum ? -acc : acc;
+      };
+      BN2.prototype.modn = function modn(num) {
+        return this.modrn(num);
+      };
+      BN2.prototype.idivn = function idivn(num) {
+        var isNegNum = num < 0;
+        if (isNegNum) num = -num;
+        assert(num <= 67108863);
+        var carry = 0;
+        for (var i = this.length - 1; i >= 0; i--) {
+          var w = (this.words[i] | 0) + carry * 67108864;
+          this.words[i] = w / num | 0;
+          carry = w % num;
+        }
+        this._strip();
+        return isNegNum ? this.ineg() : this;
+      };
+      BN2.prototype.divn = function divn(num) {
+        return this.clone().idivn(num);
+      };
+      BN2.prototype.egcd = function egcd(p) {
+        assert(p.negative === 0);
+        assert(!p.isZero());
+        var x = this;
+        var y = p.clone();
+        if (x.negative !== 0) {
+          x = x.umod(p);
+        } else {
+          x = x.clone();
+        }
+        var A = new BN2(1);
+        var B = new BN2(0);
+        var C = new BN2(0);
+        var D = new BN2(1);
+        var g = 0;
+        while (x.isEven() && y.isEven()) {
+          x.iushrn(1);
+          y.iushrn(1);
+          ++g;
+        }
+        var yp = y.clone();
+        var xp = x.clone();
+        while (!x.isZero()) {
+          for (var i = 0, im = 1; (x.words[0] & im) === 0 && i < 26; ++i, im <<= 1) ;
+          if (i > 0) {
+            x.iushrn(i);
+            while (i-- > 0) {
+              if (A.isOdd() || B.isOdd()) {
+                A.iadd(yp);
+                B.isub(xp);
+              }
+              A.iushrn(1);
+              B.iushrn(1);
+            }
+          }
+          for (var j = 0, jm = 1; (y.words[0] & jm) === 0 && j < 26; ++j, jm <<= 1) ;
+          if (j > 0) {
+            y.iushrn(j);
+            while (j-- > 0) {
+              if (C.isOdd() || D.isOdd()) {
+                C.iadd(yp);
+                D.isub(xp);
+              }
+              C.iushrn(1);
+              D.iushrn(1);
+            }
+          }
+          if (x.cmp(y) >= 0) {
+            x.isub(y);
+            A.isub(C);
+            B.isub(D);
+          } else {
+            y.isub(x);
+            C.isub(A);
+            D.isub(B);
+          }
+        }
+        return {
+          a: C,
+          b: D,
+          gcd: y.iushln(g)
+        };
+      };
+      BN2.prototype._invmp = function _invmp(p) {
+        assert(p.negative === 0);
+        assert(!p.isZero());
+        var a = this;
+        var b = p.clone();
+        if (a.negative !== 0) {
+          a = a.umod(p);
+        } else {
+          a = a.clone();
+        }
+        var x1 = new BN2(1);
+        var x2 = new BN2(0);
+        var delta = b.clone();
+        while (a.cmpn(1) > 0 && b.cmpn(1) > 0) {
+          for (var i = 0, im = 1; (a.words[0] & im) === 0 && i < 26; ++i, im <<= 1) ;
+          if (i > 0) {
+            a.iushrn(i);
+            while (i-- > 0) {
+              if (x1.isOdd()) {
+                x1.iadd(delta);
+              }
+              x1.iushrn(1);
+            }
+          }
+          for (var j = 0, jm = 1; (b.words[0] & jm) === 0 && j < 26; ++j, jm <<= 1) ;
+          if (j > 0) {
+            b.iushrn(j);
+            while (j-- > 0) {
+              if (x2.isOdd()) {
+                x2.iadd(delta);
+              }
+              x2.iushrn(1);
+            }
+          }
+          if (a.cmp(b) >= 0) {
+            a.isub(b);
+            x1.isub(x2);
+          } else {
+            b.isub(a);
+            x2.isub(x1);
+          }
+        }
+        var res;
+        if (a.cmpn(1) === 0) {
+          res = x1;
+        } else {
+          res = x2;
+        }
+        if (res.cmpn(0) < 0) {
+          res.iadd(p);
+        }
+        return res;
+      };
+      BN2.prototype.gcd = function gcd(num) {
+        if (this.isZero()) return num.abs();
+        if (num.isZero()) return this.abs();
+        var a = this.clone();
+        var b = num.clone();
+        a.negative = 0;
+        b.negative = 0;
+        for (var shift = 0; a.isEven() && b.isEven(); shift++) {
+          a.iushrn(1);
+          b.iushrn(1);
+        }
+        do {
+          while (a.isEven()) {
+            a.iushrn(1);
+          }
+          while (b.isEven()) {
+            b.iushrn(1);
+          }
+          var r = a.cmp(b);
+          if (r < 0) {
+            var t = a;
+            a = b;
+            b = t;
+          } else if (r === 0 || b.cmpn(1) === 0) {
+            break;
+          }
+          a.isub(b);
+        } while (true);
+        return b.iushln(shift);
+      };
+      BN2.prototype.invm = function invm(num) {
+        return this.egcd(num).a.umod(num);
+      };
+      BN2.prototype.isEven = function isEven() {
+        return (this.words[0] & 1) === 0;
+      };
+      BN2.prototype.isOdd = function isOdd() {
+        return (this.words[0] & 1) === 1;
+      };
+      BN2.prototype.andln = function andln(num) {
+        return this.words[0] & num;
+      };
+      BN2.prototype.bincn = function bincn(bit) {
+        assert(typeof bit === "number");
+        var r = bit % 26;
+        var s = (bit - r) / 26;
+        var q = 1 << r;
+        if (this.length <= s) {
+          this._expand(s + 1);
+          this.words[s] |= q;
+          return this;
+        }
+        var carry = q;
+        for (var i = s; carry !== 0 && i < this.length; i++) {
+          var w = this.words[i] | 0;
+          w += carry;
+          carry = w >>> 26;
+          w &= 67108863;
+          this.words[i] = w;
+        }
+        if (carry !== 0) {
+          this.words[i] = carry;
+          this.length++;
+        }
+        return this;
+      };
+      BN2.prototype.isZero = function isZero() {
+        return this.length === 1 && this.words[0] === 0;
+      };
+      BN2.prototype.cmpn = function cmpn(num) {
+        var negative = num < 0;
+        if (this.negative !== 0 && !negative) return -1;
+        if (this.negative === 0 && negative) return 1;
+        this._strip();
+        var res;
+        if (this.length > 1) {
+          res = 1;
+        } else {
+          if (negative) {
+            num = -num;
+          }
+          assert(num <= 67108863, "Number is too big");
+          var w = this.words[0] | 0;
+          res = w === num ? 0 : w < num ? -1 : 1;
+        }
+        if (this.negative !== 0) return -res | 0;
+        return res;
+      };
+      BN2.prototype.cmp = function cmp(num) {
+        if (this.negative !== 0 && num.negative === 0) return -1;
+        if (this.negative === 0 && num.negative !== 0) return 1;
+        var res = this.ucmp(num);
+        if (this.negative !== 0) return -res | 0;
+        return res;
+      };
+      BN2.prototype.ucmp = function ucmp(num) {
+        if (this.length > num.length) return 1;
+        if (this.length < num.length) return -1;
+        var res = 0;
+        for (var i = this.length - 1; i >= 0; i--) {
+          var a = this.words[i] | 0;
+          var b = num.words[i] | 0;
+          if (a === b) continue;
+          if (a < b) {
+            res = -1;
+          } else if (a > b) {
+            res = 1;
+          }
+          break;
+        }
+        return res;
+      };
+      BN2.prototype.gtn = function gtn(num) {
+        return this.cmpn(num) === 1;
+      };
+      BN2.prototype.gt = function gt(num) {
+        return this.cmp(num) === 1;
+      };
+      BN2.prototype.gten = function gten(num) {
+        return this.cmpn(num) >= 0;
+      };
+      BN2.prototype.gte = function gte(num) {
+        return this.cmp(num) >= 0;
+      };
+      BN2.prototype.ltn = function ltn(num) {
+        return this.cmpn(num) === -1;
+      };
+      BN2.prototype.lt = function lt(num) {
+        return this.cmp(num) === -1;
+      };
+      BN2.prototype.lten = function lten(num) {
+        return this.cmpn(num) <= 0;
+      };
+      BN2.prototype.lte = function lte(num) {
+        return this.cmp(num) <= 0;
+      };
+      BN2.prototype.eqn = function eqn(num) {
+        return this.cmpn(num) === 0;
+      };
+      BN2.prototype.eq = function eq(num) {
+        return this.cmp(num) === 0;
+      };
+      BN2.red = function red(num) {
+        return new Red(num);
+      };
+      BN2.prototype.toRed = function toRed(ctx) {
+        assert(!this.red, "Already a number in reduction context");
+        assert(this.negative === 0, "red works only with positives");
+        return ctx.convertTo(this)._forceRed(ctx);
+      };
+      BN2.prototype.fromRed = function fromRed() {
+        assert(this.red, "fromRed works only with numbers in reduction context");
+        return this.red.convertFrom(this);
+      };
+      BN2.prototype._forceRed = function _forceRed(ctx) {
+        this.red = ctx;
+        return this;
+      };
+      BN2.prototype.forceRed = function forceRed(ctx) {
+        assert(!this.red, "Already a number in reduction context");
+        return this._forceRed(ctx);
+      };
+      BN2.prototype.redAdd = function redAdd(num) {
+        assert(this.red, "redAdd works only with red numbers");
+        return this.red.add(this, num);
+      };
+      BN2.prototype.redIAdd = function redIAdd(num) {
+        assert(this.red, "redIAdd works only with red numbers");
+        return this.red.iadd(this, num);
+      };
+      BN2.prototype.redSub = function redSub(num) {
+        assert(this.red, "redSub works only with red numbers");
+        return this.red.sub(this, num);
+      };
+      BN2.prototype.redISub = function redISub(num) {
+        assert(this.red, "redISub works only with red numbers");
+        return this.red.isub(this, num);
+      };
+      BN2.prototype.redShl = function redShl(num) {
+        assert(this.red, "redShl works only with red numbers");
+        return this.red.shl(this, num);
+      };
+      BN2.prototype.redMul = function redMul(num) {
+        assert(this.red, "redMul works only with red numbers");
+        this.red._verify2(this, num);
+        return this.red.mul(this, num);
+      };
+      BN2.prototype.redIMul = function redIMul(num) {
+        assert(this.red, "redMul works only with red numbers");
+        this.red._verify2(this, num);
+        return this.red.imul(this, num);
+      };
+      BN2.prototype.redSqr = function redSqr() {
+        assert(this.red, "redSqr works only with red numbers");
+        this.red._verify1(this);
+        return this.red.sqr(this);
+      };
+      BN2.prototype.redISqr = function redISqr() {
+        assert(this.red, "redISqr works only with red numbers");
+        this.red._verify1(this);
+        return this.red.isqr(this);
+      };
+      BN2.prototype.redSqrt = function redSqrt() {
+        assert(this.red, "redSqrt works only with red numbers");
+        this.red._verify1(this);
+        return this.red.sqrt(this);
+      };
+      BN2.prototype.redInvm = function redInvm() {
+        assert(this.red, "redInvm works only with red numbers");
+        this.red._verify1(this);
+        return this.red.invm(this);
+      };
+      BN2.prototype.redNeg = function redNeg() {
+        assert(this.red, "redNeg works only with red numbers");
+        this.red._verify1(this);
+        return this.red.neg(this);
+      };
+      BN2.prototype.redPow = function redPow(num) {
+        assert(this.red && !num.red, "redPow(normalNum)");
+        this.red._verify1(this);
+        return this.red.pow(this, num);
+      };
+      var primes = {
+        k256: null,
+        p224: null,
+        p192: null,
+        p25519: null
+      };
+      function MPrime(name, p) {
+        this.name = name;
+        this.p = new BN2(p, 16);
+        this.n = this.p.bitLength();
+        this.k = new BN2(1).iushln(this.n).isub(this.p);
+        this.tmp = this._tmp();
+      }
+      MPrime.prototype._tmp = function _tmp() {
+        var tmp = new BN2(null);
+        tmp.words = new Array(Math.ceil(this.n / 13));
+        return tmp;
+      };
+      MPrime.prototype.ireduce = function ireduce(num) {
+        var r = num;
+        var rlen;
+        do {
+          this.split(r, this.tmp);
+          r = this.imulK(r);
+          r = r.iadd(this.tmp);
+          rlen = r.bitLength();
+        } while (rlen > this.n);
+        var cmp = rlen < this.n ? -1 : r.ucmp(this.p);
+        if (cmp === 0) {
+          r.words[0] = 0;
+          r.length = 1;
+        } else if (cmp > 0) {
+          r.isub(this.p);
+        } else {
+          if (r.strip !== void 0) {
+            r.strip();
+          } else {
+            r._strip();
+          }
+        }
+        return r;
+      };
+      MPrime.prototype.split = function split(input, out) {
+        input.iushrn(this.n, 0, out);
+      };
+      MPrime.prototype.imulK = function imulK(num) {
+        return num.imul(this.k);
+      };
+      function K256() {
+        MPrime.call(
+          this,
+          "k256",
+          "ffffffff ffffffff ffffffff ffffffff ffffffff ffffffff fffffffe fffffc2f"
+        );
+      }
+      inherits(K256, MPrime);
+      K256.prototype.split = function split(input, output) {
+        var mask = 4194303;
+        var outLen = Math.min(input.length, 9);
+        for (var i = 0; i < outLen; i++) {
+          output.words[i] = input.words[i];
+        }
+        output.length = outLen;
+        if (input.length <= 9) {
+          input.words[0] = 0;
+          input.length = 1;
+          return;
+        }
+        var prev = input.words[9];
+        output.words[output.length++] = prev & mask;
+        for (i = 10; i < input.length; i++) {
+          var next = input.words[i] | 0;
+          input.words[i - 10] = (next & mask) << 4 | prev >>> 22;
+          prev = next;
+        }
+        prev >>>= 22;
+        input.words[i - 10] = prev;
+        if (prev === 0 && input.length > 10) {
+          input.length -= 10;
+        } else {
+          input.length -= 9;
+        }
+      };
+      K256.prototype.imulK = function imulK(num) {
+        num.words[num.length] = 0;
+        num.words[num.length + 1] = 0;
+        num.length += 2;
+        var lo = 0;
+        for (var i = 0; i < num.length; i++) {
+          var w = num.words[i] | 0;
+          lo += w * 977;
+          num.words[i] = lo & 67108863;
+          lo = w * 64 + (lo / 67108864 | 0);
+        }
+        if (num.words[num.length - 1] === 0) {
+          num.length--;
+          if (num.words[num.length - 1] === 0) {
+            num.length--;
+          }
+        }
+        return num;
+      };
+      function P224() {
+        MPrime.call(
+          this,
+          "p224",
+          "ffffffff ffffffff ffffffff ffffffff 00000000 00000000 00000001"
+        );
+      }
+      inherits(P224, MPrime);
+      function P192() {
+        MPrime.call(
+          this,
+          "p192",
+          "ffffffff ffffffff ffffffff fffffffe ffffffff ffffffff"
+        );
+      }
+      inherits(P192, MPrime);
+      function P25519() {
+        MPrime.call(
+          this,
+          "25519",
+          "7fffffffffffffff ffffffffffffffff ffffffffffffffff ffffffffffffffed"
+        );
+      }
+      inherits(P25519, MPrime);
+      P25519.prototype.imulK = function imulK(num) {
+        var carry = 0;
+        for (var i = 0; i < num.length; i++) {
+          var hi = (num.words[i] | 0) * 19 + carry;
+          var lo = hi & 67108863;
+          hi >>>= 26;
+          num.words[i] = lo;
+          carry = hi;
+        }
+        if (carry !== 0) {
+          num.words[num.length++] = carry;
+        }
+        return num;
+      };
+      BN2._prime = function prime(name) {
+        if (primes[name]) return primes[name];
+        var prime2;
+        if (name === "k256") {
+          prime2 = new K256();
+        } else if (name === "p224") {
+          prime2 = new P224();
+        } else if (name === "p192") {
+          prime2 = new P192();
+        } else if (name === "p25519") {
+          prime2 = new P25519();
+        } else {
+          throw new Error("Unknown prime " + name);
+        }
+        primes[name] = prime2;
+        return prime2;
+      };
+      function Red(m) {
+        if (typeof m === "string") {
+          var prime = BN2._prime(m);
+          this.m = prime.p;
+          this.prime = prime;
+        } else {
+          assert(m.gtn(1), "modulus must be greater than 1");
+          this.m = m;
+          this.prime = null;
+        }
+      }
+      Red.prototype._verify1 = function _verify1(a) {
+        assert(a.negative === 0, "red works only with positives");
+        assert(a.red, "red works only with red numbers");
+      };
+      Red.prototype._verify2 = function _verify2(a, b) {
+        assert((a.negative | b.negative) === 0, "red works only with positives");
+        assert(
+          a.red && a.red === b.red,
+          "red works only with red numbers"
+        );
+      };
+      Red.prototype.imod = function imod(a) {
+        if (this.prime) return this.prime.ireduce(a)._forceRed(this);
+        move(a, a.umod(this.m)._forceRed(this));
+        return a;
+      };
+      Red.prototype.neg = function neg(a) {
+        if (a.isZero()) {
+          return a.clone();
+        }
+        return this.m.sub(a)._forceRed(this);
+      };
+      Red.prototype.add = function add(a, b) {
+        this._verify2(a, b);
+        var res = a.add(b);
+        if (res.cmp(this.m) >= 0) {
+          res.isub(this.m);
+        }
+        return res._forceRed(this);
+      };
+      Red.prototype.iadd = function iadd(a, b) {
+        this._verify2(a, b);
+        var res = a.iadd(b);
+        if (res.cmp(this.m) >= 0) {
+          res.isub(this.m);
+        }
+        return res;
+      };
+      Red.prototype.sub = function sub(a, b) {
+        this._verify2(a, b);
+        var res = a.sub(b);
+        if (res.cmpn(0) < 0) {
+          res.iadd(this.m);
+        }
+        return res._forceRed(this);
+      };
+      Red.prototype.isub = function isub(a, b) {
+        this._verify2(a, b);
+        var res = a.isub(b);
+        if (res.cmpn(0) < 0) {
+          res.iadd(this.m);
+        }
+        return res;
+      };
+      Red.prototype.shl = function shl(a, num) {
+        this._verify1(a);
+        return this.imod(a.ushln(num));
+      };
+      Red.prototype.imul = function imul(a, b) {
+        this._verify2(a, b);
+        return this.imod(a.imul(b));
+      };
+      Red.prototype.mul = function mul(a, b) {
+        this._verify2(a, b);
+        return this.imod(a.mul(b));
+      };
+      Red.prototype.isqr = function isqr(a) {
+        return this.imul(a, a.clone());
+      };
+      Red.prototype.sqr = function sqr(a) {
+        return this.mul(a, a);
+      };
+      Red.prototype.sqrt = function sqrt(a) {
+        if (a.isZero()) return a.clone();
+        var mod3 = this.m.andln(3);
+        assert(mod3 % 2 === 1);
+        if (mod3 === 3) {
+          var pow = this.m.add(new BN2(1)).iushrn(2);
+          return this.pow(a, pow);
+        }
+        var q = this.m.subn(1);
+        var s = 0;
+        while (!q.isZero() && q.andln(1) === 0) {
+          s++;
+          q.iushrn(1);
+        }
+        assert(!q.isZero());
+        var one = new BN2(1).toRed(this);
+        var nOne = one.redNeg();
+        var lpow = this.m.subn(1).iushrn(1);
+        var z = this.m.bitLength();
+        z = new BN2(2 * z * z).toRed(this);
+        while (this.pow(z, lpow).cmp(nOne) !== 0) {
+          z.redIAdd(nOne);
+        }
+        var c = this.pow(z, q);
+        var r = this.pow(a, q.addn(1).iushrn(1));
+        var t = this.pow(a, q);
+        var m = s;
+        while (t.cmp(one) !== 0) {
+          var tmp = t;
+          for (var i = 0; tmp.cmp(one) !== 0; i++) {
+            tmp = tmp.redSqr();
+          }
+          assert(i < m);
+          var b = this.pow(c, new BN2(1).iushln(m - i - 1));
+          r = r.redMul(b);
+          c = b.redSqr();
+          t = t.redMul(c);
+          m = i;
+        }
+        return r;
+      };
+      Red.prototype.invm = function invm(a) {
+        var inv = a._invmp(this.m);
+        if (inv.negative !== 0) {
+          inv.negative = 0;
+          return this.imod(inv).redNeg();
+        } else {
+          return this.imod(inv);
+        }
+      };
+      Red.prototype.pow = function pow(a, num) {
+        if (num.isZero()) return new BN2(1).toRed(this);
+        if (num.cmpn(1) === 0) return a.clone();
+        var windowSize = 4;
+        var wnd = new Array(1 << windowSize);
+        wnd[0] = new BN2(1).toRed(this);
+        wnd[1] = a;
+        for (var i = 2; i < wnd.length; i++) {
+          wnd[i] = this.mul(wnd[i - 1], a);
+        }
+        var res = wnd[0];
+        var current = 0;
+        var currentLen = 0;
+        var start = num.bitLength() % 26;
+        if (start === 0) {
+          start = 26;
+        }
+        for (i = num.length - 1; i >= 0; i--) {
+          var word = num.words[i];
+          for (var j = start - 1; j >= 0; j--) {
+            var bit = word >> j & 1;
+            if (res !== wnd[0]) {
+              res = this.sqr(res);
+            }
+            if (bit === 0 && current === 0) {
+              currentLen = 0;
+              continue;
+            }
+            current <<= 1;
+            current |= bit;
+            currentLen++;
+            if (currentLen !== windowSize && (i !== 0 || j !== 0)) continue;
+            res = this.mul(res, wnd[current]);
+            currentLen = 0;
+            current = 0;
+          }
+          start = 26;
+        }
+        return res;
+      };
+      Red.prototype.convertTo = function convertTo(num) {
+        var r = num.umod(this.m);
+        return r === num ? r.clone() : r;
+      };
+      Red.prototype.convertFrom = function convertFrom(num) {
+        var res = num.clone();
+        res.red = null;
+        return res;
+      };
+      BN2.mont = function mont(num) {
+        return new Mont(num);
+      };
+      function Mont(m) {
+        Red.call(this, m);
+        this.shift = this.m.bitLength();
+        if (this.shift % 26 !== 0) {
+          this.shift += 26 - this.shift % 26;
+        }
+        this.r = new BN2(1).iushln(this.shift);
+        this.r2 = this.imod(this.r.sqr());
+        this.rinv = this.r._invmp(this.m);
+        this.minv = this.rinv.mul(this.r).isubn(1).div(this.m);
+        this.minv = this.minv.umod(this.r);
+        this.minv = this.r.sub(this.minv);
+      }
+      inherits(Mont, Red);
+      Mont.prototype.convertTo = function convertTo(num) {
+        return this.imod(num.ushln(this.shift));
+      };
+      Mont.prototype.convertFrom = function convertFrom(num) {
+        var r = this.imod(num.mul(this.rinv));
+        r.red = null;
+        return r;
+      };
+      Mont.prototype.imul = function imul(a, b) {
+        if (a.isZero() || b.isZero()) {
+          a.words[0] = 0;
+          a.length = 1;
+          return a;
+        }
+        var t = a.imul(b);
+        var c = t.maskn(this.shift).mul(this.minv).imaskn(this.shift).mul(this.m);
+        var u = t.isub(c).iushrn(this.shift);
+        var res = u;
+        if (u.cmp(this.m) >= 0) {
+          res = u.isub(this.m);
+        } else if (u.cmpn(0) < 0) {
+          res = u.iadd(this.m);
+        }
+        return res._forceRed(this);
+      };
+      Mont.prototype.mul = function mul(a, b) {
+        if (a.isZero() || b.isZero()) return new BN2(0)._forceRed(this);
+        var t = a.mul(b);
+        var c = t.maskn(this.shift).mul(this.minv).imaskn(this.shift).mul(this.m);
+        var u = t.isub(c).iushrn(this.shift);
+        var res = u;
+        if (u.cmp(this.m) >= 0) {
+          res = u.isub(this.m);
+        } else if (u.cmpn(0) < 0) {
+          res = u.iadd(this.m);
+        }
+        return res._forceRed(this);
+      };
+      Mont.prototype.invm = function invm(a) {
+        var res = this.imod(a._invmp(this.m).mul(this.r2));
+        return res._forceRed(this);
+      };
+    })(typeof module === "undefined" || module, exports);
+  }
+});
+
 // src/providers/positionProvider.ts
 import {
   elizaLogger
 } from "@elizaos/core";
-
-// node_modules/@solana/errors/dist/index.node.mjs
-var SOLANA_ERROR__BLOCK_HEIGHT_EXCEEDED = 1;
-var SOLANA_ERROR__INVALID_NONCE = 2;
-var SOLANA_ERROR__NONCE_ACCOUNT_NOT_FOUND = 3;
-var SOLANA_ERROR__BLOCKHASH_STRING_LENGTH_OUT_OF_RANGE = 4;
-var SOLANA_ERROR__INVALID_BLOCKHASH_BYTE_LENGTH = 5;
-var SOLANA_ERROR__LAMPORTS_OUT_OF_RANGE = 6;
-var SOLANA_ERROR__MALFORMED_BIGINT_STRING = 7;
-var SOLANA_ERROR__MALFORMED_NUMBER_STRING = 8;
-var SOLANA_ERROR__TIMESTAMP_OUT_OF_RANGE = 9;
-var SOLANA_ERROR__MALFORMED_JSON_RPC_ERROR = 10;
-var SOLANA_ERROR__JSON_RPC__PARSE_ERROR = -32700;
-var SOLANA_ERROR__JSON_RPC__INTERNAL_ERROR = -32603;
-var SOLANA_ERROR__JSON_RPC__INVALID_PARAMS = -32602;
-var SOLANA_ERROR__JSON_RPC__METHOD_NOT_FOUND = -32601;
-var SOLANA_ERROR__JSON_RPC__INVALID_REQUEST = -32600;
-var SOLANA_ERROR__JSON_RPC__SERVER_ERROR_MIN_CONTEXT_SLOT_NOT_REACHED = -32016;
-var SOLANA_ERROR__JSON_RPC__SERVER_ERROR_UNSUPPORTED_TRANSACTION_VERSION = -32015;
-var SOLANA_ERROR__JSON_RPC__SERVER_ERROR_BLOCK_STATUS_NOT_AVAILABLE_YET = -32014;
-var SOLANA_ERROR__JSON_RPC__SERVER_ERROR_TRANSACTION_SIGNATURE_LEN_MISMATCH = -32013;
-var SOLANA_ERROR__JSON_RPC__SCAN_ERROR = -32012;
-var SOLANA_ERROR__JSON_RPC__SERVER_ERROR_TRANSACTION_HISTORY_NOT_AVAILABLE = -32011;
-var SOLANA_ERROR__JSON_RPC__SERVER_ERROR_KEY_EXCLUDED_FROM_SECONDARY_INDEX = -32010;
-var SOLANA_ERROR__JSON_RPC__SERVER_ERROR_LONG_TERM_STORAGE_SLOT_SKIPPED = -32009;
-var SOLANA_ERROR__JSON_RPC__SERVER_ERROR_NO_SNAPSHOT = -32008;
-var SOLANA_ERROR__JSON_RPC__SERVER_ERROR_SLOT_SKIPPED = -32007;
-var SOLANA_ERROR__JSON_RPC__SERVER_ERROR_TRANSACTION_PRECOMPILE_VERIFICATION_FAILURE = -32006;
-var SOLANA_ERROR__JSON_RPC__SERVER_ERROR_NODE_UNHEALTHY = -32005;
-var SOLANA_ERROR__JSON_RPC__SERVER_ERROR_BLOCK_NOT_AVAILABLE = -32004;
-var SOLANA_ERROR__JSON_RPC__SERVER_ERROR_TRANSACTION_SIGNATURE_VERIFICATION_FAILURE = -32003;
-var SOLANA_ERROR__JSON_RPC__SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE = -32002;
-var SOLANA_ERROR__JSON_RPC__SERVER_ERROR_BLOCK_CLEANED_UP = -32001;
-var SOLANA_ERROR__ADDRESSES__INVALID_BYTE_LENGTH = 28e5;
-var SOLANA_ERROR__ADDRESSES__STRING_LENGTH_OUT_OF_RANGE = 2800001;
-var SOLANA_ERROR__ADDRESSES__INVALID_BASE58_ENCODED_ADDRESS = 2800002;
-var SOLANA_ERROR__ADDRESSES__INVALID_ED25519_PUBLIC_KEY = 2800003;
-var SOLANA_ERROR__ADDRESSES__MALFORMED_PDA = 2800004;
-var SOLANA_ERROR__ADDRESSES__PDA_BUMP_SEED_OUT_OF_RANGE = 2800005;
-var SOLANA_ERROR__ADDRESSES__MAX_NUMBER_OF_PDA_SEEDS_EXCEEDED = 2800006;
-var SOLANA_ERROR__ADDRESSES__MAX_PDA_SEED_LENGTH_EXCEEDED = 2800007;
-var SOLANA_ERROR__ADDRESSES__INVALID_SEEDS_POINT_ON_CURVE = 2800008;
-var SOLANA_ERROR__ADDRESSES__FAILED_TO_FIND_VIABLE_PDA_BUMP_SEED = 2800009;
-var SOLANA_ERROR__ADDRESSES__PDA_ENDS_WITH_PDA_MARKER = 2800010;
-var SOLANA_ERROR__ACCOUNTS__ACCOUNT_NOT_FOUND = 323e4;
-var SOLANA_ERROR__ACCOUNTS__ONE_OR_MORE_ACCOUNTS_NOT_FOUND = 32300001;
-var SOLANA_ERROR__ACCOUNTS__FAILED_TO_DECODE_ACCOUNT = 3230002;
-var SOLANA_ERROR__ACCOUNTS__EXPECTED_DECODED_ACCOUNT = 3230003;
-var SOLANA_ERROR__ACCOUNTS__EXPECTED_ALL_ACCOUNTS_TO_BE_DECODED = 3230004;
-var SOLANA_ERROR__SUBTLE_CRYPTO__DISALLOWED_IN_INSECURE_CONTEXT = 361e4;
-var SOLANA_ERROR__SUBTLE_CRYPTO__DIGEST_UNIMPLEMENTED = 3610001;
-var SOLANA_ERROR__SUBTLE_CRYPTO__ED25519_ALGORITHM_UNIMPLEMENTED = 3610002;
-var SOLANA_ERROR__SUBTLE_CRYPTO__EXPORT_FUNCTION_UNIMPLEMENTED = 3610003;
-var SOLANA_ERROR__SUBTLE_CRYPTO__GENERATE_FUNCTION_UNIMPLEMENTED = 3610004;
-var SOLANA_ERROR__SUBTLE_CRYPTO__SIGN_FUNCTION_UNIMPLEMENTED = 3610005;
-var SOLANA_ERROR__SUBTLE_CRYPTO__VERIFY_FUNCTION_UNIMPLEMENTED = 3610006;
-var SOLANA_ERROR__SUBTLE_CRYPTO__CANNOT_EXPORT_NON_EXTRACTABLE_KEY = 3610007;
-var SOLANA_ERROR__CRYPTO__RANDOM_VALUES_FUNCTION_UNIMPLEMENTED = 3611e3;
-var SOLANA_ERROR__KEYS__INVALID_KEY_PAIR_BYTE_LENGTH = 3704e3;
-var SOLANA_ERROR__KEYS__INVALID_PRIVATE_KEY_BYTE_LENGTH = 3704001;
-var SOLANA_ERROR__KEYS__INVALID_SIGNATURE_BYTE_LENGTH = 3704002;
-var SOLANA_ERROR__KEYS__SIGNATURE_STRING_LENGTH_OUT_OF_RANGE = 3704003;
-var SOLANA_ERROR__KEYS__PUBLIC_KEY_MUST_MATCH_PRIVATE_KEY = 3704004;
-var SOLANA_ERROR__INSTRUCTION__EXPECTED_TO_HAVE_ACCOUNTS = 4128e3;
-var SOLANA_ERROR__INSTRUCTION__EXPECTED_TO_HAVE_DATA = 4128001;
-var SOLANA_ERROR__INSTRUCTION__PROGRAM_ID_MISMATCH = 4128002;
-var SOLANA_ERROR__INSTRUCTION_ERROR__UNKNOWN = 4615e3;
-var SOLANA_ERROR__INSTRUCTION_ERROR__GENERIC_ERROR = 4615001;
-var SOLANA_ERROR__INSTRUCTION_ERROR__INVALID_ARGUMENT = 4615002;
-var SOLANA_ERROR__INSTRUCTION_ERROR__INVALID_INSTRUCTION_DATA = 4615003;
-var SOLANA_ERROR__INSTRUCTION_ERROR__INVALID_ACCOUNT_DATA = 4615004;
-var SOLANA_ERROR__INSTRUCTION_ERROR__ACCOUNT_DATA_TOO_SMALL = 4615005;
-var SOLANA_ERROR__INSTRUCTION_ERROR__INSUFFICIENT_FUNDS = 4615006;
-var SOLANA_ERROR__INSTRUCTION_ERROR__INCORRECT_PROGRAM_ID = 4615007;
-var SOLANA_ERROR__INSTRUCTION_ERROR__MISSING_REQUIRED_SIGNATURE = 4615008;
-var SOLANA_ERROR__INSTRUCTION_ERROR__ACCOUNT_ALREADY_INITIALIZED = 4615009;
-var SOLANA_ERROR__INSTRUCTION_ERROR__UNINITIALIZED_ACCOUNT = 4615010;
-var SOLANA_ERROR__INSTRUCTION_ERROR__UNBALANCED_INSTRUCTION = 4615011;
-var SOLANA_ERROR__INSTRUCTION_ERROR__MODIFIED_PROGRAM_ID = 4615012;
-var SOLANA_ERROR__INSTRUCTION_ERROR__EXTERNAL_ACCOUNT_LAMPORT_SPEND = 4615013;
-var SOLANA_ERROR__INSTRUCTION_ERROR__EXTERNAL_ACCOUNT_DATA_MODIFIED = 4615014;
-var SOLANA_ERROR__INSTRUCTION_ERROR__READONLY_LAMPORT_CHANGE = 4615015;
-var SOLANA_ERROR__INSTRUCTION_ERROR__READONLY_DATA_MODIFIED = 4615016;
-var SOLANA_ERROR__INSTRUCTION_ERROR__DUPLICATE_ACCOUNT_INDEX = 4615017;
-var SOLANA_ERROR__INSTRUCTION_ERROR__EXECUTABLE_MODIFIED = 4615018;
-var SOLANA_ERROR__INSTRUCTION_ERROR__RENT_EPOCH_MODIFIED = 4615019;
-var SOLANA_ERROR__INSTRUCTION_ERROR__NOT_ENOUGH_ACCOUNT_KEYS = 4615020;
-var SOLANA_ERROR__INSTRUCTION_ERROR__ACCOUNT_DATA_SIZE_CHANGED = 4615021;
-var SOLANA_ERROR__INSTRUCTION_ERROR__ACCOUNT_NOT_EXECUTABLE = 4615022;
-var SOLANA_ERROR__INSTRUCTION_ERROR__ACCOUNT_BORROW_FAILED = 4615023;
-var SOLANA_ERROR__INSTRUCTION_ERROR__ACCOUNT_BORROW_OUTSTANDING = 4615024;
-var SOLANA_ERROR__INSTRUCTION_ERROR__DUPLICATE_ACCOUNT_OUT_OF_SYNC = 4615025;
-var SOLANA_ERROR__INSTRUCTION_ERROR__CUSTOM = 4615026;
-var SOLANA_ERROR__INSTRUCTION_ERROR__INVALID_ERROR = 4615027;
-var SOLANA_ERROR__INSTRUCTION_ERROR__EXECUTABLE_DATA_MODIFIED = 4615028;
-var SOLANA_ERROR__INSTRUCTION_ERROR__EXECUTABLE_LAMPORT_CHANGE = 4615029;
-var SOLANA_ERROR__INSTRUCTION_ERROR__EXECUTABLE_ACCOUNT_NOT_RENT_EXEMPT = 4615030;
-var SOLANA_ERROR__INSTRUCTION_ERROR__UNSUPPORTED_PROGRAM_ID = 4615031;
-var SOLANA_ERROR__INSTRUCTION_ERROR__CALL_DEPTH = 4615032;
-var SOLANA_ERROR__INSTRUCTION_ERROR__MISSING_ACCOUNT = 4615033;
-var SOLANA_ERROR__INSTRUCTION_ERROR__REENTRANCY_NOT_ALLOWED = 4615034;
-var SOLANA_ERROR__INSTRUCTION_ERROR__MAX_SEED_LENGTH_EXCEEDED = 4615035;
-var SOLANA_ERROR__INSTRUCTION_ERROR__INVALID_SEEDS = 4615036;
-var SOLANA_ERROR__INSTRUCTION_ERROR__INVALID_REALLOC = 4615037;
-var SOLANA_ERROR__INSTRUCTION_ERROR__COMPUTATIONAL_BUDGET_EXCEEDED = 4615038;
-var SOLANA_ERROR__INSTRUCTION_ERROR__PRIVILEGE_ESCALATION = 4615039;
-var SOLANA_ERROR__INSTRUCTION_ERROR__PROGRAM_ENVIRONMENT_SETUP_FAILURE = 4615040;
-var SOLANA_ERROR__INSTRUCTION_ERROR__PROGRAM_FAILED_TO_COMPLETE = 4615041;
-var SOLANA_ERROR__INSTRUCTION_ERROR__PROGRAM_FAILED_TO_COMPILE = 4615042;
-var SOLANA_ERROR__INSTRUCTION_ERROR__IMMUTABLE = 4615043;
-var SOLANA_ERROR__INSTRUCTION_ERROR__INCORRECT_AUTHORITY = 4615044;
-var SOLANA_ERROR__INSTRUCTION_ERROR__BORSH_IO_ERROR = 4615045;
-var SOLANA_ERROR__INSTRUCTION_ERROR__ACCOUNT_NOT_RENT_EXEMPT = 4615046;
-var SOLANA_ERROR__INSTRUCTION_ERROR__INVALID_ACCOUNT_OWNER = 4615047;
-var SOLANA_ERROR__INSTRUCTION_ERROR__ARITHMETIC_OVERFLOW = 4615048;
-var SOLANA_ERROR__INSTRUCTION_ERROR__UNSUPPORTED_SYSVAR = 4615049;
-var SOLANA_ERROR__INSTRUCTION_ERROR__ILLEGAL_OWNER = 4615050;
-var SOLANA_ERROR__INSTRUCTION_ERROR__MAX_ACCOUNTS_DATA_ALLOCATIONS_EXCEEDED = 4615051;
-var SOLANA_ERROR__INSTRUCTION_ERROR__MAX_ACCOUNTS_EXCEEDED = 4615052;
-var SOLANA_ERROR__INSTRUCTION_ERROR__MAX_INSTRUCTION_TRACE_LENGTH_EXCEEDED = 4615053;
-var SOLANA_ERROR__INSTRUCTION_ERROR__BUILTIN_PROGRAMS_MUST_CONSUME_COMPUTE_UNITS = 4615054;
-var SOLANA_ERROR__SIGNER__ADDRESS_CANNOT_HAVE_MULTIPLE_SIGNERS = 5508e3;
-var SOLANA_ERROR__SIGNER__EXPECTED_KEY_PAIR_SIGNER = 5508001;
-var SOLANA_ERROR__SIGNER__EXPECTED_MESSAGE_SIGNER = 5508002;
-var SOLANA_ERROR__SIGNER__EXPECTED_MESSAGE_MODIFYING_SIGNER = 5508003;
-var SOLANA_ERROR__SIGNER__EXPECTED_MESSAGE_PARTIAL_SIGNER = 5508004;
-var SOLANA_ERROR__SIGNER__EXPECTED_TRANSACTION_SIGNER = 5508005;
-var SOLANA_ERROR__SIGNER__EXPECTED_TRANSACTION_MODIFYING_SIGNER = 5508006;
-var SOLANA_ERROR__SIGNER__EXPECTED_TRANSACTION_PARTIAL_SIGNER = 5508007;
-var SOLANA_ERROR__SIGNER__EXPECTED_TRANSACTION_SENDING_SIGNER = 5508008;
-var SOLANA_ERROR__SIGNER__TRANSACTION_CANNOT_HAVE_MULTIPLE_SENDING_SIGNERS = 5508009;
-var SOLANA_ERROR__SIGNER__TRANSACTION_SENDING_SIGNER_MISSING = 5508010;
-var SOLANA_ERROR__SIGNER__WALLET_MULTISIGN_UNIMPLEMENTED = 5508011;
-var SOLANA_ERROR__TRANSACTION__INVOKED_PROGRAMS_CANNOT_PAY_FEES = 5663e3;
-var SOLANA_ERROR__TRANSACTION__INVOKED_PROGRAMS_MUST_NOT_BE_WRITABLE = 5663001;
-var SOLANA_ERROR__TRANSACTION__EXPECTED_BLOCKHASH_LIFETIME = 5663002;
-var SOLANA_ERROR__TRANSACTION__EXPECTED_NONCE_LIFETIME = 5663003;
-var SOLANA_ERROR__TRANSACTION__VERSION_NUMBER_OUT_OF_RANGE = 5663004;
-var SOLANA_ERROR__TRANSACTION__FAILED_TO_DECOMPILE_ADDRESS_LOOKUP_TABLE_CONTENTS_MISSING = 5663005;
-var SOLANA_ERROR__TRANSACTION__FAILED_TO_DECOMPILE_ADDRESS_LOOKUP_TABLE_INDEX_OUT_OF_RANGE = 5663006;
-var SOLANA_ERROR__TRANSACTION__FAILED_TO_DECOMPILE_INSTRUCTION_PROGRAM_ADDRESS_NOT_FOUND = 5663007;
-var SOLANA_ERROR__TRANSACTION__FAILED_TO_DECOMPILE_FEE_PAYER_MISSING = 5663008;
-var SOLANA_ERROR__TRANSACTION__SIGNATURES_MISSING = 5663009;
-var SOLANA_ERROR__TRANSACTION__ADDRESS_MISSING = 5663010;
-var SOLANA_ERROR__TRANSACTION__FEE_PAYER_MISSING = 5663011;
-var SOLANA_ERROR__TRANSACTION__FEE_PAYER_SIGNATURE_MISSING = 5663012;
-var SOLANA_ERROR__TRANSACTION__INVALID_NONCE_TRANSACTION_INSTRUCTIONS_MISSING = 5663013;
-var SOLANA_ERROR__TRANSACTION__INVALID_NONCE_TRANSACTION_FIRST_INSTRUCTION_MUST_BE_ADVANCE_NONCE = 5663014;
-var SOLANA_ERROR__TRANSACTION__ADDRESSES_CANNOT_SIGN_TRANSACTION = 5663015;
-var SOLANA_ERROR__TRANSACTION__CANNOT_ENCODE_WITH_EMPTY_SIGNATURES = 5663016;
-var SOLANA_ERROR__TRANSACTION__MESSAGE_SIGNATURES_MISMATCH = 5663017;
-var SOLANA_ERROR__TRANSACTION__FAILED_TO_ESTIMATE_COMPUTE_LIMIT = 5663018;
-var SOLANA_ERROR__TRANSACTION__FAILED_WHEN_SIMULATING_TO_ESTIMATE_COMPUTE_LIMIT = 5663019;
-var SOLANA_ERROR__TRANSACTION_ERROR__UNKNOWN = 705e4;
-var SOLANA_ERROR__TRANSACTION_ERROR__ACCOUNT_IN_USE = 7050001;
-var SOLANA_ERROR__TRANSACTION_ERROR__ACCOUNT_LOADED_TWICE = 7050002;
-var SOLANA_ERROR__TRANSACTION_ERROR__ACCOUNT_NOT_FOUND = 7050003;
-var SOLANA_ERROR__TRANSACTION_ERROR__PROGRAM_ACCOUNT_NOT_FOUND = 7050004;
-var SOLANA_ERROR__TRANSACTION_ERROR__INSUFFICIENT_FUNDS_FOR_FEE = 7050005;
-var SOLANA_ERROR__TRANSACTION_ERROR__INVALID_ACCOUNT_FOR_FEE = 7050006;
-var SOLANA_ERROR__TRANSACTION_ERROR__ALREADY_PROCESSED = 7050007;
-var SOLANA_ERROR__TRANSACTION_ERROR__BLOCKHASH_NOT_FOUND = 7050008;
-var SOLANA_ERROR__TRANSACTION_ERROR__CALL_CHAIN_TOO_DEEP = 7050009;
-var SOLANA_ERROR__TRANSACTION_ERROR__MISSING_SIGNATURE_FOR_FEE = 7050010;
-var SOLANA_ERROR__TRANSACTION_ERROR__INVALID_ACCOUNT_INDEX = 7050011;
-var SOLANA_ERROR__TRANSACTION_ERROR__SIGNATURE_FAILURE = 7050012;
-var SOLANA_ERROR__TRANSACTION_ERROR__INVALID_PROGRAM_FOR_EXECUTION = 7050013;
-var SOLANA_ERROR__TRANSACTION_ERROR__SANITIZE_FAILURE = 7050014;
-var SOLANA_ERROR__TRANSACTION_ERROR__CLUSTER_MAINTENANCE = 7050015;
-var SOLANA_ERROR__TRANSACTION_ERROR__ACCOUNT_BORROW_OUTSTANDING = 7050016;
-var SOLANA_ERROR__TRANSACTION_ERROR__WOULD_EXCEED_MAX_BLOCK_COST_LIMIT = 7050017;
-var SOLANA_ERROR__TRANSACTION_ERROR__UNSUPPORTED_VERSION = 7050018;
-var SOLANA_ERROR__TRANSACTION_ERROR__INVALID_WRITABLE_ACCOUNT = 7050019;
-var SOLANA_ERROR__TRANSACTION_ERROR__WOULD_EXCEED_MAX_ACCOUNT_COST_LIMIT = 7050020;
-var SOLANA_ERROR__TRANSACTION_ERROR__WOULD_EXCEED_ACCOUNT_DATA_BLOCK_LIMIT = 7050021;
-var SOLANA_ERROR__TRANSACTION_ERROR__TOO_MANY_ACCOUNT_LOCKS = 7050022;
-var SOLANA_ERROR__TRANSACTION_ERROR__ADDRESS_LOOKUP_TABLE_NOT_FOUND = 7050023;
-var SOLANA_ERROR__TRANSACTION_ERROR__INVALID_ADDRESS_LOOKUP_TABLE_OWNER = 7050024;
-var SOLANA_ERROR__TRANSACTION_ERROR__INVALID_ADDRESS_LOOKUP_TABLE_DATA = 7050025;
-var SOLANA_ERROR__TRANSACTION_ERROR__INVALID_ADDRESS_LOOKUP_TABLE_INDEX = 7050026;
-var SOLANA_ERROR__TRANSACTION_ERROR__INVALID_RENT_PAYING_ACCOUNT = 7050027;
-var SOLANA_ERROR__TRANSACTION_ERROR__WOULD_EXCEED_MAX_VOTE_COST_LIMIT = 7050028;
-var SOLANA_ERROR__TRANSACTION_ERROR__WOULD_EXCEED_ACCOUNT_DATA_TOTAL_LIMIT = 7050029;
-var SOLANA_ERROR__TRANSACTION_ERROR__DUPLICATE_INSTRUCTION = 7050030;
-var SOLANA_ERROR__TRANSACTION_ERROR__INSUFFICIENT_FUNDS_FOR_RENT = 7050031;
-var SOLANA_ERROR__TRANSACTION_ERROR__MAX_LOADED_ACCOUNTS_DATA_SIZE_EXCEEDED = 7050032;
-var SOLANA_ERROR__TRANSACTION_ERROR__INVALID_LOADED_ACCOUNTS_DATA_SIZE_LIMIT = 7050033;
-var SOLANA_ERROR__TRANSACTION_ERROR__RESANITIZATION_NEEDED = 7050034;
-var SOLANA_ERROR__TRANSACTION_ERROR__PROGRAM_EXECUTION_TEMPORARILY_RESTRICTED = 7050035;
-var SOLANA_ERROR__TRANSACTION_ERROR__UNBALANCED_TRANSACTION = 7050036;
-var SOLANA_ERROR__CODECS__CANNOT_DECODE_EMPTY_BYTE_ARRAY = 8078e3;
-var SOLANA_ERROR__CODECS__INVALID_BYTE_LENGTH = 8078001;
-var SOLANA_ERROR__CODECS__EXPECTED_FIXED_LENGTH = 8078002;
-var SOLANA_ERROR__CODECS__EXPECTED_VARIABLE_LENGTH = 8078003;
-var SOLANA_ERROR__CODECS__ENCODER_DECODER_SIZE_COMPATIBILITY_MISMATCH = 8078004;
-var SOLANA_ERROR__CODECS__ENCODER_DECODER_FIXED_SIZE_MISMATCH = 8078005;
-var SOLANA_ERROR__CODECS__ENCODER_DECODER_MAX_SIZE_MISMATCH = 8078006;
-var SOLANA_ERROR__CODECS__INVALID_NUMBER_OF_ITEMS = 8078007;
-var SOLANA_ERROR__CODECS__ENUM_DISCRIMINATOR_OUT_OF_RANGE = 8078008;
-var SOLANA_ERROR__CODECS__INVALID_DISCRIMINATED_UNION_VARIANT = 8078009;
-var SOLANA_ERROR__CODECS__INVALID_ENUM_VARIANT = 8078010;
-var SOLANA_ERROR__CODECS__NUMBER_OUT_OF_RANGE = 8078011;
-var SOLANA_ERROR__CODECS__INVALID_STRING_FOR_BASE = 8078012;
-var SOLANA_ERROR__CODECS__EXPECTED_POSITIVE_BYTE_LENGTH = 8078013;
-var SOLANA_ERROR__CODECS__OFFSET_OUT_OF_RANGE = 8078014;
-var SOLANA_ERROR__CODECS__INVALID_LITERAL_UNION_VARIANT = 8078015;
-var SOLANA_ERROR__CODECS__LITERAL_UNION_DISCRIMINATOR_OUT_OF_RANGE = 8078016;
-var SOLANA_ERROR__CODECS__UNION_VARIANT_OUT_OF_RANGE = 8078017;
-var SOLANA_ERROR__CODECS__INVALID_CONSTANT = 8078018;
-var SOLANA_ERROR__CODECS__EXPECTED_ZERO_VALUE_TO_MATCH_ITEM_FIXED_SIZE = 8078019;
-var SOLANA_ERROR__CODECS__ENCODED_BYTES_MUST_NOT_INCLUDE_SENTINEL = 8078020;
-var SOLANA_ERROR__CODECS__SENTINEL_MISSING_IN_DECODED_BYTES = 8078021;
-var SOLANA_ERROR__CODECS__CANNOT_USE_LEXICAL_VALUES_AS_ENUM_DISCRIMINATORS = 8078022;
-var SOLANA_ERROR__RPC__INTEGER_OVERFLOW = 81e5;
-var SOLANA_ERROR__RPC__TRANSPORT_HTTP_HEADER_FORBIDDEN = 8100001;
-var SOLANA_ERROR__RPC__TRANSPORT_HTTP_ERROR = 8100002;
-var SOLANA_ERROR__RPC__API_PLAN_MISSING_FOR_RPC_METHOD = 8100003;
-var SOLANA_ERROR__RPC_SUBSCRIPTIONS__CANNOT_CREATE_SUBSCRIPTION_PLAN = 819e4;
-var SOLANA_ERROR__RPC_SUBSCRIPTIONS__EXPECTED_SERVER_SUBSCRIPTION_ID = 8190001;
-var SOLANA_ERROR__RPC_SUBSCRIPTIONS__CHANNEL_CLOSED_BEFORE_MESSAGE_BUFFERED = 8190002;
-var SOLANA_ERROR__RPC_SUBSCRIPTIONS__CHANNEL_CONNECTION_CLOSED = 8190003;
-var SOLANA_ERROR__RPC_SUBSCRIPTIONS__CHANNEL_FAILED_TO_CONNECT = 8190004;
-var SOLANA_ERROR__INVARIANT_VIOLATION__SUBSCRIPTION_ITERATOR_STATE_MISSING = 99e5;
-var SOLANA_ERROR__INVARIANT_VIOLATION__SUBSCRIPTION_ITERATOR_MUST_NOT_POLL_BEFORE_RESOLVING_EXISTING_MESSAGE_PROMISE = 9900001;
-var SOLANA_ERROR__INVARIANT_VIOLATION__CACHED_ABORTABLE_ITERABLE_CACHE_ENTRY_MISSING = 9900002;
-var SOLANA_ERROR__INVARIANT_VIOLATION__SWITCH_MUST_BE_EXHAUSTIVE = 9900003;
-var SOLANA_ERROR__INVARIANT_VIOLATION__DATA_PUBLISHER_CHANNEL_UNIMPLEMENTED = 9900004;
-function encodeValue(value) {
-  if (Array.isArray(value)) {
-    const commaSeparatedValues = value.map(encodeValue).join(
-      "%2C%20"
-      /* ", " */
-    );
-    return "%5B" + commaSeparatedValues + /* "]" */
-    "%5D";
-  } else if (typeof value === "bigint") {
-    return `${value}n`;
-  } else {
-    return encodeURIComponent(
-      String(
-        value != null && Object.getPrototypeOf(value) === null ? (
-          // Plain objects with no prototype don't have a `toString` method.
-          // Convert them before stringifying them.
-          { ...value }
-        ) : value
-      )
-    );
-  }
-}
-function encodeObjectContextEntry([key, value]) {
-  return `${key}=${encodeValue(value)}`;
-}
-function encodeContextObject(context) {
-  const searchParamsString = Object.entries(context).map(encodeObjectContextEntry).join("&");
-  return Buffer.from(searchParamsString, "utf8").toString("base64");
-}
-var SolanaErrorMessages = {
-  [SOLANA_ERROR__ACCOUNTS__ACCOUNT_NOT_FOUND]: "Account not found at address: $address",
-  [SOLANA_ERROR__ACCOUNTS__EXPECTED_ALL_ACCOUNTS_TO_BE_DECODED]: "Not all accounts were decoded. Encoded accounts found at addresses: $addresses.",
-  [SOLANA_ERROR__ACCOUNTS__EXPECTED_DECODED_ACCOUNT]: "Expected decoded account at address: $address",
-  [SOLANA_ERROR__ACCOUNTS__FAILED_TO_DECODE_ACCOUNT]: "Failed to decode account data at address: $address",
-  [SOLANA_ERROR__ACCOUNTS__ONE_OR_MORE_ACCOUNTS_NOT_FOUND]: "Accounts not found at addresses: $addresses",
-  [SOLANA_ERROR__ADDRESSES__FAILED_TO_FIND_VIABLE_PDA_BUMP_SEED]: "Unable to find a viable program address bump seed.",
-  [SOLANA_ERROR__ADDRESSES__INVALID_BASE58_ENCODED_ADDRESS]: "$putativeAddress is not a base58-encoded address.",
-  [SOLANA_ERROR__ADDRESSES__INVALID_BYTE_LENGTH]: "Expected base58 encoded address to decode to a byte array of length 32. Actual length: $actualLength.",
-  [SOLANA_ERROR__ADDRESSES__INVALID_ED25519_PUBLIC_KEY]: "The `CryptoKey` must be an `Ed25519` public key.",
-  [SOLANA_ERROR__ADDRESSES__INVALID_SEEDS_POINT_ON_CURVE]: "Invalid seeds; point must fall off the Ed25519 curve.",
-  [SOLANA_ERROR__ADDRESSES__MALFORMED_PDA]: "Expected given program derived address to have the following format: [Address, ProgramDerivedAddressBump].",
-  [SOLANA_ERROR__ADDRESSES__MAX_NUMBER_OF_PDA_SEEDS_EXCEEDED]: "A maximum of $maxSeeds seeds, including the bump seed, may be supplied when creating an address. Received: $actual.",
-  [SOLANA_ERROR__ADDRESSES__MAX_PDA_SEED_LENGTH_EXCEEDED]: "The seed at index $index with length $actual exceeds the maximum length of $maxSeedLength bytes.",
-  [SOLANA_ERROR__ADDRESSES__PDA_BUMP_SEED_OUT_OF_RANGE]: "Expected program derived address bump to be in the range [0, 255], got: $bump.",
-  [SOLANA_ERROR__ADDRESSES__PDA_ENDS_WITH_PDA_MARKER]: "Program address cannot end with PDA marker.",
-  [SOLANA_ERROR__ADDRESSES__STRING_LENGTH_OUT_OF_RANGE]: "Expected base58-encoded address string of length in the range [32, 44]. Actual length: $actualLength.",
-  [SOLANA_ERROR__BLOCKHASH_STRING_LENGTH_OUT_OF_RANGE]: "Expected base58-encoded blockash string of length in the range [32, 44]. Actual length: $actualLength.",
-  [SOLANA_ERROR__BLOCK_HEIGHT_EXCEEDED]: "The network has progressed past the last block for which this transaction could have been committed.",
-  [SOLANA_ERROR__CODECS__CANNOT_DECODE_EMPTY_BYTE_ARRAY]: "Codec [$codecDescription] cannot decode empty byte arrays.",
-  [SOLANA_ERROR__CODECS__CANNOT_USE_LEXICAL_VALUES_AS_ENUM_DISCRIMINATORS]: "Enum codec cannot use lexical values [$stringValues] as discriminators. Either remove all lexical values or set `useValuesAsDiscriminators` to `false`.",
-  [SOLANA_ERROR__CODECS__ENCODED_BYTES_MUST_NOT_INCLUDE_SENTINEL]: "Sentinel [$hexSentinel] must not be present in encoded bytes [$hexEncodedBytes].",
-  [SOLANA_ERROR__CODECS__ENCODER_DECODER_FIXED_SIZE_MISMATCH]: "Encoder and decoder must have the same fixed size, got [$encoderFixedSize] and [$decoderFixedSize].",
-  [SOLANA_ERROR__CODECS__ENCODER_DECODER_MAX_SIZE_MISMATCH]: "Encoder and decoder must have the same max size, got [$encoderMaxSize] and [$decoderMaxSize].",
-  [SOLANA_ERROR__CODECS__ENCODER_DECODER_SIZE_COMPATIBILITY_MISMATCH]: "Encoder and decoder must either both be fixed-size or variable-size.",
-  [SOLANA_ERROR__CODECS__ENUM_DISCRIMINATOR_OUT_OF_RANGE]: "Enum discriminator out of range. Expected a number in [$formattedValidDiscriminators], got $discriminator.",
-  [SOLANA_ERROR__CODECS__EXPECTED_FIXED_LENGTH]: "Expected a fixed-size codec, got a variable-size one.",
-  [SOLANA_ERROR__CODECS__EXPECTED_POSITIVE_BYTE_LENGTH]: "Codec [$codecDescription] expected a positive byte length, got $bytesLength.",
-  [SOLANA_ERROR__CODECS__EXPECTED_VARIABLE_LENGTH]: "Expected a variable-size codec, got a fixed-size one.",
-  [SOLANA_ERROR__CODECS__EXPECTED_ZERO_VALUE_TO_MATCH_ITEM_FIXED_SIZE]: "Codec [$codecDescription] expected zero-value [$hexZeroValue] to have the same size as the provided fixed-size item [$expectedSize bytes].",
-  [SOLANA_ERROR__CODECS__INVALID_BYTE_LENGTH]: "Codec [$codecDescription] expected $expected bytes, got $bytesLength.",
-  [SOLANA_ERROR__CODECS__INVALID_CONSTANT]: "Expected byte array constant [$hexConstant] to be present in data [$hexData] at offset [$offset].",
-  [SOLANA_ERROR__CODECS__INVALID_DISCRIMINATED_UNION_VARIANT]: "Invalid discriminated union variant. Expected one of [$variants], got $value.",
-  [SOLANA_ERROR__CODECS__INVALID_ENUM_VARIANT]: "Invalid enum variant. Expected one of [$stringValues] or a number in [$formattedNumericalValues], got $variant.",
-  [SOLANA_ERROR__CODECS__INVALID_LITERAL_UNION_VARIANT]: "Invalid literal union variant. Expected one of [$variants], got $value.",
-  [SOLANA_ERROR__CODECS__INVALID_NUMBER_OF_ITEMS]: "Expected [$codecDescription] to have $expected items, got $actual.",
-  [SOLANA_ERROR__CODECS__INVALID_STRING_FOR_BASE]: "Invalid value $value for base $base with alphabet $alphabet.",
-  [SOLANA_ERROR__CODECS__LITERAL_UNION_DISCRIMINATOR_OUT_OF_RANGE]: "Literal union discriminator out of range. Expected a number between $minRange and $maxRange, got $discriminator.",
-  [SOLANA_ERROR__CODECS__NUMBER_OUT_OF_RANGE]: "Codec [$codecDescription] expected number to be in the range [$min, $max], got $value.",
-  [SOLANA_ERROR__CODECS__OFFSET_OUT_OF_RANGE]: "Codec [$codecDescription] expected offset to be in the range [0, $bytesLength], got $offset.",
-  [SOLANA_ERROR__CODECS__SENTINEL_MISSING_IN_DECODED_BYTES]: "Expected sentinel [$hexSentinel] to be present in decoded bytes [$hexDecodedBytes].",
-  [SOLANA_ERROR__CODECS__UNION_VARIANT_OUT_OF_RANGE]: "Union variant out of range. Expected an index between $minRange and $maxRange, got $variant.",
-  [SOLANA_ERROR__CRYPTO__RANDOM_VALUES_FUNCTION_UNIMPLEMENTED]: "No random values implementation could be found.",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__ACCOUNT_ALREADY_INITIALIZED]: "instruction requires an uninitialized account",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__ACCOUNT_BORROW_FAILED]: "instruction tries to borrow reference for an account which is already borrowed",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__ACCOUNT_BORROW_OUTSTANDING]: "instruction left account with an outstanding borrowed reference",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__ACCOUNT_DATA_SIZE_CHANGED]: "program other than the account's owner changed the size of the account data",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__ACCOUNT_DATA_TOO_SMALL]: "account data too small for instruction",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__ACCOUNT_NOT_EXECUTABLE]: "instruction expected an executable account",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__ACCOUNT_NOT_RENT_EXEMPT]: "An account does not have enough lamports to be rent-exempt",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__ARITHMETIC_OVERFLOW]: "Program arithmetic overflowed",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__BORSH_IO_ERROR]: "Failed to serialize or deserialize account data: $encodedData",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__BUILTIN_PROGRAMS_MUST_CONSUME_COMPUTE_UNITS]: "Builtin programs must consume compute units",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__CALL_DEPTH]: "Cross-program invocation call depth too deep",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__COMPUTATIONAL_BUDGET_EXCEEDED]: "Computational budget exceeded",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__CUSTOM]: "custom program error: #$code",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__DUPLICATE_ACCOUNT_INDEX]: "instruction contains duplicate accounts",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__DUPLICATE_ACCOUNT_OUT_OF_SYNC]: "instruction modifications of multiply-passed account differ",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__EXECUTABLE_ACCOUNT_NOT_RENT_EXEMPT]: "executable accounts must be rent exempt",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__EXECUTABLE_DATA_MODIFIED]: "instruction changed executable accounts data",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__EXECUTABLE_LAMPORT_CHANGE]: "instruction changed the balance of an executable account",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__EXECUTABLE_MODIFIED]: "instruction changed executable bit of an account",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__EXTERNAL_ACCOUNT_DATA_MODIFIED]: "instruction modified data of an account it does not own",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__EXTERNAL_ACCOUNT_LAMPORT_SPEND]: "instruction spent from the balance of an account it does not own",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__GENERIC_ERROR]: "generic instruction error",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__ILLEGAL_OWNER]: "Provided owner is not allowed",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__IMMUTABLE]: "Account is immutable",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__INCORRECT_AUTHORITY]: "Incorrect authority provided",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__INCORRECT_PROGRAM_ID]: "incorrect program id for instruction",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__INSUFFICIENT_FUNDS]: "insufficient funds for instruction",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__INVALID_ACCOUNT_DATA]: "invalid account data for instruction",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__INVALID_ACCOUNT_OWNER]: "Invalid account owner",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__INVALID_ARGUMENT]: "invalid program argument",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__INVALID_ERROR]: "program returned invalid error code",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__INVALID_INSTRUCTION_DATA]: "invalid instruction data",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__INVALID_REALLOC]: "Failed to reallocate account data",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__INVALID_SEEDS]: "Provided seeds do not result in a valid address",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__MAX_ACCOUNTS_DATA_ALLOCATIONS_EXCEEDED]: "Accounts data allocations exceeded the maximum allowed per transaction",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__MAX_ACCOUNTS_EXCEEDED]: "Max accounts exceeded",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__MAX_INSTRUCTION_TRACE_LENGTH_EXCEEDED]: "Max instruction trace length exceeded",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__MAX_SEED_LENGTH_EXCEEDED]: "Length of the seed is too long for address generation",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__MISSING_ACCOUNT]: "An account required by the instruction is missing",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__MISSING_REQUIRED_SIGNATURE]: "missing required signature for instruction",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__MODIFIED_PROGRAM_ID]: "instruction illegally modified the program id of an account",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__NOT_ENOUGH_ACCOUNT_KEYS]: "insufficient account keys for instruction",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__PRIVILEGE_ESCALATION]: "Cross-program invocation with unauthorized signer or writable account",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__PROGRAM_ENVIRONMENT_SETUP_FAILURE]: "Failed to create program execution environment",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__PROGRAM_FAILED_TO_COMPILE]: "Program failed to compile",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__PROGRAM_FAILED_TO_COMPLETE]: "Program failed to complete",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__READONLY_DATA_MODIFIED]: "instruction modified data of a read-only account",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__READONLY_LAMPORT_CHANGE]: "instruction changed the balance of a read-only account",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__REENTRANCY_NOT_ALLOWED]: "Cross-program invocation reentrancy not allowed for this instruction",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__RENT_EPOCH_MODIFIED]: "instruction modified rent epoch of an account",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__UNBALANCED_INSTRUCTION]: "sum of account balances before and after instruction do not match",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__UNINITIALIZED_ACCOUNT]: "instruction requires an initialized account",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__UNKNOWN]: "",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__UNSUPPORTED_PROGRAM_ID]: "Unsupported program id",
-  [SOLANA_ERROR__INSTRUCTION_ERROR__UNSUPPORTED_SYSVAR]: "Unsupported sysvar",
-  [SOLANA_ERROR__INSTRUCTION__EXPECTED_TO_HAVE_ACCOUNTS]: "The instruction does not have any accounts.",
-  [SOLANA_ERROR__INSTRUCTION__EXPECTED_TO_HAVE_DATA]: "The instruction does not have any data.",
-  [SOLANA_ERROR__INSTRUCTION__PROGRAM_ID_MISMATCH]: "Expected instruction to have progress address $expectedProgramAddress, got $actualProgramAddress.",
-  [SOLANA_ERROR__INVALID_BLOCKHASH_BYTE_LENGTH]: "Expected base58 encoded blockhash to decode to a byte array of length 32. Actual length: $actualLength.",
-  [SOLANA_ERROR__INVALID_NONCE]: "The nonce `$expectedNonceValue` is no longer valid. It has advanced to `$actualNonceValue`",
-  [SOLANA_ERROR__INVARIANT_VIOLATION__CACHED_ABORTABLE_ITERABLE_CACHE_ENTRY_MISSING]: "Invariant violation: Found no abortable iterable cache entry for key `$cacheKey`. It should be impossible to hit this error; please file an issue at https://sola.na/web3invariant",
-  [SOLANA_ERROR__INVARIANT_VIOLATION__DATA_PUBLISHER_CHANNEL_UNIMPLEMENTED]: "Invariant violation: This data publisher does not publish to the channel named `$channelName`. Supported channels include $supportedChannelNames.",
-  [SOLANA_ERROR__INVARIANT_VIOLATION__SUBSCRIPTION_ITERATOR_MUST_NOT_POLL_BEFORE_RESOLVING_EXISTING_MESSAGE_PROMISE]: "Invariant violation: WebSocket message iterator state is corrupt; iterated without first resolving existing message promise. It should be impossible to hit this error; please file an issue at https://sola.na/web3invariant",
-  [SOLANA_ERROR__INVARIANT_VIOLATION__SUBSCRIPTION_ITERATOR_STATE_MISSING]: "Invariant violation: WebSocket message iterator is missing state storage. It should be impossible to hit this error; please file an issue at https://sola.na/web3invariant",
-  [SOLANA_ERROR__INVARIANT_VIOLATION__SWITCH_MUST_BE_EXHAUSTIVE]: "Invariant violation: Switch statement non-exhaustive. Received unexpected value `$unexpectedValue`. It should be impossible to hit this error; please file an issue at https://sola.na/web3invariant",
-  [SOLANA_ERROR__JSON_RPC__INTERNAL_ERROR]: "JSON-RPC error: Internal JSON-RPC error ($__serverMessage)",
-  [SOLANA_ERROR__JSON_RPC__INVALID_PARAMS]: "JSON-RPC error: Invalid method parameter(s) ($__serverMessage)",
-  [SOLANA_ERROR__JSON_RPC__INVALID_REQUEST]: "JSON-RPC error: The JSON sent is not a valid `Request` object ($__serverMessage)",
-  [SOLANA_ERROR__JSON_RPC__METHOD_NOT_FOUND]: "JSON-RPC error: The method does not exist / is not available ($__serverMessage)",
-  [SOLANA_ERROR__JSON_RPC__PARSE_ERROR]: "JSON-RPC error: An error occurred on the server while parsing the JSON text ($__serverMessage)",
-  [SOLANA_ERROR__JSON_RPC__SCAN_ERROR]: "$__serverMessage",
-  [SOLANA_ERROR__JSON_RPC__SERVER_ERROR_BLOCK_CLEANED_UP]: "$__serverMessage",
-  [SOLANA_ERROR__JSON_RPC__SERVER_ERROR_BLOCK_NOT_AVAILABLE]: "$__serverMessage",
-  [SOLANA_ERROR__JSON_RPC__SERVER_ERROR_BLOCK_STATUS_NOT_AVAILABLE_YET]: "$__serverMessage",
-  [SOLANA_ERROR__JSON_RPC__SERVER_ERROR_KEY_EXCLUDED_FROM_SECONDARY_INDEX]: "$__serverMessage",
-  [SOLANA_ERROR__JSON_RPC__SERVER_ERROR_LONG_TERM_STORAGE_SLOT_SKIPPED]: "$__serverMessage",
-  [SOLANA_ERROR__JSON_RPC__SERVER_ERROR_MIN_CONTEXT_SLOT_NOT_REACHED]: "Minimum context slot has not been reached",
-  [SOLANA_ERROR__JSON_RPC__SERVER_ERROR_NODE_UNHEALTHY]: "Node is unhealthy; behind by $numSlotsBehind slots",
-  [SOLANA_ERROR__JSON_RPC__SERVER_ERROR_NO_SNAPSHOT]: "No snapshot",
-  [SOLANA_ERROR__JSON_RPC__SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE]: "Transaction simulation failed",
-  [SOLANA_ERROR__JSON_RPC__SERVER_ERROR_SLOT_SKIPPED]: "$__serverMessage",
-  [SOLANA_ERROR__JSON_RPC__SERVER_ERROR_TRANSACTION_HISTORY_NOT_AVAILABLE]: "Transaction history is not available from this node",
-  [SOLANA_ERROR__JSON_RPC__SERVER_ERROR_TRANSACTION_PRECOMPILE_VERIFICATION_FAILURE]: "$__serverMessage",
-  [SOLANA_ERROR__JSON_RPC__SERVER_ERROR_TRANSACTION_SIGNATURE_LEN_MISMATCH]: "Transaction signature length mismatch",
-  [SOLANA_ERROR__JSON_RPC__SERVER_ERROR_TRANSACTION_SIGNATURE_VERIFICATION_FAILURE]: "Transaction signature verification failure",
-  [SOLANA_ERROR__JSON_RPC__SERVER_ERROR_UNSUPPORTED_TRANSACTION_VERSION]: "$__serverMessage",
-  [SOLANA_ERROR__KEYS__INVALID_KEY_PAIR_BYTE_LENGTH]: "Key pair bytes must be of length 64, got $byteLength.",
-  [SOLANA_ERROR__KEYS__INVALID_PRIVATE_KEY_BYTE_LENGTH]: "Expected private key bytes with length 32. Actual length: $actualLength.",
-  [SOLANA_ERROR__KEYS__INVALID_SIGNATURE_BYTE_LENGTH]: "Expected base58-encoded signature to decode to a byte array of length 64. Actual length: $actualLength.",
-  [SOLANA_ERROR__KEYS__PUBLIC_KEY_MUST_MATCH_PRIVATE_KEY]: "The provided private key does not match the provided public key.",
-  [SOLANA_ERROR__KEYS__SIGNATURE_STRING_LENGTH_OUT_OF_RANGE]: "Expected base58-encoded signature string of length in the range [64, 88]. Actual length: $actualLength.",
-  [SOLANA_ERROR__LAMPORTS_OUT_OF_RANGE]: "Lamports value must be in the range [0, 2e64-1]",
-  [SOLANA_ERROR__MALFORMED_BIGINT_STRING]: "`$value` cannot be parsed as a `BigInt`",
-  [SOLANA_ERROR__MALFORMED_JSON_RPC_ERROR]: "$message",
-  [SOLANA_ERROR__MALFORMED_NUMBER_STRING]: "`$value` cannot be parsed as a `Number`",
-  [SOLANA_ERROR__NONCE_ACCOUNT_NOT_FOUND]: "No nonce account could be found at address `$nonceAccountAddress`",
-  [SOLANA_ERROR__RPC_SUBSCRIPTIONS__CANNOT_CREATE_SUBSCRIPTION_PLAN]: "The notification name must end in 'Notifications' and the API must supply a subscription plan creator function for the notification '$notificationName'.",
-  [SOLANA_ERROR__RPC_SUBSCRIPTIONS__CHANNEL_CLOSED_BEFORE_MESSAGE_BUFFERED]: "WebSocket was closed before payload could be added to the send buffer",
-  [SOLANA_ERROR__RPC_SUBSCRIPTIONS__CHANNEL_CONNECTION_CLOSED]: "WebSocket connection closed",
-  [SOLANA_ERROR__RPC_SUBSCRIPTIONS__CHANNEL_FAILED_TO_CONNECT]: "WebSocket failed to connect",
-  [SOLANA_ERROR__RPC_SUBSCRIPTIONS__EXPECTED_SERVER_SUBSCRIPTION_ID]: "Failed to obtain a subscription id from the server",
-  [SOLANA_ERROR__RPC__API_PLAN_MISSING_FOR_RPC_METHOD]: "Could not find an API plan for RPC method: `$method`",
-  [SOLANA_ERROR__RPC__INTEGER_OVERFLOW]: "The $argumentLabel argument to the `$methodName` RPC method$optionalPathLabel was `$value`. This number is unsafe for use with the Solana JSON-RPC because it exceeds `Number.MAX_SAFE_INTEGER`.",
-  [SOLANA_ERROR__RPC__TRANSPORT_HTTP_ERROR]: "HTTP error ($statusCode): $message",
-  [SOLANA_ERROR__RPC__TRANSPORT_HTTP_HEADER_FORBIDDEN]: "HTTP header(s) forbidden: $headers. Learn more at https://developer.mozilla.org/en-US/docs/Glossary/Forbidden_header_name.",
-  [SOLANA_ERROR__SIGNER__ADDRESS_CANNOT_HAVE_MULTIPLE_SIGNERS]: "Multiple distinct signers were identified for address `$address`. Please ensure that you are using the same signer instance for each address.",
-  [SOLANA_ERROR__SIGNER__EXPECTED_KEY_PAIR_SIGNER]: "The provided value does not implement the `KeyPairSigner` interface",
-  [SOLANA_ERROR__SIGNER__EXPECTED_MESSAGE_MODIFYING_SIGNER]: "The provided value does not implement the `MessageModifyingSigner` interface",
-  [SOLANA_ERROR__SIGNER__EXPECTED_MESSAGE_PARTIAL_SIGNER]: "The provided value does not implement the `MessagePartialSigner` interface",
-  [SOLANA_ERROR__SIGNER__EXPECTED_MESSAGE_SIGNER]: "The provided value does not implement any of the `MessageSigner` interfaces",
-  [SOLANA_ERROR__SIGNER__EXPECTED_TRANSACTION_MODIFYING_SIGNER]: "The provided value does not implement the `TransactionModifyingSigner` interface",
-  [SOLANA_ERROR__SIGNER__EXPECTED_TRANSACTION_PARTIAL_SIGNER]: "The provided value does not implement the `TransactionPartialSigner` interface",
-  [SOLANA_ERROR__SIGNER__EXPECTED_TRANSACTION_SENDING_SIGNER]: "The provided value does not implement the `TransactionSendingSigner` interface",
-  [SOLANA_ERROR__SIGNER__EXPECTED_TRANSACTION_SIGNER]: "The provided value does not implement any of the `TransactionSigner` interfaces",
-  [SOLANA_ERROR__SIGNER__TRANSACTION_CANNOT_HAVE_MULTIPLE_SENDING_SIGNERS]: "More than one `TransactionSendingSigner` was identified.",
-  [SOLANA_ERROR__SIGNER__TRANSACTION_SENDING_SIGNER_MISSING]: "No `TransactionSendingSigner` was identified. Please provide a valid `ITransactionWithSingleSendingSigner` transaction.",
-  [SOLANA_ERROR__SIGNER__WALLET_MULTISIGN_UNIMPLEMENTED]: "Wallet account signers do not support signing multiple messages/transactions in a single operation",
-  [SOLANA_ERROR__SUBTLE_CRYPTO__CANNOT_EXPORT_NON_EXTRACTABLE_KEY]: "Cannot export a non-extractable key.",
-  [SOLANA_ERROR__SUBTLE_CRYPTO__DIGEST_UNIMPLEMENTED]: "No digest implementation could be found.",
-  [SOLANA_ERROR__SUBTLE_CRYPTO__DISALLOWED_IN_INSECURE_CONTEXT]: "Cryptographic operations are only allowed in secure browser contexts. Read more here: https://developer.mozilla.org/en-US/docs/Web/Security/Secure_Contexts.",
-  [SOLANA_ERROR__SUBTLE_CRYPTO__ED25519_ALGORITHM_UNIMPLEMENTED]: "This runtime does not support the generation of Ed25519 key pairs.\n\nInstall @solana/webcrypto-ed25519-polyfill and call its `install` function before generating keys in environments that do not support Ed25519.\n\nFor a list of runtimes that currently support Ed25519 operations, visit https://github.com/WICG/webcrypto-secure-curves/issues/20.",
-  [SOLANA_ERROR__SUBTLE_CRYPTO__EXPORT_FUNCTION_UNIMPLEMENTED]: "No signature verification implementation could be found.",
-  [SOLANA_ERROR__SUBTLE_CRYPTO__GENERATE_FUNCTION_UNIMPLEMENTED]: "No key generation implementation could be found.",
-  [SOLANA_ERROR__SUBTLE_CRYPTO__SIGN_FUNCTION_UNIMPLEMENTED]: "No signing implementation could be found.",
-  [SOLANA_ERROR__SUBTLE_CRYPTO__VERIFY_FUNCTION_UNIMPLEMENTED]: "No key export implementation could be found.",
-  [SOLANA_ERROR__TIMESTAMP_OUT_OF_RANGE]: "Timestamp value must be in the range [-(2n ** 63n), (2n ** 63n) - 1]. `$value` given",
-  [SOLANA_ERROR__TRANSACTION_ERROR__ACCOUNT_BORROW_OUTSTANDING]: "Transaction processing left an account with an outstanding borrowed reference",
-  [SOLANA_ERROR__TRANSACTION_ERROR__ACCOUNT_IN_USE]: "Account in use",
-  [SOLANA_ERROR__TRANSACTION_ERROR__ACCOUNT_LOADED_TWICE]: "Account loaded twice",
-  [SOLANA_ERROR__TRANSACTION_ERROR__ACCOUNT_NOT_FOUND]: "Attempt to debit an account but found no record of a prior credit.",
-  [SOLANA_ERROR__TRANSACTION_ERROR__ADDRESS_LOOKUP_TABLE_NOT_FOUND]: "Transaction loads an address table account that doesn't exist",
-  [SOLANA_ERROR__TRANSACTION_ERROR__ALREADY_PROCESSED]: "This transaction has already been processed",
-  [SOLANA_ERROR__TRANSACTION_ERROR__BLOCKHASH_NOT_FOUND]: "Blockhash not found",
-  [SOLANA_ERROR__TRANSACTION_ERROR__CALL_CHAIN_TOO_DEEP]: "Loader call chain is too deep",
-  [SOLANA_ERROR__TRANSACTION_ERROR__CLUSTER_MAINTENANCE]: "Transactions are currently disabled due to cluster maintenance",
-  [SOLANA_ERROR__TRANSACTION_ERROR__DUPLICATE_INSTRUCTION]: "Transaction contains a duplicate instruction ($index) that is not allowed",
-  [SOLANA_ERROR__TRANSACTION_ERROR__INSUFFICIENT_FUNDS_FOR_FEE]: "Insufficient funds for fee",
-  [SOLANA_ERROR__TRANSACTION_ERROR__INSUFFICIENT_FUNDS_FOR_RENT]: "Transaction results in an account ($accountIndex) with insufficient funds for rent",
-  [SOLANA_ERROR__TRANSACTION_ERROR__INVALID_ACCOUNT_FOR_FEE]: "This account may not be used to pay transaction fees",
-  [SOLANA_ERROR__TRANSACTION_ERROR__INVALID_ACCOUNT_INDEX]: "Transaction contains an invalid account reference",
-  [SOLANA_ERROR__TRANSACTION_ERROR__INVALID_ADDRESS_LOOKUP_TABLE_DATA]: "Transaction loads an address table account with invalid data",
-  [SOLANA_ERROR__TRANSACTION_ERROR__INVALID_ADDRESS_LOOKUP_TABLE_INDEX]: "Transaction address table lookup uses an invalid index",
-  [SOLANA_ERROR__TRANSACTION_ERROR__INVALID_ADDRESS_LOOKUP_TABLE_OWNER]: "Transaction loads an address table account with an invalid owner",
-  [SOLANA_ERROR__TRANSACTION_ERROR__INVALID_LOADED_ACCOUNTS_DATA_SIZE_LIMIT]: "LoadedAccountsDataSizeLimit set for transaction must be greater than 0.",
-  [SOLANA_ERROR__TRANSACTION_ERROR__INVALID_PROGRAM_FOR_EXECUTION]: "This program may not be used for executing instructions",
-  [SOLANA_ERROR__TRANSACTION_ERROR__INVALID_RENT_PAYING_ACCOUNT]: "Transaction leaves an account with a lower balance than rent-exempt minimum",
-  [SOLANA_ERROR__TRANSACTION_ERROR__INVALID_WRITABLE_ACCOUNT]: "Transaction loads a writable account that cannot be written",
-  [SOLANA_ERROR__TRANSACTION_ERROR__MAX_LOADED_ACCOUNTS_DATA_SIZE_EXCEEDED]: "Transaction exceeded max loaded accounts data size cap",
-  [SOLANA_ERROR__TRANSACTION_ERROR__MISSING_SIGNATURE_FOR_FEE]: "Transaction requires a fee but has no signature present",
-  [SOLANA_ERROR__TRANSACTION_ERROR__PROGRAM_ACCOUNT_NOT_FOUND]: "Attempt to load a program that does not exist",
-  [SOLANA_ERROR__TRANSACTION_ERROR__PROGRAM_EXECUTION_TEMPORARILY_RESTRICTED]: "Execution of the program referenced by account at index $accountIndex is temporarily restricted.",
-  [SOLANA_ERROR__TRANSACTION_ERROR__RESANITIZATION_NEEDED]: "ResanitizationNeeded",
-  [SOLANA_ERROR__TRANSACTION_ERROR__SANITIZE_FAILURE]: "Transaction failed to sanitize accounts offsets correctly",
-  [SOLANA_ERROR__TRANSACTION_ERROR__SIGNATURE_FAILURE]: "Transaction did not pass signature verification",
-  [SOLANA_ERROR__TRANSACTION_ERROR__TOO_MANY_ACCOUNT_LOCKS]: "Transaction locked too many accounts",
-  [SOLANA_ERROR__TRANSACTION_ERROR__UNBALANCED_TRANSACTION]: "Sum of account balances before and after transaction do not match",
-  [SOLANA_ERROR__TRANSACTION_ERROR__UNKNOWN]: "The transaction failed with the error `$errorName`",
-  [SOLANA_ERROR__TRANSACTION_ERROR__UNSUPPORTED_VERSION]: "Transaction version is unsupported",
-  [SOLANA_ERROR__TRANSACTION_ERROR__WOULD_EXCEED_ACCOUNT_DATA_BLOCK_LIMIT]: "Transaction would exceed account data limit within the block",
-  [SOLANA_ERROR__TRANSACTION_ERROR__WOULD_EXCEED_ACCOUNT_DATA_TOTAL_LIMIT]: "Transaction would exceed total account data limit",
-  [SOLANA_ERROR__TRANSACTION_ERROR__WOULD_EXCEED_MAX_ACCOUNT_COST_LIMIT]: "Transaction would exceed max account limit within the block",
-  [SOLANA_ERROR__TRANSACTION_ERROR__WOULD_EXCEED_MAX_BLOCK_COST_LIMIT]: "Transaction would exceed max Block Cost Limit",
-  [SOLANA_ERROR__TRANSACTION_ERROR__WOULD_EXCEED_MAX_VOTE_COST_LIMIT]: "Transaction would exceed max Vote Cost Limit",
-  [SOLANA_ERROR__TRANSACTION__ADDRESSES_CANNOT_SIGN_TRANSACTION]: "Attempted to sign a transaction with an address that is not a signer for it",
-  [SOLANA_ERROR__TRANSACTION__ADDRESS_MISSING]: "Transaction is missing an address at index: $index.",
-  [SOLANA_ERROR__TRANSACTION__CANNOT_ENCODE_WITH_EMPTY_SIGNATURES]: "Transaction has no expected signers therefore it cannot be encoded",
-  [SOLANA_ERROR__TRANSACTION__EXPECTED_BLOCKHASH_LIFETIME]: "Transaction does not have a blockhash lifetime",
-  [SOLANA_ERROR__TRANSACTION__EXPECTED_NONCE_LIFETIME]: "Transaction is not a durable nonce transaction",
-  [SOLANA_ERROR__TRANSACTION__FAILED_TO_DECOMPILE_ADDRESS_LOOKUP_TABLE_CONTENTS_MISSING]: "Contents of these address lookup tables unknown: $lookupTableAddresses",
-  [SOLANA_ERROR__TRANSACTION__FAILED_TO_DECOMPILE_ADDRESS_LOOKUP_TABLE_INDEX_OUT_OF_RANGE]: "Lookup of address at index $highestRequestedIndex failed for lookup table `$lookupTableAddress`. Highest known index is $highestKnownIndex. The lookup table may have been extended since its contents were retrieved",
-  [SOLANA_ERROR__TRANSACTION__FAILED_TO_DECOMPILE_FEE_PAYER_MISSING]: "No fee payer set in CompiledTransaction",
-  [SOLANA_ERROR__TRANSACTION__FAILED_TO_DECOMPILE_INSTRUCTION_PROGRAM_ADDRESS_NOT_FOUND]: "Could not find program address at index $index",
-  [SOLANA_ERROR__TRANSACTION__FAILED_TO_ESTIMATE_COMPUTE_LIMIT]: "Failed to estimate the compute unit consumption for this transaction message. This is likely because simulating the transaction failed. Inspect the `cause` property of this error to learn more",
-  [SOLANA_ERROR__TRANSACTION__FAILED_WHEN_SIMULATING_TO_ESTIMATE_COMPUTE_LIMIT]: "Transaction failed when it was simulated in order to estimate the compute unit consumption. The compute unit estimate provided is for a transaction that failed when simulated and may not be representative of the compute units this transaction would consume if successful. Inspect the `cause` property of this error to learn more",
-  [SOLANA_ERROR__TRANSACTION__FEE_PAYER_MISSING]: "Transaction is missing a fee payer.",
-  [SOLANA_ERROR__TRANSACTION__FEE_PAYER_SIGNATURE_MISSING]: "Could not determine this transaction's signature. Make sure that the transaction has been signed by its fee payer.",
-  [SOLANA_ERROR__TRANSACTION__INVALID_NONCE_TRANSACTION_FIRST_INSTRUCTION_MUST_BE_ADVANCE_NONCE]: "Transaction first instruction is not advance nonce account instruction.",
-  [SOLANA_ERROR__TRANSACTION__INVALID_NONCE_TRANSACTION_INSTRUCTIONS_MISSING]: "Transaction with no instructions cannot be durable nonce transaction.",
-  [SOLANA_ERROR__TRANSACTION__INVOKED_PROGRAMS_CANNOT_PAY_FEES]: "This transaction includes an address (`$programAddress`) which is both invoked and set as the fee payer. Program addresses may not pay fees",
-  [SOLANA_ERROR__TRANSACTION__INVOKED_PROGRAMS_MUST_NOT_BE_WRITABLE]: "This transaction includes an address (`$programAddress`) which is both invoked and marked writable. Program addresses may not be writable",
-  [SOLANA_ERROR__TRANSACTION__MESSAGE_SIGNATURES_MISMATCH]: "The transaction message expected the transaction to have $signerAddressesLength signatures, got $signaturesLength.",
-  [SOLANA_ERROR__TRANSACTION__SIGNATURES_MISSING]: "Transaction is missing signatures for addresses: $addresses.",
-  [SOLANA_ERROR__TRANSACTION__VERSION_NUMBER_OUT_OF_RANGE]: "Transaction version must be in the range [0, 127]. `$actualVersion` given"
-};
-var START_INDEX = "i";
-var TYPE = "t";
-function getHumanReadableErrorMessage(code, context = {}) {
-  const messageFormatString = SolanaErrorMessages[code];
-  if (messageFormatString.length === 0) {
-    return "";
-  }
-  let state;
-  function commitStateUpTo(endIndex) {
-    if (state[TYPE] === 2) {
-      const variableName = messageFormatString.slice(state[START_INDEX] + 1, endIndex);
-      fragments.push(
-        variableName in context ? (
-          // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
-          `${context[variableName]}`
-        ) : `$${variableName}`
-      );
-    } else if (state[TYPE] === 1) {
-      fragments.push(messageFormatString.slice(state[START_INDEX], endIndex));
-    }
-  }
-  const fragments = [];
-  messageFormatString.split("").forEach((char, ii) => {
-    if (ii === 0) {
-      state = {
-        [START_INDEX]: 0,
-        [TYPE]: messageFormatString[0] === "\\" ? 0 : messageFormatString[0] === "$" ? 2 : 1
-        /* Text */
-      };
-      return;
-    }
-    let nextState;
-    switch (state[TYPE]) {
-      case 0:
-        nextState = {
-          [START_INDEX]: ii,
-          [TYPE]: 1
-          /* Text */
-        };
-        break;
-      case 1:
-        if (char === "\\") {
-          nextState = {
-            [START_INDEX]: ii,
-            [TYPE]: 0
-            /* EscapeSequence */
-          };
-        } else if (char === "$") {
-          nextState = {
-            [START_INDEX]: ii,
-            [TYPE]: 2
-            /* Variable */
-          };
-        }
-        break;
-      case 2:
-        if (char === "\\") {
-          nextState = {
-            [START_INDEX]: ii,
-            [TYPE]: 0
-            /* EscapeSequence */
-          };
-        } else if (char === "$") {
-          nextState = {
-            [START_INDEX]: ii,
-            [TYPE]: 2
-            /* Variable */
-          };
-        } else if (!char.match(/\w/)) {
-          nextState = {
-            [START_INDEX]: ii,
-            [TYPE]: 1
-            /* Text */
-          };
-        }
-        break;
-    }
-    if (nextState) {
-      if (state !== nextState) {
-        commitStateUpTo(ii);
-      }
-      state = nextState;
-    }
-  });
-  commitStateUpTo();
-  return fragments.join("");
-}
-function getErrorMessage(code, context = {}) {
-  if (process.env.NODE_ENV !== "production") {
-    return getHumanReadableErrorMessage(code, context);
-  } else {
-    let decodingAdviceMessage = `Solana error #${code}; Decode this error by running \`npx @solana/errors decode -- ${code}`;
-    if (Object.keys(context).length) {
-      decodingAdviceMessage += ` '${encodeContextObject(context)}'`;
-    }
-    return `${decodingAdviceMessage}\``;
-  }
-}
-var SolanaError = class extends Error {
-  /**
-   * Indicates the root cause of this {@link SolanaError}, if any.
-   *
-   * For example, a transaction error might have an instruction error as its root cause. In this
-   * case, you will be able to access the instruction error on the transaction error as `cause`.
-   */
-  cause = this.cause;
-  /**
-   * Contains context that can assist in understanding or recovering from a {@link SolanaError}.
-   */
-  context;
-  constructor(...[code, contextAndErrorOptions]) {
-    let context;
-    let errorOptions;
-    if (contextAndErrorOptions) {
-      const { cause, ...contextRest } = contextAndErrorOptions;
-      if (cause) {
-        errorOptions = { cause };
-      }
-      if (Object.keys(contextRest).length > 0) {
-        context = contextRest;
-      }
-    }
-    const message = getErrorMessage(code, context);
-    super(message, errorOptions);
-    this.context = {
-      __code: code,
-      ...context
-    };
-    this.name = "SolanaError";
-  }
-};
-function safeCaptureStackTrace(...args) {
-  if ("captureStackTrace" in Error && typeof Error.captureStackTrace === "function") {
-    Error.captureStackTrace(...args);
-  }
-}
-function getSolanaErrorFromRpcError({ errorCodeBaseOffset, getErrorContext, orderedErrorNames, rpcEnumError }, constructorOpt) {
-  let rpcErrorName;
-  let rpcErrorContext;
-  if (typeof rpcEnumError === "string") {
-    rpcErrorName = rpcEnumError;
-  } else {
-    rpcErrorName = Object.keys(rpcEnumError)[0];
-    rpcErrorContext = rpcEnumError[rpcErrorName];
-  }
-  const codeOffset = orderedErrorNames.indexOf(rpcErrorName);
-  const errorCode = errorCodeBaseOffset + codeOffset;
-  const errorContext = getErrorContext(errorCode, rpcErrorName, rpcErrorContext);
-  const err = new SolanaError(errorCode, errorContext);
-  safeCaptureStackTrace(err, constructorOpt);
-  return err;
-}
-var ORDERED_ERROR_NAMES = [
-  // Keep synced with RPC source: https://github.com/anza-xyz/agave/blob/master/sdk/program/src/instruction.rs
-  // If this list ever gets too large, consider implementing a compression strategy like this:
-  // https://gist.github.com/steveluscher/aaa7cbbb5433b1197983908a40860c47
-  "GenericError",
-  "InvalidArgument",
-  "InvalidInstructionData",
-  "InvalidAccountData",
-  "AccountDataTooSmall",
-  "InsufficientFunds",
-  "IncorrectProgramId",
-  "MissingRequiredSignature",
-  "AccountAlreadyInitialized",
-  "UninitializedAccount",
-  "UnbalancedInstruction",
-  "ModifiedProgramId",
-  "ExternalAccountLamportSpend",
-  "ExternalAccountDataModified",
-  "ReadonlyLamportChange",
-  "ReadonlyDataModified",
-  "DuplicateAccountIndex",
-  "ExecutableModified",
-  "RentEpochModified",
-  "NotEnoughAccountKeys",
-  "AccountDataSizeChanged",
-  "AccountNotExecutable",
-  "AccountBorrowFailed",
-  "AccountBorrowOutstanding",
-  "DuplicateAccountOutOfSync",
-  "Custom",
-  "InvalidError",
-  "ExecutableDataModified",
-  "ExecutableLamportChange",
-  "ExecutableAccountNotRentExempt",
-  "UnsupportedProgramId",
-  "CallDepth",
-  "MissingAccount",
-  "ReentrancyNotAllowed",
-  "MaxSeedLengthExceeded",
-  "InvalidSeeds",
-  "InvalidRealloc",
-  "ComputationalBudgetExceeded",
-  "PrivilegeEscalation",
-  "ProgramEnvironmentSetupFailure",
-  "ProgramFailedToComplete",
-  "ProgramFailedToCompile",
-  "Immutable",
-  "IncorrectAuthority",
-  "BorshIoError",
-  "AccountNotRentExempt",
-  "InvalidAccountOwner",
-  "ArithmeticOverflow",
-  "UnsupportedSysvar",
-  "IllegalOwner",
-  "MaxAccountsDataAllocationsExceeded",
-  "MaxAccountsExceeded",
-  "MaxInstructionTraceLengthExceeded",
-  "BuiltinProgramsMustConsumeComputeUnits"
-];
-function getSolanaErrorFromInstructionError(index, instructionError) {
-  const numberIndex = Number(index);
-  return getSolanaErrorFromRpcError(
-    {
-      errorCodeBaseOffset: 4615001,
-      getErrorContext(errorCode, rpcErrorName, rpcErrorContext) {
-        if (errorCode === SOLANA_ERROR__INSTRUCTION_ERROR__UNKNOWN) {
-          return {
-            errorName: rpcErrorName,
-            index: numberIndex,
-            ...rpcErrorContext !== void 0 ? { instructionErrorContext: rpcErrorContext } : null
-          };
-        } else if (errorCode === SOLANA_ERROR__INSTRUCTION_ERROR__CUSTOM) {
-          return {
-            code: Number(rpcErrorContext),
-            index: numberIndex
-          };
-        } else if (errorCode === SOLANA_ERROR__INSTRUCTION_ERROR__BORSH_IO_ERROR) {
-          return {
-            encodedData: rpcErrorContext,
-            index: numberIndex
-          };
-        }
-        return { index: numberIndex };
-      },
-      orderedErrorNames: ORDERED_ERROR_NAMES,
-      rpcEnumError: instructionError
-    },
-    getSolanaErrorFromInstructionError
-  );
-}
-var ORDERED_ERROR_NAMES2 = [
-  // Keep synced with RPC source: https://github.com/anza-xyz/agave/blob/master/sdk/src/transaction/error.rs
-  // If this list ever gets too large, consider implementing a compression strategy like this:
-  // https://gist.github.com/steveluscher/aaa7cbbb5433b1197983908a40860c47
-  "AccountInUse",
-  "AccountLoadedTwice",
-  "AccountNotFound",
-  "ProgramAccountNotFound",
-  "InsufficientFundsForFee",
-  "InvalidAccountForFee",
-  "AlreadyProcessed",
-  "BlockhashNotFound",
-  // `InstructionError` intentionally omitted; delegated to `getSolanaErrorFromInstructionError`
-  "CallChainTooDeep",
-  "MissingSignatureForFee",
-  "InvalidAccountIndex",
-  "SignatureFailure",
-  "InvalidProgramForExecution",
-  "SanitizeFailure",
-  "ClusterMaintenance",
-  "AccountBorrowOutstanding",
-  "WouldExceedMaxBlockCostLimit",
-  "UnsupportedVersion",
-  "InvalidWritableAccount",
-  "WouldExceedMaxAccountCostLimit",
-  "WouldExceedAccountDataBlockLimit",
-  "TooManyAccountLocks",
-  "AddressLookupTableNotFound",
-  "InvalidAddressLookupTableOwner",
-  "InvalidAddressLookupTableData",
-  "InvalidAddressLookupTableIndex",
-  "InvalidRentPayingAccount",
-  "WouldExceedMaxVoteCostLimit",
-  "WouldExceedAccountDataTotalLimit",
-  "DuplicateInstruction",
-  "InsufficientFundsForRent",
-  "MaxLoadedAccountsDataSizeExceeded",
-  "InvalidLoadedAccountsDataSizeLimit",
-  "ResanitizationNeeded",
-  "ProgramExecutionTemporarilyRestricted",
-  "UnbalancedTransaction"
-];
-function getSolanaErrorFromTransactionError(transactionError) {
-  if (typeof transactionError === "object" && "InstructionError" in transactionError) {
-    return getSolanaErrorFromInstructionError(
-      ...transactionError.InstructionError
-    );
-  }
-  return getSolanaErrorFromRpcError(
-    {
-      errorCodeBaseOffset: 7050001,
-      getErrorContext(errorCode, rpcErrorName, rpcErrorContext) {
-        if (errorCode === SOLANA_ERROR__TRANSACTION_ERROR__UNKNOWN) {
-          return {
-            errorName: rpcErrorName,
-            ...rpcErrorContext !== void 0 ? { transactionErrorContext: rpcErrorContext } : null
-          };
-        } else if (errorCode === SOLANA_ERROR__TRANSACTION_ERROR__DUPLICATE_INSTRUCTION) {
-          return {
-            index: Number(rpcErrorContext)
-          };
-        } else if (errorCode === SOLANA_ERROR__TRANSACTION_ERROR__INSUFFICIENT_FUNDS_FOR_RENT || errorCode === SOLANA_ERROR__TRANSACTION_ERROR__PROGRAM_EXECUTION_TEMPORARILY_RESTRICTED) {
-          return {
-            accountIndex: Number(rpcErrorContext.account_index)
-          };
-        }
-      },
-      orderedErrorNames: ORDERED_ERROR_NAMES2,
-      rpcEnumError: transactionError
-    },
-    getSolanaErrorFromTransactionError
-  );
-}
-function getSolanaErrorFromJsonRpcError(putativeErrorResponse) {
-  let out;
-  if (isRpcErrorResponse(putativeErrorResponse)) {
-    const { code: rawCode, data, message } = putativeErrorResponse;
-    const code = Number(rawCode);
-    if (code === SOLANA_ERROR__JSON_RPC__SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE) {
-      const { err, ...preflightErrorContext } = data;
-      const causeObject = err ? { cause: getSolanaErrorFromTransactionError(err) } : null;
-      out = new SolanaError(SOLANA_ERROR__JSON_RPC__SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE, {
-        ...preflightErrorContext,
-        ...causeObject
-      });
-    } else {
-      let errorContext;
-      switch (code) {
-        case SOLANA_ERROR__JSON_RPC__INTERNAL_ERROR:
-        case SOLANA_ERROR__JSON_RPC__INVALID_PARAMS:
-        case SOLANA_ERROR__JSON_RPC__INVALID_REQUEST:
-        case SOLANA_ERROR__JSON_RPC__METHOD_NOT_FOUND:
-        case SOLANA_ERROR__JSON_RPC__PARSE_ERROR:
-        case SOLANA_ERROR__JSON_RPC__SCAN_ERROR:
-        case SOLANA_ERROR__JSON_RPC__SERVER_ERROR_BLOCK_CLEANED_UP:
-        case SOLANA_ERROR__JSON_RPC__SERVER_ERROR_BLOCK_NOT_AVAILABLE:
-        case SOLANA_ERROR__JSON_RPC__SERVER_ERROR_BLOCK_STATUS_NOT_AVAILABLE_YET:
-        case SOLANA_ERROR__JSON_RPC__SERVER_ERROR_KEY_EXCLUDED_FROM_SECONDARY_INDEX:
-        case SOLANA_ERROR__JSON_RPC__SERVER_ERROR_LONG_TERM_STORAGE_SLOT_SKIPPED:
-        case SOLANA_ERROR__JSON_RPC__SERVER_ERROR_SLOT_SKIPPED:
-        case SOLANA_ERROR__JSON_RPC__SERVER_ERROR_TRANSACTION_PRECOMPILE_VERIFICATION_FAILURE:
-        case SOLANA_ERROR__JSON_RPC__SERVER_ERROR_UNSUPPORTED_TRANSACTION_VERSION:
-          errorContext = { __serverMessage: message };
-          break;
-        default:
-          if (typeof data === "object" && !Array.isArray(data)) {
-            errorContext = data;
-          }
-      }
-      out = new SolanaError(code, errorContext);
-    }
-  } else {
-    const message = typeof putativeErrorResponse === "object" && putativeErrorResponse !== null && "message" in putativeErrorResponse && typeof putativeErrorResponse.message === "string" ? putativeErrorResponse.message : "Malformed JSON-RPC error with no message attribute";
-    out = new SolanaError(SOLANA_ERROR__MALFORMED_JSON_RPC_ERROR, { error: putativeErrorResponse, message });
-  }
-  safeCaptureStackTrace(out, getSolanaErrorFromJsonRpcError);
-  return out;
-}
-function isRpcErrorResponse(value) {
-  return typeof value === "object" && value !== null && "code" in value && "message" in value && (typeof value.code === "number" || typeof value.code === "bigint") && typeof value.message === "string";
-}
-
-// node_modules/@solana/codecs-core/dist/index.node.mjs
-function getEncodedSize(value, encoder) {
-  return "fixedSize" in encoder ? encoder.fixedSize : encoder.getSizeFromValue(value);
-}
-function createEncoder(encoder) {
-  return Object.freeze({
-    ...encoder,
-    encode: (value) => {
-      const bytes = new Uint8Array(getEncodedSize(value, encoder));
-      encoder.write(value, bytes, 0);
-      return bytes;
-    }
-  });
-}
-
-// node_modules/@solana/codecs-strings/dist/index.node.mjs
-function assertValidBaseString(alphabet4, testValue, givenValue = testValue) {
-  if (!testValue.match(new RegExp(`^[${alphabet4}]*$`))) {
-    throw new SolanaError(SOLANA_ERROR__CODECS__INVALID_STRING_FOR_BASE, {
-      alphabet: alphabet4,
-      base: alphabet4.length,
-      value: givenValue
-    });
-  }
-}
-var getBaseXEncoder = (alphabet4) => {
-  return createEncoder({
-    getSizeFromValue: (value) => {
-      const [leadingZeroes, tailChars] = partitionLeadingZeroes(value, alphabet4[0]);
-      if (!tailChars) return value.length;
-      const base10Number = getBigIntFromBaseX(tailChars, alphabet4);
-      return leadingZeroes.length + Math.ceil(base10Number.toString(16).length / 2);
-    },
-    write(value, bytes, offset) {
-      assertValidBaseString(alphabet4, value);
-      if (value === "") return offset;
-      const [leadingZeroes, tailChars] = partitionLeadingZeroes(value, alphabet4[0]);
-      if (!tailChars) {
-        bytes.set(new Uint8Array(leadingZeroes.length).fill(0), offset);
-        return offset + leadingZeroes.length;
-      }
-      let base10Number = getBigIntFromBaseX(tailChars, alphabet4);
-      const tailBytes = [];
-      while (base10Number > 0n) {
-        tailBytes.unshift(Number(base10Number % 256n));
-        base10Number /= 256n;
-      }
-      const bytesToAdd = [...Array(leadingZeroes.length).fill(0), ...tailBytes];
-      bytes.set(bytesToAdd, offset);
-      return offset + bytesToAdd.length;
-    }
-  });
-};
-function partitionLeadingZeroes(value, zeroCharacter) {
-  const [leadingZeros, tailChars] = value.split(new RegExp(`((?!${zeroCharacter}).*)`));
-  return [leadingZeros, tailChars];
-}
-function getBigIntFromBaseX(value, alphabet4) {
-  const base = BigInt(alphabet4.length);
-  let sum = 0n;
-  for (const char of value) {
-    sum *= base;
-    sum += BigInt(alphabet4.indexOf(char));
-  }
-  return sum;
-}
-var alphabet2 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-var getBase58Encoder = () => getBaseXEncoder(alphabet2);
-var e = globalThis.TextDecoder;
-var o = globalThis.TextEncoder;
-
-// node_modules/@solana/addresses/dist/index.node.mjs
-var memoizedBase58Encoder;
-function getMemoizedBase58Encoder() {
-  if (!memoizedBase58Encoder) memoizedBase58Encoder = getBase58Encoder();
-  return memoizedBase58Encoder;
-}
-function assertIsAddress(putativeAddress) {
-  if (
-    // Lowest address (32 bytes of zeroes)
-    putativeAddress.length < 32 || // Highest address (32 bytes of 255)
-    putativeAddress.length > 44
-  ) {
-    throw new SolanaError(SOLANA_ERROR__ADDRESSES__STRING_LENGTH_OUT_OF_RANGE, {
-      actualLength: putativeAddress.length
-    });
-  }
-  const base58Encoder = getMemoizedBase58Encoder();
-  const bytes = base58Encoder.encode(putativeAddress);
-  const numBytes = bytes.byteLength;
-  if (numBytes !== 32) {
-    throw new SolanaError(SOLANA_ERROR__ADDRESSES__INVALID_BYTE_LENGTH, {
-      actualLength: numBytes
-    });
-  }
-}
-function address(putativeAddress) {
-  assertIsAddress(putativeAddress);
-  return putativeAddress;
-}
-
-// node_modules/@solana/functional/dist/index.node.mjs
-function pipe(init, ...fns) {
-  return fns.reduce((acc, fn) => fn(acc), init);
-}
-
-// node_modules/@solana/rpc-spec-types/dist/index.node.mjs
-function parseJsonWithBigInts(json) {
-  return JSON.parse(wrapIntegersInBigIntValueObject(json), (_, value) => {
-    return isBigIntValueObject(value) ? unwrapBigIntValueObject(value) : value;
-  });
-}
-function wrapIntegersInBigIntValueObject(json) {
-  const out = [];
-  let inQuote = false;
-  for (let ii = 0; ii < json.length; ii++) {
-    let isEscaped = false;
-    if (json[ii] === "\\") {
-      out.push(json[ii++]);
-      isEscaped = !isEscaped;
-    }
-    if (json[ii] === '"') {
-      out.push(json[ii]);
-      if (!isEscaped) {
-        inQuote = !inQuote;
-      }
-      continue;
-    }
-    if (!inQuote) {
-      const consumedNumber = consumeNumber(json, ii);
-      if (consumedNumber == null ? void 0 : consumedNumber.length) {
-        ii += consumedNumber.length - 1;
-        if (consumedNumber.match(/\.|[eE]-/)) {
-          out.push(consumedNumber);
-        } else {
-          out.push(wrapBigIntValueObject(consumedNumber));
-        }
-        continue;
-      }
-    }
-    out.push(json[ii]);
-  }
-  return out.join("");
-}
-function consumeNumber(json, ii) {
-  var _a;
-  const JSON_NUMBER_REGEX = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/;
-  if (!((_a = json[ii]) == null ? void 0 : _a.match(/[-\d]/))) {
-    return null;
-  }
-  const numberMatch = json.slice(ii).match(JSON_NUMBER_REGEX);
-  return numberMatch ? numberMatch[0] : null;
-}
-function wrapBigIntValueObject(value) {
-  return `{"$n":"${value}"}`;
-}
-function unwrapBigIntValueObject({ $n }) {
-  if ($n.match(/[eE]/)) {
-    const [units, exponent] = $n.split(/[eE]/);
-    return BigInt(units) * BigInt(10) ** BigInt(exponent);
-  }
-  return BigInt($n);
-}
-function isBigIntValueObject(value) {
-  return !!value && typeof value === "object" && "$n" in value && typeof value.$n === "string";
-}
-var _nextMessageId = 0n;
-function getNextMessageId() {
-  const id = _nextMessageId;
-  _nextMessageId++;
-  return id.toString();
-}
-function createRpcMessage(request) {
-  return {
-    id: getNextMessageId(),
-    jsonrpc: "2.0",
-    method: request.methodName,
-    params: request.params
-  };
-}
-function stringifyJsonWithBigints(value, space) {
-  return unwrapBigIntValueObject2(
-    JSON.stringify(value, (_, v) => typeof v === "bigint" ? wrapBigIntValueObject2(v) : v, space)
-  );
-}
-function wrapBigIntValueObject2(value) {
-  return { $n: `${value}` };
-}
-function unwrapBigIntValueObject2(value) {
-  return value.replace(/\{\s*"\$n"\s*:\s*"(-?\d+)"\s*\}/g, "$1");
-}
-
-// node_modules/@solana/rpc-spec/dist/index.node.mjs
-function createRpc(rpcConfig) {
-  return makeProxy(rpcConfig);
-}
-function makeProxy(rpcConfig) {
-  return new Proxy(rpcConfig.api, {
-    defineProperty() {
-      return false;
-    },
-    deleteProperty() {
-      return false;
-    },
-    get(target, p, receiver) {
-      return function(...rawParams) {
-        const methodName = p.toString();
-        const getApiPlan = Reflect.get(target, methodName, receiver);
-        if (!getApiPlan) {
-          throw new SolanaError(SOLANA_ERROR__RPC__API_PLAN_MISSING_FOR_RPC_METHOD, {
-            method: methodName,
-            params: rawParams
-          });
-        }
-        const apiPlan = getApiPlan(...rawParams);
-        return createPendingRpcRequest(rpcConfig, apiPlan);
-      };
-    }
-  });
-}
-function createPendingRpcRequest({ transport }, plan) {
-  return {
-    async send(options) {
-      return await plan.execute({ signal: options == null ? void 0 : options.abortSignal, transport });
-    }
-  };
-}
-function createJsonRpcApi(config) {
-  return new Proxy({}, {
-    defineProperty() {
-      return false;
-    },
-    deleteProperty() {
-      return false;
-    },
-    get(...args) {
-      const [_, p] = args;
-      const methodName = p.toString();
-      return function(...rawParams) {
-        const rawRequest = Object.freeze({ methodName, params: rawParams });
-        const request = (config == null ? void 0 : config.requestTransformer) ? config == null ? void 0 : config.requestTransformer(rawRequest) : rawRequest;
-        return Object.freeze({
-          execute: async ({ signal, transport }) => {
-            const payload = createRpcMessage(request);
-            const response = await transport({ payload, signal });
-            if (!(config == null ? void 0 : config.responseTransformer)) {
-              return response;
-            }
-            return config.responseTransformer(response, request);
-          }
-        });
-      };
-    }
-  });
-}
-function isJsonRpcPayload(payload) {
-  if (payload == null || typeof payload !== "object" || Array.isArray(payload)) {
-    return false;
-  }
-  return "jsonrpc" in payload && payload.jsonrpc === "2.0" && "method" in payload && typeof payload.method === "string" && "params" in payload;
-}
-
-// node_modules/@solana/rpc-transformers/dist/index.node.mjs
-function downcastNodeToNumberIfBigint(value) {
-  return typeof value === "bigint" ? (
-    // FIXME(solana-labs/solana/issues/30341) Create a data type to represent u64 in the Solana
-    // JSON RPC implementation so that we can throw away this entire patcher instead of unsafely
-    // downcasting `bigints` to `numbers`.
-    Number(value)
-  ) : value;
-}
-var KEYPATH_WILDCARD = {};
-function getTreeWalker(visitors) {
-  return function traverse(node, state) {
-    if (Array.isArray(node)) {
-      return node.map((element, ii) => {
-        const nextState = {
-          ...state,
-          keyPath: [...state.keyPath, ii]
-        };
-        return traverse(element, nextState);
-      });
-    } else if (typeof node === "object" && node !== null) {
-      const out = {};
-      for (const propName in node) {
-        if (!Object.prototype.hasOwnProperty.call(node, propName)) {
-          continue;
-        }
-        const nextState = {
-          ...state,
-          keyPath: [...state.keyPath, propName]
-        };
-        out[propName] = traverse(node[propName], nextState);
-      }
-      return out;
-    } else {
-      return visitors.reduce((acc, visitNode) => visitNode(acc, state), node);
-    }
-  };
-}
-function getTreeWalkerRequestTransformer(visitors, initialState) {
-  return (request) => {
-    const traverse = getTreeWalker(visitors);
-    return Object.freeze({
-      ...request,
-      params: traverse(request.params, initialState)
-    });
-  };
-}
-function getTreeWalkerResponseTransformer(visitors, initialState) {
-  return (json) => getTreeWalker(visitors)(json, initialState);
-}
-function getBigIntDowncastRequestTransformer() {
-  return getTreeWalkerRequestTransformer([downcastNodeToNumberIfBigint], { keyPath: [] });
-}
-function applyDefaultCommitment({
-  commitmentPropertyName,
-  params,
-  optionsObjectPositionInParams,
-  overrideCommitment
-}) {
-  const paramInTargetPosition = params[optionsObjectPositionInParams];
-  if (
-    // There's no config.
-    paramInTargetPosition === void 0 || // There is a config object.
-    paramInTargetPosition && typeof paramInTargetPosition === "object" && !Array.isArray(paramInTargetPosition)
-  ) {
-    if (
-      // The config object already has a commitment set.
-      paramInTargetPosition && commitmentPropertyName in paramInTargetPosition
-    ) {
-      if (!paramInTargetPosition[commitmentPropertyName] || paramInTargetPosition[commitmentPropertyName] === "finalized") {
-        const nextParams = [...params];
-        const {
-          [commitmentPropertyName]: _,
-          // eslint-disable-line @typescript-eslint/no-unused-vars
-          ...rest
-        } = paramInTargetPosition;
-        if (Object.keys(rest).length > 0) {
-          nextParams[optionsObjectPositionInParams] = rest;
-        } else {
-          if (optionsObjectPositionInParams === nextParams.length - 1) {
-            nextParams.length--;
-          } else {
-            nextParams[optionsObjectPositionInParams] = void 0;
-          }
-        }
-        return nextParams;
-      }
-    } else if (overrideCommitment !== "finalized") {
-      const nextParams = [...params];
-      nextParams[optionsObjectPositionInParams] = {
-        ...paramInTargetPosition,
-        [commitmentPropertyName]: overrideCommitment
-      };
-      return nextParams;
-    }
-  }
-  return params;
-}
-function getDefaultCommitmentRequestTransformer({
-  defaultCommitment,
-  optionsObjectPositionByMethod
-}) {
-  return (request) => {
-    const { params, methodName } = request;
-    if (!Array.isArray(params)) {
-      return request;
-    }
-    const optionsObjectPositionInParams = optionsObjectPositionByMethod[methodName];
-    if (optionsObjectPositionInParams == null) {
-      return request;
-    }
-    return Object.freeze({
-      methodName,
-      params: applyDefaultCommitment({
-        commitmentPropertyName: methodName === "sendTransaction" ? "preflightCommitment" : "commitment",
-        optionsObjectPositionInParams,
-        overrideCommitment: defaultCommitment,
-        params
-      })
-    });
-  };
-}
-function getIntegerOverflowNodeVisitor(onIntegerOverflow) {
-  return (value, { keyPath }) => {
-    if (typeof value === "bigint") {
-      if (onIntegerOverflow && (value > Number.MAX_SAFE_INTEGER || value < -Number.MAX_SAFE_INTEGER)) {
-        onIntegerOverflow(keyPath, value);
-      }
-    }
-    return value;
-  };
-}
-function getIntegerOverflowRequestTransformer(onIntegerOverflow) {
-  return (request) => {
-    const transformer = getTreeWalkerRequestTransformer(
-      [getIntegerOverflowNodeVisitor((...args) => onIntegerOverflow(request, ...args))],
-      { keyPath: [] }
-    );
-    return transformer(request);
-  };
-}
-var OPTIONS_OBJECT_POSITION_BY_METHOD = {
-  accountNotifications: 1,
-  blockNotifications: 1,
-  getAccountInfo: 1,
-  getBalance: 1,
-  getBlock: 1,
-  getBlockHeight: 0,
-  getBlockProduction: 0,
-  getBlocks: 2,
-  getBlocksWithLimit: 2,
-  getEpochInfo: 0,
-  getFeeForMessage: 1,
-  getInflationGovernor: 0,
-  getInflationReward: 1,
-  getLargestAccounts: 0,
-  getLatestBlockhash: 0,
-  getLeaderSchedule: 1,
-  getMinimumBalanceForRentExemption: 1,
-  getMultipleAccounts: 1,
-  getProgramAccounts: 1,
-  getSignaturesForAddress: 1,
-  getSlot: 0,
-  getSlotLeader: 0,
-  getStakeMinimumDelegation: 0,
-  getSupply: 0,
-  getTokenAccountBalance: 1,
-  getTokenAccountsByDelegate: 2,
-  getTokenAccountsByOwner: 2,
-  getTokenLargestAccounts: 1,
-  getTokenSupply: 1,
-  getTransaction: 1,
-  getTransactionCount: 0,
-  getVoteAccounts: 0,
-  isBlockhashValid: 1,
-  logsNotifications: 1,
-  programNotifications: 1,
-  requestAirdrop: 2,
-  sendTransaction: 1,
-  signatureNotifications: 1,
-  simulateTransaction: 1
-};
-function getDefaultRequestTransformerForSolanaRpc(config) {
-  const handleIntegerOverflow = config == null ? void 0 : config.onIntegerOverflow;
-  return (request) => {
-    return pipe(
-      request,
-      handleIntegerOverflow ? getIntegerOverflowRequestTransformer(handleIntegerOverflow) : (r) => r,
-      getBigIntDowncastRequestTransformer(),
-      getDefaultCommitmentRequestTransformer({
-        defaultCommitment: config == null ? void 0 : config.defaultCommitment,
-        optionsObjectPositionByMethod: OPTIONS_OBJECT_POSITION_BY_METHOD
-      })
-    );
-  };
-}
-function getBigIntUpcastVisitor(allowedNumericKeyPaths) {
-  return function upcastNodeToBigIntIfNumber(value, { keyPath }) {
-    const isInteger = typeof value === "number" && Number.isInteger(value) || typeof value === "bigint";
-    if (!isInteger) return value;
-    if (keyPathIsAllowedToBeNumeric(keyPath, allowedNumericKeyPaths)) {
-      return Number(value);
-    } else {
-      return BigInt(value);
-    }
-  };
-}
-function keyPathIsAllowedToBeNumeric(keyPath, allowedNumericKeyPaths) {
-  return allowedNumericKeyPaths.some((prohibitedKeyPath) => {
-    if (prohibitedKeyPath.length !== keyPath.length) {
-      return false;
-    }
-    for (let ii = keyPath.length - 1; ii >= 0; ii--) {
-      const keyPathPart = keyPath[ii];
-      const prohibitedKeyPathPart = prohibitedKeyPath[ii];
-      if (prohibitedKeyPathPart !== keyPathPart && (prohibitedKeyPathPart !== KEYPATH_WILDCARD || typeof keyPathPart !== "number")) {
-        return false;
-      }
-    }
-    return true;
-  });
-}
-function getBigIntUpcastResponseTransformer(allowedNumericKeyPaths) {
-  return getTreeWalkerResponseTransformer([getBigIntUpcastVisitor(allowedNumericKeyPaths)], { keyPath: [] });
-}
-function getResultResponseTransformer() {
-  return (json) => json.result;
-}
-function getThrowSolanaErrorResponseTransformer() {
-  return (json) => {
-    const jsonRpcResponse = json;
-    if ("error" in jsonRpcResponse) {
-      throw getSolanaErrorFromJsonRpcError(jsonRpcResponse.error);
-    }
-    return jsonRpcResponse;
-  };
-}
-function getDefaultResponseTransformerForSolanaRpc(config) {
-  return (response, request) => {
-    const methodName = request.methodName;
-    const keyPaths = (config == null ? void 0 : config.allowedNumericKeyPaths) && methodName ? config.allowedNumericKeyPaths[methodName] : void 0;
-    return pipe(
-      response,
-      (r) => getThrowSolanaErrorResponseTransformer()(r, request),
-      (r) => getResultResponseTransformer()(r, request),
-      (r) => getBigIntUpcastResponseTransformer(keyPaths ?? [])(r, request)
-    );
-  };
-}
-var jsonParsedTokenAccountsConfigs = [
-  // parsed Token/Token22 token account
-  ["data", "parsed", "info", "tokenAmount", "decimals"],
-  ["data", "parsed", "info", "tokenAmount", "uiAmount"],
-  ["data", "parsed", "info", "rentExemptReserve", "decimals"],
-  ["data", "parsed", "info", "rentExemptReserve", "uiAmount"],
-  ["data", "parsed", "info", "delegatedAmount", "decimals"],
-  ["data", "parsed", "info", "delegatedAmount", "uiAmount"],
-  ["data", "parsed", "info", "extensions", KEYPATH_WILDCARD, "state", "olderTransferFee", "transferFeeBasisPoints"],
-  ["data", "parsed", "info", "extensions", KEYPATH_WILDCARD, "state", "newerTransferFee", "transferFeeBasisPoints"],
-  ["data", "parsed", "info", "extensions", KEYPATH_WILDCARD, "state", "preUpdateAverageRate"],
-  ["data", "parsed", "info", "extensions", KEYPATH_WILDCARD, "state", "currentRate"]
-];
-var jsonParsedAccountsConfigs = [
-  ...jsonParsedTokenAccountsConfigs,
-  // parsed AddressTableLookup account
-  ["data", "parsed", "info", "lastExtendedSlotStartIndex"],
-  // parsed Config account
-  ["data", "parsed", "info", "slashPenalty"],
-  ["data", "parsed", "info", "warmupCooldownRate"],
-  // parsed Token/Token22 mint account
-  ["data", "parsed", "info", "decimals"],
-  // parsed Token/Token22 multisig account
-  ["data", "parsed", "info", "numRequiredSigners"],
-  ["data", "parsed", "info", "numValidSigners"],
-  // parsed Stake account
-  ["data", "parsed", "info", "stake", "delegation", "warmupCooldownRate"],
-  // parsed Sysvar rent account
-  ["data", "parsed", "info", "exemptionThreshold"],
-  ["data", "parsed", "info", "burnPercent"],
-  // parsed Vote account
-  ["data", "parsed", "info", "commission"],
-  ["data", "parsed", "info", "votes", KEYPATH_WILDCARD, "confirmationCount"]
-];
-var innerInstructionsConfigs = [
-  ["index"],
-  ["instructions", KEYPATH_WILDCARD, "accounts", KEYPATH_WILDCARD],
-  ["instructions", KEYPATH_WILDCARD, "programIdIndex"],
-  ["instructions", KEYPATH_WILDCARD, "stackHeight"]
-];
-var messageConfig = [
-  ["addressTableLookups", KEYPATH_WILDCARD, "writableIndexes", KEYPATH_WILDCARD],
-  ["addressTableLookups", KEYPATH_WILDCARD, "readonlyIndexes", KEYPATH_WILDCARD],
-  ["header", "numReadonlySignedAccounts"],
-  ["header", "numReadonlyUnsignedAccounts"],
-  ["header", "numRequiredSignatures"],
-  ["instructions", KEYPATH_WILDCARD, "accounts", KEYPATH_WILDCARD],
-  ["instructions", KEYPATH_WILDCARD, "programIdIndex"],
-  ["instructions", KEYPATH_WILDCARD, "stackHeight"]
-];
-
-// node_modules/@solana/rpc-api/dist/index.node.mjs
-function createSolanaRpcApi(config) {
-  return createJsonRpcApi({
-    requestTransformer: getDefaultRequestTransformerForSolanaRpc(config),
-    responseTransformer: getDefaultResponseTransformerForSolanaRpc({
-      allowedNumericKeyPaths: getAllowedNumericKeypaths()
-    })
-  });
-}
-var memoizedKeypaths;
-function getAllowedNumericKeypaths() {
-  if (!memoizedKeypaths) {
-    memoizedKeypaths = {
-      getAccountInfo: jsonParsedAccountsConfigs.map((c) => ["value", ...c]),
-      getBlock: [
-        ["transactions", KEYPATH_WILDCARD, "meta", "preTokenBalances", KEYPATH_WILDCARD, "accountIndex"],
-        [
-          "transactions",
-          KEYPATH_WILDCARD,
-          "meta",
-          "preTokenBalances",
-          KEYPATH_WILDCARD,
-          "uiTokenAmount",
-          "decimals"
-        ],
-        ["transactions", KEYPATH_WILDCARD, "meta", "postTokenBalances", KEYPATH_WILDCARD, "accountIndex"],
-        [
-          "transactions",
-          KEYPATH_WILDCARD,
-          "meta",
-          "postTokenBalances",
-          KEYPATH_WILDCARD,
-          "uiTokenAmount",
-          "decimals"
-        ],
-        ["transactions", KEYPATH_WILDCARD, "meta", "rewards", KEYPATH_WILDCARD, "commission"],
-        ...innerInstructionsConfigs.map((c) => [
-          "transactions",
-          KEYPATH_WILDCARD,
-          "meta",
-          "innerInstructions",
-          KEYPATH_WILDCARD,
-          ...c
-        ]),
-        ...messageConfig.map((c) => ["transactions", KEYPATH_WILDCARD, "transaction", "message", ...c]),
-        ["rewards", KEYPATH_WILDCARD, "commission"]
-      ],
-      getClusterNodes: [
-        [KEYPATH_WILDCARD, "featureSet"],
-        [KEYPATH_WILDCARD, "shredVersion"]
-      ],
-      getInflationGovernor: [["initial"], ["foundation"], ["foundationTerm"], ["taper"], ["terminal"]],
-      getInflationRate: [["foundation"], ["total"], ["validator"]],
-      getInflationReward: [[KEYPATH_WILDCARD, "commission"]],
-      getMultipleAccounts: jsonParsedAccountsConfigs.map((c) => ["value", KEYPATH_WILDCARD, ...c]),
-      getProgramAccounts: jsonParsedAccountsConfigs.flatMap((c) => [
-        ["value", KEYPATH_WILDCARD, "account", ...c],
-        [KEYPATH_WILDCARD, "account", ...c]
-      ]),
-      getRecentPerformanceSamples: [[KEYPATH_WILDCARD, "samplePeriodSecs"]],
-      getTokenAccountBalance: [
-        ["value", "decimals"],
-        ["value", "uiAmount"]
-      ],
-      getTokenAccountsByDelegate: jsonParsedTokenAccountsConfigs.map((c) => [
-        "value",
-        KEYPATH_WILDCARD,
-        "account",
-        ...c
-      ]),
-      getTokenAccountsByOwner: jsonParsedTokenAccountsConfigs.map((c) => [
-        "value",
-        KEYPATH_WILDCARD,
-        "account",
-        ...c
-      ]),
-      getTokenLargestAccounts: [
-        ["value", KEYPATH_WILDCARD, "decimals"],
-        ["value", KEYPATH_WILDCARD, "uiAmount"]
-      ],
-      getTokenSupply: [
-        ["value", "decimals"],
-        ["value", "uiAmount"]
-      ],
-      getTransaction: [
-        ["meta", "preTokenBalances", KEYPATH_WILDCARD, "accountIndex"],
-        ["meta", "preTokenBalances", KEYPATH_WILDCARD, "uiTokenAmount", "decimals"],
-        ["meta", "postTokenBalances", KEYPATH_WILDCARD, "accountIndex"],
-        ["meta", "postTokenBalances", KEYPATH_WILDCARD, "uiTokenAmount", "decimals"],
-        ["meta", "rewards", KEYPATH_WILDCARD, "commission"],
-        ...innerInstructionsConfigs.map((c) => ["meta", "innerInstructions", KEYPATH_WILDCARD, ...c]),
-        ...messageConfig.map((c) => ["transaction", "message", ...c])
-      ],
-      getVersion: [["feature-set"]],
-      getVoteAccounts: [
-        ["current", KEYPATH_WILDCARD, "commission"],
-        ["delinquent", KEYPATH_WILDCARD, "commission"]
-      ],
-      simulateTransaction: [
-        ...jsonParsedAccountsConfigs.map((c) => ["value", "accounts", KEYPATH_WILDCARD, ...c]),
-        ...innerInstructionsConfigs.map((c) => ["value", "innerInstructions", KEYPATH_WILDCARD, ...c])
-      ]
-    };
-  }
-  return memoizedKeypaths;
-}
-
-// node_modules/@solana/rpc-transport-http/dist/index.node.mjs
-var DISALLOWED_HEADERS = {
-  accept: true,
-  "content-length": true,
-  "content-type": true
-};
-var FORBIDDEN_HEADERS = /* @__PURE__ */ Object.assign(
-  {
-    "accept-charset": true,
-    "access-control-request-headers": true,
-    "access-control-request-method": true,
-    connection: true,
-    "content-length": true,
-    cookie: true,
-    date: true,
-    dnt: true,
-    expect: true,
-    host: true,
-    "keep-alive": true,
-    origin: true,
-    "permissions-policy": true,
-    // Prefix matching is implemented in code, below.
-    // 'proxy-': true,
-    // 'sec-': true,
-    referer: true,
-    te: true,
-    trailer: true,
-    "transfer-encoding": true,
-    upgrade: true,
-    via: true
-  },
-  void 0
-);
-function assertIsAllowedHttpRequestHeaders(headers) {
-  const badHeaders = Object.keys(headers).filter((headerName) => {
-    const lowercaseHeaderName = headerName.toLowerCase();
-    return DISALLOWED_HEADERS[headerName.toLowerCase()] === true || FORBIDDEN_HEADERS[headerName.toLowerCase()] === true || lowercaseHeaderName.startsWith("proxy-") || lowercaseHeaderName.startsWith("sec-");
-  });
-  if (badHeaders.length > 0) {
-    throw new SolanaError(SOLANA_ERROR__RPC__TRANSPORT_HTTP_HEADER_FORBIDDEN, {
-      headers: badHeaders
-    });
-  }
-}
-function normalizeHeaders(headers) {
-  const out = {};
-  for (const headerName in headers) {
-    out[headerName.toLowerCase()] = headers[headerName];
-  }
-  return out;
-}
-function createHttpTransport(config) {
-  if (process.env.NODE_ENV !== "production" && false) ;
-  const { fromJson, headers, toJson, url } = config;
-  if (process.env.NODE_ENV !== "production" && headers) {
-    assertIsAllowedHttpRequestHeaders(headers);
-  }
-  let dispatcherConfig;
-  if ("dispatcher_NODE_ONLY" in config) {
-    dispatcherConfig = { dispatcher: config.dispatcher_NODE_ONLY };
-  }
-  const customHeaders = headers && normalizeHeaders(headers);
-  return async function makeHttpRequest({
-    payload,
-    signal
-  }) {
-    const body = toJson ? toJson(payload) : JSON.stringify(payload);
-    const requestInfo = {
-      ...dispatcherConfig,
-      body,
-      headers: {
-        ...customHeaders,
-        // Keep these headers lowercase so they will override any user-supplied headers above.
-        accept: "application/json",
-        "content-length": body.length.toString(),
-        "content-type": "application/json; charset=utf-8"
-      },
-      method: "POST",
-      signal
-    };
-    const response = await fetch(url, requestInfo);
-    if (!response.ok) {
-      throw new SolanaError(SOLANA_ERROR__RPC__TRANSPORT_HTTP_ERROR, {
-        headers: response.headers,
-        message: response.statusText,
-        statusCode: response.status
-      });
-    }
-    if (fromJson) {
-      return fromJson(await response.text(), payload);
-    }
-    return await response.json();
-  };
-}
-var SOLANA_RPC_METHODS = [
-  "getAccountInfo",
-  "getBalance",
-  "getBlock",
-  "getBlockCommitment",
-  "getBlockHeight",
-  "getBlockProduction",
-  "getBlocks",
-  "getBlocksWithLimit",
-  "getBlockTime",
-  "getClusterNodes",
-  "getEpochInfo",
-  "getEpochSchedule",
-  "getFeeForMessage",
-  "getFirstAvailableBlock",
-  "getGenesisHash",
-  "getHealth",
-  "getHighestSnapshotSlot",
-  "getIdentity",
-  "getInflationGovernor",
-  "getInflationRate",
-  "getInflationReward",
-  "getLargestAccounts",
-  "getLatestBlockhash",
-  "getLeaderSchedule",
-  "getMaxRetransmitSlot",
-  "getMaxShredInsertSlot",
-  "getMinimumBalanceForRentExemption",
-  "getMultipleAccounts",
-  "getProgramAccounts",
-  "getRecentPerformanceSamples",
-  "getRecentPrioritizationFees",
-  "getSignaturesForAddress",
-  "getSignatureStatuses",
-  "getSlot",
-  "getSlotLeader",
-  "getSlotLeaders",
-  "getStakeMinimumDelegation",
-  "getSupply",
-  "getTokenAccountBalance",
-  "getTokenAccountsByDelegate",
-  "getTokenAccountsByOwner",
-  "getTokenLargestAccounts",
-  "getTokenSupply",
-  "getTransaction",
-  "getTransactionCount",
-  "getVersion",
-  "getVoteAccounts",
-  "index",
-  "isBlockhashValid",
-  "minimumLedgerSlot",
-  "requestAirdrop",
-  "sendTransaction",
-  "simulateTransaction"
-];
-function isSolanaRequest(payload) {
-  return isJsonRpcPayload(payload) && SOLANA_RPC_METHODS.includes(payload.method);
-}
-function createHttpTransportForSolanaRpc(config) {
-  return createHttpTransport({
-    ...config,
-    fromJson: (rawResponse, payload) => isSolanaRequest(payload) ? parseJsonWithBigInts(rawResponse) : JSON.parse(rawResponse),
-    toJson: (payload) => isSolanaRequest(payload) ? stringifyJsonWithBigints(payload) : JSON.stringify(payload)
-  });
-}
-
-// node_modules/@solana/rpc/dist/index.node.mjs
-import { setMaxListeners } from "events";
-
-// node_modules/@solana/fast-stable-stringify/dist/index.node.mjs
-var objToString = Object.prototype.toString;
-var objKeys = Object.keys || function(obj) {
-  const keys = [];
-  for (const name in obj) {
-    keys.push(name);
-  }
-  return keys;
-};
-function stringify(val, isArrayProp) {
-  let i, max, str, keys, key, propVal, toStr;
-  if (val === true) {
-    return "true";
-  }
-  if (val === false) {
-    return "false";
-  }
-  switch (typeof val) {
-    case "object":
-      if (val === null) {
-        return null;
-      } else if ("toJSON" in val && typeof val.toJSON === "function") {
-        return stringify(val.toJSON(), isArrayProp);
-      } else {
-        toStr = objToString.call(val);
-        if (toStr === "[object Array]") {
-          str = "[";
-          max = val.length - 1;
-          for (i = 0; i < max; i++) {
-            str += stringify(val[i], true) + ",";
-          }
-          if (max > -1) {
-            str += stringify(val[i], true);
-          }
-          return str + "]";
-        } else if (toStr === "[object Object]") {
-          keys = objKeys(val).sort();
-          max = keys.length;
-          str = "";
-          i = 0;
-          while (i < max) {
-            key = keys[i];
-            propVal = stringify(val[key], false);
-            if (propVal !== void 0) {
-              if (str) {
-                str += ",";
-              }
-              str += JSON.stringify(key) + ":" + propVal;
-            }
-            i++;
-          }
-          return "{" + str + "}";
-        } else {
-          return JSON.stringify(val);
-        }
-      }
-    case "function":
-    case "undefined":
-      return isArrayProp ? null : void 0;
-    case "bigint":
-      return `${val.toString()}n`;
-    case "string":
-      return JSON.stringify(val);
-    default:
-      return isFinite(val) ? val : null;
-  }
-}
-function index_default(val) {
-  const returnVal = stringify(val, false);
-  if (returnVal !== void 0) {
-    return "" + returnVal;
-  }
-}
-
-// node_modules/@solana/rpc/dist/index.node.mjs
-function createSolanaJsonRpcIntegerOverflowError(methodName, keyPath, value) {
-  let argumentLabel = "";
-  if (typeof keyPath[0] === "number") {
-    const argPosition = keyPath[0] + 1;
-    const lastDigit = argPosition % 10;
-    const lastTwoDigits = argPosition % 100;
-    if (lastDigit == 1 && lastTwoDigits != 11) {
-      argumentLabel = argPosition + "st";
-    } else if (lastDigit == 2 && lastTwoDigits != 12) {
-      argumentLabel = argPosition + "nd";
-    } else if (lastDigit == 3 && lastTwoDigits != 13) {
-      argumentLabel = argPosition + "rd";
-    } else {
-      argumentLabel = argPosition + "th";
-    }
-  } else {
-    argumentLabel = `\`${keyPath[0].toString()}\``;
-  }
-  const path = keyPath.length > 1 ? keyPath.slice(1).map((pathPart) => typeof pathPart === "number" ? `[${pathPart}]` : pathPart).join(".") : void 0;
-  const error = new SolanaError(SOLANA_ERROR__RPC__INTEGER_OVERFLOW, {
-    argumentLabel,
-    keyPath,
-    methodName,
-    optionalPathLabel: path ? ` at path \`${path}\`` : "",
-    value,
-    ...path !== void 0 ? { path } : void 0
-  });
-  safeCaptureStackTrace(error, createSolanaJsonRpcIntegerOverflowError);
-  return error;
-}
-var DEFAULT_RPC_CONFIG = {
-  defaultCommitment: "confirmed",
-  onIntegerOverflow(request, keyPath, value) {
-    throw createSolanaJsonRpcIntegerOverflowError(request.methodName, keyPath, value);
-  }
-};
-var e2 = class extends globalThis.AbortController {
-  constructor(...t) {
-    super(...t), setMaxListeners(Number.MAX_SAFE_INTEGER, this.signal);
-  }
-};
-var EXPLICIT_ABORT_TOKEN;
-function createExplicitAbortToken() {
-  return process.env.NODE_ENV !== "production" ? {
-    EXPLICIT_ABORT_TOKEN: "This object is thrown from the request that underlies a series of coalesced requests when the last request in that series aborts"
-  } : {};
-}
-function getRpcTransportWithRequestCoalescing(transport, getDeduplicationKey) {
-  let coalescedRequestsByDeduplicationKey;
-  return async function makeCoalescedHttpRequest(request) {
-    const { payload, signal } = request;
-    const deduplicationKey = getDeduplicationKey(payload);
-    if (deduplicationKey === void 0) {
-      return await transport(request);
-    }
-    if (!coalescedRequestsByDeduplicationKey) {
-      queueMicrotask(() => {
-        coalescedRequestsByDeduplicationKey = void 0;
-      });
-      coalescedRequestsByDeduplicationKey = {};
-    }
-    if (coalescedRequestsByDeduplicationKey[deduplicationKey] == null) {
-      const abortController = new e2();
-      const responsePromise = (async () => {
-        try {
-          return await transport({
-            ...request,
-            signal: abortController.signal
-          });
-        } catch (e22) {
-          if (e22 === (EXPLICIT_ABORT_TOKEN ||= createExplicitAbortToken())) {
-            return;
-          }
-          throw e22;
-        }
-      })();
-      coalescedRequestsByDeduplicationKey[deduplicationKey] = {
-        abortController,
-        numConsumers: 0,
-        responsePromise
-      };
-    }
-    const coalescedRequest = coalescedRequestsByDeduplicationKey[deduplicationKey];
-    coalescedRequest.numConsumers++;
-    if (signal) {
-      const responsePromise = coalescedRequest.responsePromise;
-      return await new Promise((resolve, reject) => {
-        const handleAbort = (e22) => {
-          signal.removeEventListener("abort", handleAbort);
-          coalescedRequest.numConsumers -= 1;
-          queueMicrotask(() => {
-            if (coalescedRequest.numConsumers === 0) {
-              const abortController = coalescedRequest.abortController;
-              abortController.abort(EXPLICIT_ABORT_TOKEN ||= createExplicitAbortToken());
-            }
-          });
-          reject(e22.target.reason);
-        };
-        signal.addEventListener("abort", handleAbort);
-        responsePromise.then(resolve).catch(reject).finally(() => {
-          signal.removeEventListener("abort", handleAbort);
-        });
-      });
-    } else {
-      return await coalescedRequest.responsePromise;
-    }
-  };
-}
-function getSolanaRpcPayloadDeduplicationKey(payload) {
-  return isJsonRpcPayload(payload) ? index_default([payload.method, payload.params]) : void 0;
-}
-function normalizeHeaders2(headers) {
-  const out = {};
-  for (const headerName in headers) {
-    out[headerName.toLowerCase()] = headers[headerName];
-  }
-  return out;
-}
-function createDefaultRpcTransport(config) {
-  return pipe(
-    createHttpTransportForSolanaRpc({
-      ...config,
-      headers: {
-        ...{
-          // Keep these headers lowercase so they will be overridden by any user-supplied headers below.
-          "accept-encoding": (
-            // Natively supported by Node LTS v20.18.0 and above.
-            "br,gzip,deflate"
-          )
-          // Brotli, gzip, and Deflate, in that order.
-        },
-        ...config.headers ? normalizeHeaders2(config.headers) : void 0,
-        ...{
-          // Keep these headers lowercase so they will override any user-supplied headers above.
-          "solana-client": `js/${"2.1.1"}`
-        }
-      }
-    }),
-    (transport) => getRpcTransportWithRequestCoalescing(transport, getSolanaRpcPayloadDeduplicationKey)
-  );
-}
-function createSolanaRpc(clusterUrl, config) {
-  return createSolanaRpcFromTransport(createDefaultRpcTransport({ url: clusterUrl, ...config }));
-}
-function createSolanaRpcFromTransport(transport) {
-  return createRpc({
-    api: createSolanaRpcApi(DEFAULT_RPC_CONFIG),
-    transport
-  });
-}
+import { createSolanaRpc } from "@solana/kit";
 
 // src/utils/loadWallet.ts
 import { Keypair, PublicKey } from "@solana/web3.js";
@@ -1934,14 +2950,14 @@ async function loadWallet(runtime, requirePrivateKey = true) {
     try {
       const secretKey = bs58.decode(privateKeyString);
       return { signer: Keypair.fromSecretKey(secretKey) };
-    } catch (e3) {
-      console.log("Error decoding base58 private key:", e3);
+    } catch (e) {
+      console.log("Error decoding base58 private key:", e);
       try {
         console.log("Try decoding base64 instead");
         const secretKey = Uint8Array.from(Buffer.from(privateKeyString, "base64"));
         return { signer: Keypair.fromSecretKey(secretKey) };
-      } catch (e22) {
-        console.error("Error decoding private key: ", e22);
+      } catch (e2) {
+        console.error("Error decoding private key: ", e2);
         throw new Error("Invalid private key format");
       }
     }
@@ -2092,6 +3108,7 @@ function v4(options, buf, offset) {
 var v4_default = v4;
 
 // src/actions/managePositions.ts
+import { createSolanaRpc as createSolanaRpc2 } from "@solana/kit";
 var isManagingPositionsHandlerActive = false;
 function isValidOpenPositionParams(obj) {
   if (!obj || typeof obj !== "object") return false;
@@ -2230,8 +3247,8 @@ var managePositions = {
       if (orcaService && typeof orcaService.setWallet === "function") {
         orcaService.setWallet(ownerAddress);
       }
-      const rpc = createSolanaRpc(runtime.getSetting("SOLANA_RPC_URL"));
-      let positions = await orcaService.fetchPositions(rpc, ownerAddress);
+      const rpc = createSolanaRpc2(runtime.getSetting("SOLANA_RPC_URL"));
+      let positions = await orcaService.fetchPositions(ownerAddress);
       elizaLogger2.log(`Found ${positions.length} existing positions for owner ${ownerAddress}.`);
       if (positions.length === 0) {
         elizaLogger2.info("No existing positions found. Attempting to open an initial position.");
@@ -2242,7 +3259,7 @@ var managePositions = {
             const newPositionMint = await orcaService.open_position(initialParams);
             if (newPositionMint) {
               elizaLogger2.info(`Successfully opened initial position. Mint: ${newPositionMint}. Re-fetching positions.`);
-              positions = await orcaService.fetchPositions(rpc, ownerAddress);
+              positions = await orcaService.fetchPositions(ownerAddress);
               elizaLogger2.log(`Found ${positions.length} positions after opening initial one.`);
             } else {
               elizaLogger2.warn("Attempted to open initial position, but open_position returned null (possibly an existing position was found by the service itself, or opening failed silently).");
@@ -2393,8 +3410,8 @@ async function extractAndValidateConfiguration(text, runtime, position, whirlpoo
     } else {
       elizaLogger2.warn("[EAVC] JSON.parse result is not a valid object. Proceeding to fallback.", result);
     }
-  } catch (e3) {
-    elizaLogger2.warn(`[EAVC] JSON.parse failed on extracted string. Error: ${e3 instanceof Error ? e3.message : String(e3)}`);
+  } catch (e) {
+    elizaLogger2.warn(`[EAVC] JSON.parse failed on extracted string. Error: ${e instanceof Error ? e.message : String(e)}`);
   }
   if (!parsedLLMOutput) {
     try {
@@ -2527,51 +3544,75 @@ var managePositionActionRetriggerEvaluator = {
 
 // src/services/srv_orca.ts
 import { Service, logger } from "@elizaos/core";
-import { Connection, Keypair as Keypair3, PublicKey as PublicKey3 } from "@solana/web3.js";
-import { closePositionInstructions, openPositionInstructions } from "@orca-so/whirlpools";
-import { getPositionAddress } from "@orca-so/whirlpools-client";
+import {
+  address as address2,
+  createSolanaRpc as createSolanaRpc3,
+  createKeyPairSignerFromBytes
+} from "@solana/kit";
+import { Connection, Keypair as Keypair2, PublicKey as PublicKey2 } from "@solana/web3.js";
+import { PDAUtil as WhirlpoolPDAUtil } from "@orca-so/whirlpools-sdk";
+import { closePositionInstructions, openPositionInstructions, decreaseLiquidityInstructions, resetPositionRangeInstructions } from "@orca-so/whirlpools";
+import { fetchMaybePosition, fetchPosition, getPositionAddress } from "@orca-so/whirlpools-client";
 
 // src/utils/sendTransaction.ts
 import { elizaLogger as elizaLogger4 } from "@elizaos/core";
 import {
-  TransactionMessage,
-  VersionedTransaction
-} from "@solana/web3.js";
-import { getSetComputeUnitLimitInstruction, getSetComputeUnitPriceInstruction } from "@solana-program/compute-budget";
-async function sendTransaction(connection, instructions, wallet) {
-  const latestBlockhash = await connection.getLatestBlockhash();
-  const messageV0 = new TransactionMessage({
-    payerKey: wallet.publicKey,
-    recentBlockhash: latestBlockhash.blockhash,
-    instructions
-  }).compileToV0Message();
-  const simulatedTx = new VersionedTransaction(messageV0);
-  simulatedTx.sign([wallet]);
-  const simulation = await connection.simulateTransaction(simulatedTx);
-  const computeUnits = simulation.value.unitsConsumed || 2e5;
-  const safeComputeUnits = Math.ceil(Math.max(computeUnits * 1.3, computeUnits + 1e5));
-  const recentPrioritizationFees = await connection.getRecentPrioritizationFees();
-  const prioritizationFee = recentPrioritizationFees.map((fee) => fee.prioritizationFee).sort((a, b) => a - b)[Math.ceil(0.95 * recentPrioritizationFees.length) - 1];
-  const computeBudgetInstructions = [
-    getSetComputeUnitLimitInstruction({ units: safeComputeUnits }),
-    getSetComputeUnitPriceInstruction({ microLamports: prioritizationFee })
-  ];
-  const finalMessage = new TransactionMessage({
-    payerKey: wallet.publicKey,
-    recentBlockhash: latestBlockhash.blockhash,
-    instructions: [...computeBudgetInstructions, ...instructions]
-  }).compileToV0Message();
-  const transaction = new VersionedTransaction(finalMessage);
-  transaction.sign([wallet]);
+  getSetComputeUnitLimitInstruction,
+  getSetComputeUnitPriceInstruction
+} from "@solana-program/compute-budget";
+import {
+  appendTransactionMessageInstructions,
+  createTransactionMessage,
+  getBase64EncodedWireTransaction,
+  getComputeUnitEstimateForTransactionMessageFactory,
+  pipe,
+  prependTransactionMessageInstructions,
+  setTransactionMessageFeePayer,
+  setTransactionMessageLifetimeUsingBlockhash,
+  signTransactionMessageWithSigners,
+  address
+} from "@solana/kit";
+async function sendTransaction(rpc, instructions, wallet) {
+  const latestBlockHash = await rpc.getLatestBlockhash().send();
+  const transactionMessage = await pipe(
+    createTransactionMessage({ version: 0 }),
+    (tx) => setTransactionMessageFeePayer(address(wallet.publicKey.toString()), tx),
+    (tx) => setTransactionMessageLifetimeUsingBlockhash(latestBlockHash.value, tx),
+    (tx) => appendTransactionMessageInstructions(instructions, tx)
+  );
+  const getComputeUnitEstimateForTransactionMessage = getComputeUnitEstimateForTransactionMessageFactory({
+    rpc
+  });
+  const computeUnitEstimate = await getComputeUnitEstimateForTransactionMessage(transactionMessage);
+  const safeComputeUnitEstimate = Math.max(computeUnitEstimate * 1.3, computeUnitEstimate + 1e5);
+  console.log("4");
+  const prioritizationFee = await rpc.getRecentPrioritizationFees().send().then(
+    (fees) => fees.map((fee) => Number(fee.prioritizationFee)).sort((a, b) => a - b)[Math.ceil(0.95 * fees.length) - 1]
+  );
+  const transactionMessageWithComputeUnitInstructions = await prependTransactionMessageInstructions([
+    {
+      programAddress: address("ComputeBudget111111111111111111111111111111"),
+      accounts: [],
+      data: getSetComputeUnitLimitInstruction({ units: safeComputeUnitEstimate }).data
+    },
+    {
+      programAddress: address("ComputeBudget111111111111111111111111111111"),
+      accounts: [],
+      data: getSetComputeUnitPriceInstruction({ microLamports: prioritizationFee }).data
+    }
+  ], transactionMessage);
+  const signedTransaction = await signTransactionMessageWithSigners(transactionMessageWithComputeUnitInstructions);
+  const base64EncodedWireTransaction = getBase64EncodedWireTransaction(signedTransaction);
   const timeoutMs = 9e4;
   const startTime = Date.now();
   while (Date.now() - startTime < timeoutMs) {
     const transactionStartTime = Date.now();
-    const signature = await connection.sendTransaction(transaction, {
-      maxRetries: 0,
-      skipPreflight: true
-    });
-    const statuses = await connection.getSignatureStatuses([signature]);
+    const signature = await rpc.sendTransaction(base64EncodedWireTransaction, {
+      maxRetries: 0n,
+      skipPreflight: true,
+      encoding: "base64"
+    }).send();
+    const statuses = await rpc.getSignatureStatuses([signature]).send();
     if (statuses.value[0]) {
       if (!statuses.value[0].err) {
         elizaLogger4.log(`Transaction confirmed: ${signature}`);
@@ -2590,28 +3631,49 @@ async function sendTransaction(connection, instructions, wallet) {
 }
 
 // src/services/srv_orca.ts
+var import_bn = __toESM(require_bn(), 1);
 import { fetchPositionsForOwner as fetchPositionsForOwner2, setDefaultFunder } from "@orca-so/whirlpools";
 import { fetchWhirlpool as fetchWhirlpool2 } from "@orca-so/whirlpools-client";
-import { fetchMint as fetchMint2 } from "@solana-program/token-2022";
-import { sqrtPriceToPrice as sqrtPriceToPrice3, tickIndexToPrice as tickIndexToPrice2 } from "@orca-so/whirlpools-core";
+import { fetchAllMint, fetchMint as fetchMint2 } from "@solana-program/token-2022";
+import { sqrtPriceToPrice as sqrtPriceToPrice3, tickIndexToPrice as tickIndexToPrice2, priceToTickIndex, getInitializableTickIndex } from "@orca-so/whirlpools-core";
 import bs582 from "bs58";
+var MAINNET_WHIRLPOOLS_CONFIG_PUBKEY = new PublicKey2("2LecshUwdy9xi7meFgHtFJQNSKk4KdTrcpvaB56dP2NQ");
+var MAINNET_WHIRLPOOL_PROGRAM_ID = new PublicKey2("whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3dhpGDH");
+var COMMON_QUOTE_TOKENS_MINTS = [
+  "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  // USDC
+  "So11111111111111111111111111111111111111112",
+  // WSOL
+  "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB"
+  // USDT
+];
+var TICK_SPACINGS_TO_CHECK = [1, 8, 64, 128];
 var OrcaService = class _OrcaService extends Service {
-  // Retaining updated description
-  constructor(runtime) {
-    super(runtime);
-    this.runtime = runtime;
-    this.connection = new Connection(runtime.getSetting("SOLANA_RPC_URL"));
-    this.wallet = null;
-    console.log("ORCA_SERVICE cstr");
-  }
   connection;
+  rpc;
   wallet;
   isRunning = false;
   registeredPositions = /* @__PURE__ */ new Map();
   // For register_position
   static serviceType = "ORCA_SERVICE";
-  // Changed back from 'POSITION_SERVICE'
   capabilityDescription = "Provides Orca DEX integration and position management";
+  constructor(runtime) {
+    super(runtime);
+    this.connection = new Connection(runtime.getSetting("SOLANA_RPC_URL"));
+    this.rpc = createSolanaRpc3(runtime.getSetting("SOLANA_RPC_URL"));
+    const privateKeyString = runtime.getSetting("SOLANA_PRIVATE_KEY");
+    if (!privateKeyString) {
+      throw new Error("SOLANA_PRIVATE_KEY not found in settings");
+    }
+    const privateKeyBytes = bs582.decode(privateKeyString);
+    this.wallet = Keypair2.fromSecretKey(privateKeyBytes);
+    createKeyPairSignerFromBytes(privateKeyBytes).then((signer) => {
+      this.signer = signer;
+      console.log("this.signer", this.signer);
+    });
+    logger.debug("ORCA_SERVICE: Wallet initialized");
+    console.log("ORCA_SERVICE cstr");
+  }
   static async start(runtime) {
     console.log("ORCA_SERVICE trying to start");
     return new _OrcaService(runtime);
@@ -2630,7 +3692,7 @@ var OrcaService = class _OrcaService extends Service {
         throw new Error("Private key not found");
       }
       const privateKeyBytes = bs582.decode(privateKeyString);
-      return Keypair3.fromSecretKey(privateKeyBytes);
+      return Keypair2.fromSecretKey(privateKeyBytes);
     } catch (error) {
       logger.error("Failed to create keypair:", error);
       throw error;
@@ -2692,107 +3754,98 @@ var OrcaService = class _OrcaService extends Service {
   async close_position(positionId) {
     try {
       logger.debug(`OrcaService: close_position called for ID ${positionId}`);
-      this.wallet = this.getWalletKeypair();
-      if (!this.wallet) {
-        logger.error("Failed to initialize wallet keypair");
+      setDefaultFunder(this.signer);
+      const positionMintAddress = address2(positionId);
+      logger.info(`Attempting to close position: Mint ${positionId}`);
+      const [positionAddress] = await getPositionAddress(positionMintAddress);
+      const position = await fetchMaybePosition(this.rpc, positionAddress);
+      if (!position.exists) {
+        logger.error(`Position ${positionId} not found`);
         return false;
       }
-      setDefaultFunder(this.wallet.publicKey.toBase58());
-      const positionData = this.registeredPositions.get(positionId);
-      if (!positionData) {
-        logger.warn(`OrcaService: Position ${positionId} not found in registered positions. Cannot close on-chain as its details (e.g., whirlpool address) are unknown.`);
+      const { instructions, quote, feesQuote } = await closePositionInstructions(
+        this.rpc,
+        positionMintAddress
+      );
+      if (!instructions || instructions.length === 0) {
+        logger.error("No instructions generated for closing position");
         return false;
       }
-      try {
-        const positionMintPublicKey = new PublicKey3(positionId);
-        const whirlpoolAddress = positionData.whirlpoolAddress;
-        const positionMintAddress = address(positionId);
-        const positionPda = getPositionAddress(positionMintAddress);
-        const positionAddressForInstruction = positionPda[0];
-        logger.info(`Attempting to close position on-chain: Mint ${positionId}, Whirlpool ${whirlpoolAddress}, PDA ${positionAddressForInstruction}`);
-        const rpcAdapter = this.connection;
-        const { instructions } = await closePositionInstructions(
-          rpcAdapter,
-          positionMintAddress
-        );
-        if (!instructions || instructions.length === 0) {
-          logger.error(`OrcaService: No instructions generated for closing position ${positionId}. This might happen if the position is already closed or invalid.`);
-          return false;
-        }
-        logger.debug(`Generated ${instructions.length} instruction(s) for closing position ${positionId}.`);
-        const txId = await sendTransaction(this.connection, instructions, this.wallet);
-        if (txId) {
-          logger.info(`OrcaService: Successfully closed position ${positionId} on-chain. Transaction ID: ${txId}`);
-          this.registeredPositions.delete(positionId);
-          logger.info(`OrcaService: Position ${positionId} unregistered locally.`);
-          return true;
-        } else {
-          logger.error(`OrcaService: Failed to send transaction for closing position ${positionId}. No TxId received.`);
-          return false;
-        }
-      } catch (error) {
-        logger.error(`OrcaService: Error during on-chain closure of position ${positionId}:`, error);
-        if (error instanceof Error && error.stack) {
-          logger.error("Stack trace:", error.stack);
-        }
-        return false;
+      await new Promise((resolve) => setTimeout(resolve, 1e3));
+      const txId = await sendTransaction(this.rpc, instructions, this.wallet);
+      logger.info(`Position close transaction sent: ${txId}`);
+      await new Promise((resolve) => setTimeout(resolve, 1e3));
+      const positionAfter = await fetchMaybePosition(this.rpc, positionAddress);
+      if (positionAfter.exists) {
+        throw new Error("Position was not closed successfully");
       }
+      logger.info(`Position closed successfully. Tokens returned: A=${quote.tokenEstA + feesQuote.feeOwedA}, B=${quote.tokenEstB + feesQuote.feeOwedB}`);
+      logger.info(`OrcaService: Successfully closed position ${positionId} on-chain. Transaction ID: ${txId}`);
+      this.registeredPositions.delete(positionId);
+      logger.info(`OrcaService: Position ${positionId} unregistered locally.`);
+      return true;
     } catch (error) {
       logger.error("Error in close_position:", error);
-      if (error instanceof Error && error.stack) {
-        logger.error("Stack trace:", error.stack);
-      }
       return false;
     }
   }
   async open_position(params) {
+    logger.info("OrcaService: open_position called.");
+    logger.debug("Attempting to open position with params:", params);
     try {
-      logger.info("OrcaService: open_position called.");
-      logger.debug("Attempting to open position with params:", params);
-      if (!this.wallet) {
-        logger.error("OrcaService: Wallet is not initialized. Cannot proceed with open_position.");
-        throw new Error("Wallet not initialized in OrcaService.");
-      }
-      const ownerAddress = toAddress(this.wallet.publicKey);
-      logger.info(`Checking existing positions for wallet: ${ownerAddress}`);
-      const existingPositions = await this.fetchPositions(
-        this.connection,
-        ownerAddress
+      const whirlpool = await fetchWhirlpool2(
+        this.rpc,
+        params.whirlpoolAddress
       );
-      if (existingPositions && existingPositions.length > 0) {
-        logger.info(`Found ${existingPositions.length} existing position(s) for wallet ${ownerAddress}. Not opening a new one.`);
-        existingPositions.forEach((pos, index) => {
-          logger.info(`Existing position ${index + 1}: Mint: ${pos.positionMint}, Whirlpool: ${pos.whirlpoolAddress}, InRange: ${pos.inRange}`);
-        });
-        return null;
+      if (!whirlpool) {
+        throw new Error("Whirlpool not found");
       }
-      logger.info(`No existing positions found for wallet ${ownerAddress}. Proceeding to open a new position.`);
+      setDefaultFunder(this.signer);
+      const mintA = await fetchMint2(this.rpc, whirlpool.data.tokenMintA);
+      const mintB = await fetchMint2(this.rpc, whirlpool.data.tokenMintB);
+      const lowerTickIndex = priceToTickIndex(
+        params.lowerTick,
+        mintA.data.decimals,
+        mintB.data.decimals
+      );
+      const upperTickIndex = priceToTickIndex(
+        params.upperTick,
+        mintA.data.decimals,
+        mintB.data.decimals
+      );
+      const initializableLowerTick = getInitializableTickIndex(
+        lowerTickIndex,
+        whirlpool.data.tickSpacing,
+        false
+      );
+      const initializableUpperTick = getInitializableTickIndex(
+        upperTickIndex,
+        whirlpool.data.tickSpacing,
+        true
+      );
       const { instructions, positionMint } = await openPositionInstructions(
-        this.connection,
+        this.rpc,
         params.whirlpoolAddress,
         {
-          liquidity: BigInt(params.tokenAmount || 0)
+          liquidity: BigInt(1e9)
         },
-        params.lowerTick,
-        params.upperTick
+        initializableLowerTick,
+        initializableUpperTick
       );
-      logger.info(`Attempting to send transaction to open position with mint: ${positionMint.toString()}`);
-      const openTxId = await sendTransaction(this.connection, instructions, this.wallet);
-      if (!openTxId) {
-        logger.error("Failed to open position: Transaction ID not received.");
-        throw new Error("Failed to open position");
+      const txId = await sendTransaction(this.rpc, instructions, this.wallet);
+      logger.info(`Position opened successfully. TX: ${txId}, Position Mint: ${positionMint}`);
+      const [positionAddress] = await getPositionAddress(positionMint);
+      const position = await fetchMaybePosition(this.rpc, positionAddress);
+      if (!position.exists) {
+        throw new Error("Position was not created successfully");
       }
-      logger.info(`Successfully opened new position. Mint: ${positionMint.toString()}, Transaction ID: ${openTxId}`);
       return positionMint.toString();
     } catch (error) {
       logger.error("Error in open_position:", error);
-      if (error instanceof Error && error.stack) {
-        logger.error("Stack trace:", error.stack);
-      }
       throw error;
     }
   }
-  async fetchPositions(rpc, ownerAddress) {
+  async fetchPositions(ownerAddress) {
     try {
       logger.debug("=== Starting fetchPositions ===");
       logger.debug("Owner address:", ownerAddress);
@@ -2804,7 +3857,7 @@ var OrcaService = class _OrcaService extends Service {
         }
         return value;
       };
-      const positions = await fetchPositionsForOwner2(rpc, ownerAddressString);
+      const positions = await fetchPositionsForOwner2(this.rpc, ownerAddressString);
       logger.debug("Raw positions fetched:", JSON.stringify(positions, jsonReplacer, 2));
       if (!positions || positions.length === 0) {
         logger.debug("No positions found for owner");
@@ -2823,7 +3876,7 @@ var OrcaService = class _OrcaService extends Service {
           const whirlpoolAddress = positionData.whirlpool;
           if (!fetchedWhirlpools.has(whirlpoolAddress)) {
             logger.debug("Fetching new whirlpool:", whirlpoolAddress);
-            const whirlpool2 = await fetchWhirlpool2(rpc, whirlpoolAddress);
+            const whirlpool2 = await fetchWhirlpool2(this.rpc, whirlpoolAddress);
             if (whirlpool2) {
               fetchedWhirlpools.set(whirlpoolAddress, whirlpool2.data);
               logger.debug("Whirlpool fetched and cached");
@@ -2837,11 +3890,11 @@ var OrcaService = class _OrcaService extends Service {
           });
           const { tokenMintA, tokenMintB } = whirlpool;
           if (!fetchedMints.has(tokenMintA)) {
-            const mintA2 = await fetchMint2(rpc, tokenMintA);
+            const mintA2 = await fetchMint2(this.rpc, tokenMintA);
             fetchedMints.set(tokenMintA, mintA2.data);
           }
           if (!fetchedMints.has(tokenMintB)) {
-            const mintB2 = await fetchMint2(rpc, tokenMintB);
+            const mintB2 = await fetchMint2(this.rpc, tokenMintB);
             fetchedMints.set(tokenMintB, mintB2.data);
           }
           const mintA = fetchedMints.get(tokenMintA);
@@ -2874,10 +3927,131 @@ var OrcaService = class _OrcaService extends Service {
       throw new Error("Error fetching positions");
     }
   }
+  async best_lp(inputTokenMintStr, amount) {
+    let bestPoolFound = null;
+    let maxLiquidity = new import_bn.default(0);
+    const positions = await this.fetchPositions(this.wallet.publicKey.toBase58());
+    for (const position of positions) {
+      const whirlpool = await fetchWhirlpool2(this.rpc, position.whirlpoolAddress);
+      if (whirlpool && (whirlpool.data.tokenMintA === inputTokenMintStr || whirlpool.data.tokenMintB === inputTokenMintStr)) {
+        const result = {
+          address: position.whirlpoolAddress,
+          liquidity: whirlpool.data.liquidity.toString(),
+          tokenAMint: whirlpool.data.tokenMintA,
+          tokenBMint: whirlpool.data.tokenMintB,
+          tickSpacing: whirlpool.data.tickSpacing,
+          rawData: whirlpool.data
+        };
+        logger.info(`Found existing pool: ${result.address} (${result.tokenAMint}-${result.tokenBMint}) with liquidity ${result.liquidity}`);
+        return result;
+      }
+    }
+    logger.debug(`OrcaService: Searching for new pools for token ${inputTokenMintStr}`);
+    for (const quoteTokenMintStr of COMMON_QUOTE_TOKENS_MINTS) {
+      if (inputTokenMintStr === quoteTokenMintStr) continue;
+      for (const tickSpacing of TICK_SPACINGS_TO_CHECK) {
+        try {
+          const whirlpoolPda = WhirlpoolPDAUtil.getWhirlpool(
+            MAINNET_WHIRLPOOL_PROGRAM_ID,
+            MAINNET_WHIRLPOOLS_CONFIG_PUBKEY,
+            new PublicKey2(inputTokenMintStr),
+            new PublicKey2(quoteTokenMintStr),
+            tickSpacing
+          );
+          const whirlpool = await fetchWhirlpool2(this.rpc, whirlpoolPda.publicKey.toBase58());
+          if (whirlpool) {
+            const currentLiquidity = new import_bn.default(whirlpool.data.liquidity);
+            if (currentLiquidity.gt(maxLiquidity)) {
+              maxLiquidity = currentLiquidity;
+              bestPoolFound = {
+                address: whirlpoolPda.publicKey.toBase58(),
+                liquidity: currentLiquidity.toString(),
+                tokenAMint: whirlpool.data.tokenMintA,
+                tokenBMint: whirlpool.data.tokenMintB,
+                tickSpacing: whirlpool.data.tickSpacing,
+                rawData: whirlpool.data
+              };
+            }
+          }
+        } catch (error) {
+          logger.debug(`Pool not found for ${inputTokenMintStr}-${quoteTokenMintStr} with tick spacing ${tickSpacing}`);
+        }
+      }
+    }
+    if (bestPoolFound) {
+      logger.info(`Found best new pool: ${bestPoolFound.address} with liquidity ${bestPoolFound.liquidity}`);
+    } else {
+      logger.info(`No suitable pools found for token ${inputTokenMintStr}`);
+    }
+    return bestPoolFound;
+  }
+  async reset_position(positionId, newLowerPrice, newUpperPrice) {
+    try {
+      logger.info("OrcaService: reset_position called.");
+      logger.debug(`Attempting to reset position ${positionId} to price range: ${newLowerPrice}-${newUpperPrice}`);
+      setDefaultFunder(this.signer);
+      const positionMintAddress = address2(positionId);
+      const [positionAddress] = await getPositionAddress(positionMintAddress);
+      const position = await fetchPosition(this.rpc, positionAddress);
+      if (!position) {
+        logger.error(`Position ${positionId} not found`);
+        return false;
+      }
+      const { instructions: decreaseInstructions } = await decreaseLiquidityInstructions(
+        this.rpc,
+        positionMintAddress,
+        {
+          liquidity: position.data.liquidity
+        }
+      );
+      const decreaseTxId = await sendTransaction(this.rpc, decreaseInstructions, this.wallet);
+      logger.info(`Decreased liquidity to 0. TX: ${decreaseTxId}`);
+      const { instructions: resetInstructions } = await resetPositionRangeInstructions(
+        this.rpc,
+        positionMintAddress,
+        newLowerPrice,
+        newUpperPrice,
+        this.signer
+      );
+      const resetTxId = await sendTransaction(this.rpc, resetInstructions, this.wallet);
+      logger.info(`Reset position range. TX: ${resetTxId}`);
+      const positionAfter = await fetchPosition(this.rpc, positionAddress);
+      const whirlpool = await fetchWhirlpool2(this.rpc, positionAfter.data.whirlpool);
+      const [mintA, mintB] = await fetchAllMint(this.rpc, [
+        whirlpool.data.tokenMintA,
+        whirlpool.data.tokenMintB
+      ]);
+      const lowerTickIndex = priceToTickIndex(
+        newLowerPrice,
+        mintA.data.decimals,
+        mintB.data.decimals
+      );
+      const upperTickIndex = priceToTickIndex(
+        newUpperPrice,
+        mintA.data.decimals,
+        mintB.data.decimals
+      );
+      const initializableLowerTick = getInitializableTickIndex(
+        lowerTickIndex,
+        whirlpool.data.tickSpacing,
+        false
+      );
+      const initializableUpperTick = getInitializableTickIndex(
+        upperTickIndex,
+        whirlpool.data.tickSpacing,
+        true
+      );
+      if (positionAfter.data.tickLowerIndex !== initializableLowerTick || positionAfter.data.tickUpperIndex !== initializableUpperTick) {
+        throw new Error("Position was not reset to correct tick range");
+      }
+      logger.info(`Successfully reset position ${positionId} to new price range`);
+      return true;
+    } catch (error) {
+      logger.error("Error in reset_position:", error);
+      return false;
+    }
+  }
 };
-function toAddress(publicKey) {
-  return publicKey.toBase58();
-}
 
 // src/index.ts
 var orcaPlugin = {
@@ -2958,9 +4132,9 @@ var orcaPlugin = {
     });
   }
 };
-var index_default2 = orcaPlugin;
+var index_default = orcaPlugin;
 export {
-  index_default2 as default,
+  index_default as default,
   orcaPlugin
 };
 //# sourceMappingURL=index.js.map

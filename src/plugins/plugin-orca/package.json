@@ -6,13 +6,16 @@
   "types": "dist/index.d.ts",
   "dependencies": {
     "@elizaos/core": "^1.0.0-beta.34",
+    "@orca-so/whirlpools": "^1.0.2",
+    "@orca-so/whirlpools-client": "^1.0.2",
+    "@orca-so/whirlpools-core": "^1.0.2",
     "@orca-so/whirlpools-sdk": "^0.14.0",
-    "@orca-so/whirlpools-client": "^2.0.0",
-    "@orca-so/whirlpools-core": "^2.0.0",
-    "@solana-program/compute-budget": "^0.7.0",
-    "@orca-so/whirlpools": "^2.0.0",
+    "@solana-program/compute-budget": "^0.6.1",
     "@solana-program/token-2022": "^0.3.1",
-    "@solana/web3.js": "^2.0.0"
+    "@solana/kit": "2",
+    "@solana/codecs": "^2.0.0",
+    "@types/bs58": "^4.0.4",
+    "bs58": "^6.0.0"
   },
   "devDependencies": {
     "tsup": "^8.3.5"

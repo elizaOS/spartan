@@ -1,86 +1,90 @@
 import { elizaLogger } from '@elizaos/core';
 import {
-  Transaction,
-  TransactionMessage,
-  VersionedTransaction,
-  PublicKey,
-  Keypair,
-} from '@solana/web3.js';
-import { address, createSolanaRpc } from "@solana/kit";
-import { getSetComputeUnitLimitInstruction, getSetComputeUnitPriceInstruction } from '@solana-program/compute-budget'
+  getSetComputeUnitLimitInstruction,
+  getSetComputeUnitPriceInstruction
+} from '@solana-program/compute-budget';
+import {
+  appendTransactionMessageInstructions,
+  createTransactionMessage,
+  getBase64EncodedWireTransaction,
+  getComputeUnitEstimateForTransactionMessageFactory,
+  IInstruction,
+  KeyPairSigner,
+  pipe,
+  prependTransactionMessageInstructions,
+  Rpc,
+  setTransactionMessageFeePayer,
+  setTransactionMessageFeePayerSigner,
+  setTransactionMessageLifetimeUsingBlockhash,
+  signTransactionMessageWithSigners,
+  SolanaRpcApi,
+  address
+} from '@solana/kit';
+import { Keypair } from '@solana/web3.js';
 
 // For more information: https://orca-so.github.io/whirlpools/Whirlpools%20SDKs/Whirlpools/Send%20Transaction
-export async function sendTransaction(
-  connection: Connection,
-  instructions: Array<any>,
-  wallet: Keypair
-): Promise<string> {
-  const latestBlockhash = await connection.getLatestBlockhash();
+export async function sendTransaction(rpc: Rpc<SolanaRpcApi>, instructions: IInstruction[], wallet: Keypair): Promise<string> {
+  const latestBlockHash = await rpc.getLatestBlockhash().send();
 
-  // Create a new TransactionMessage with the instructions
-  const messageV0 = new TransactionMessage({
-    payerKey: wallet.publicKey,
-    recentBlockhash: latestBlockhash.blockhash,
-    instructions,
-  }).compileToV0Message();
+  const transactionMessage = await pipe(
+    createTransactionMessage({ version: 0 }),
+    tx => setTransactionMessageFeePayer(address(wallet.publicKey.toString()), tx),
+    tx => setTransactionMessageLifetimeUsingBlockhash(latestBlockHash.value, tx),
+    tx => appendTransactionMessageInstructions(instructions, tx)
+  );
+  const getComputeUnitEstimateForTransactionMessage =
+    getComputeUnitEstimateForTransactionMessageFactory({
+      rpc: rpc
+    });
+  const computeUnitEstimate = await getComputeUnitEstimateForTransactionMessage(transactionMessage)
+  const safeComputeUnitEstimate = Math.max(computeUnitEstimate * 1.3, computeUnitEstimate + 100_000);
+  console.log('4')
+  const prioritizationFee = await rpc.getRecentPrioritizationFees()
+    .send()
+    .then(fees =>
+      fees
+        .map(fee => Number(fee.prioritizationFee))
+        .sort((a, b) => a - b)
+      [Math.ceil(0.95 * fees.length) - 1]
+    );
+  const transactionMessageWithComputeUnitInstructions = await prependTransactionMessageInstructions([
+    {
+      programAddress: address("ComputeBudget111111111111111111111111111111"),
+      accounts: [],
+      data: getSetComputeUnitLimitInstruction({ units: safeComputeUnitEstimate }).data
+    },
+    {
+      programAddress: address("ComputeBudget111111111111111111111111111111"),
+      accounts: [],
+      data: getSetComputeUnitPriceInstruction({ microLamports: prioritizationFee }).data
+    }
+  ], transactionMessage);
+  const signedTransaction = await signTransactionMessageWithSigners(transactionMessageWithComputeUnitInstructions)
+  const base64EncodedWireTransaction = getBase64EncodedWireTransaction(signedTransaction);
 
-  // Estimate compute units
-  const simulatedTx = new VersionedTransaction(messageV0);
-  simulatedTx.sign([wallet]);
-  const simulation = await connection.simulateTransaction(simulatedTx);
-  const computeUnits = simulation.value.unitsConsumed || 200_000;
-  const safeComputeUnits = Math.ceil(Math.max(computeUnits * 1.3, computeUnits + 100_000));
-
-  // Get prioritization fee
-  const recentPrioritizationFees = await connection.getRecentPrioritizationFees();
-  const prioritizationFee = recentPrioritizationFees
-    .map((fee) => fee.prioritizationFee)
-    .sort((a, b) => a - b)[Math.ceil(0.95 * recentPrioritizationFees.length) - 1];
-
-  // Add compute budget instructions
-  const computeBudgetInstructions = [
-    getSetComputeUnitLimitInstruction({ units: safeComputeUnits }),
-    getSetComputeUnitPriceInstruction({ microLamports: prioritizationFee }),
-  ];
-
-  // Create final transaction
-  const finalMessage = new TransactionMessage({
-    payerKey: wallet.publicKey,
-    recentBlockhash: latestBlockhash.blockhash,
-    instructions: [...computeBudgetInstructions, ...instructions],
-  }).compileToV0Message();
-
-  const transaction = new VersionedTransaction(finalMessage);
-  transaction.sign([wallet]);
-
-  // Send and confirm transaction
   const timeoutMs = 90000;
   const startTime = Date.now();
-
   while (Date.now() - startTime < timeoutMs) {
     const transactionStartTime = Date.now();
-
-    const signature = await connection.sendTransaction(transaction, {
-      maxRetries: 0,
+    const signature = await rpc.sendTransaction(base64EncodedWireTransaction, {
+      maxRetries: 0n,
       skipPreflight: true,
-    });
-
-    const statuses = await connection.getSignatureStatuses([signature]);
+      encoding: 'base64'
+    }).send();
+    const statuses = await rpc.getSignatureStatuses([signature]).send();
     if (statuses.value[0]) {
       if (!statuses.value[0].err) {
         elizaLogger.log(`Transaction confirmed: ${signature}`);
-        return signature;
+        return signature
       } else {
         throw new Error(`Transaction failed: ${statuses.value[0].err.toString()}`);
       }
     }
-
     const elapsedTime = Date.now() - transactionStartTime;
     const remainingTime = Math.max(0, 1000 - elapsedTime);
     if (remainingTime > 0) {
-      await new Promise((resolve) => setTimeout(resolve, remainingTime));
+      await new Promise(resolve => setTimeout(resolve, remainingTime));
     }
   }
-
   throw new Error('Transaction timeout');
 }

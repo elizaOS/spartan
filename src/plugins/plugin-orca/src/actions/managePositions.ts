@@ -266,7 +266,99 @@ export const managePositions: Action = {
 
 
       const rpc = createSolanaRpc((runtime as AgentRuntime).getSetting('SOLANA_RPC_URL'));
-      let positions = await orcaService.fetchPositions(rpc, ownerAddress);
+
+      // // --- BEGIN TEST CALL TO best_lp ---
+      // if (orcaService && typeof orcaService.best_lp === 'function') {
+      //   elizaLogger.log('[Test best_lp] Attempting to call best_lp method.');
+      //   try {
+      //     const testInputTokenMint = "So11111111111111111111111111111111111111112"; // WSOL Mint
+      //     const testAmount = 1; // Example: 1 SOL
+      //     elizaLogger.log(`[Test best_lp] Calling with RPC, token: ${testInputTokenMint}, amount: ${testAmount}`);
+
+      //     const bestLpResult = await orcaService.best_lp(testInputTokenMint, testAmount);
+      //     if (bestLpResult) {
+      //       // Format liquidity to be more readable
+      //       const liquidityFormatted = new Intl.NumberFormat('en-US', {
+      //         notation: 'compact',
+      //         maximumFractionDigits: 2
+      //       }).format(Number(bestLpResult.liquidity));
+
+      //       const poolInfo = {
+      //         pool: bestLpResult.address.slice(0, 8) + '...',  // Shorten pool address
+      //         pair: `${bestLpResult.tokenAMint.slice(0, 8)}-${bestLpResult.tokenBMint.slice(0, 8)}`,  // Hardcoded for now, could be made dynamic with a token symbol lookup
+      //         liquidity: liquidityFormatted,
+      //         spacing: bestLpResult.tickSpacing
+      //       };
+      //       elizaLogger.log('[Test best_lp] Best LP found:', poolInfo);
+      //     } else {
+      //       elizaLogger.log('[Test best_lp] No suitable LP found by best_lp.');
+      //     }
+      //   } catch (testError) {
+      //     elizaLogger.error('[Test best_lp] Error during best_lp test call:', testError);
+      //   }
+      // } else {
+      //   elizaLogger.warn('[Test best_lp] orcaService is not available or best_lp method does not exist.');
+      // }
+      // // --- END TEST CALL TO best_lp ---
+
+      // // After the best_lp test
+
+      // // --- BEGIN TEST CALL TO open_position ---
+      // if (orcaService && typeof orcaService.open_position === 'function') {
+      //   elizaLogger.log('[Test open_position] Attempting to open a new position');
+      //   try {
+      //     const testTokenMint = "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN"; // JUP token
+      //     const testAmount = 1; // Amount of tokens to provide
+
+      //     // First find the best pool
+      //     const bestPool = await orcaService.best_lp(testTokenMint, testAmount);
+      //     if (!bestPool) {
+      //       elizaLogger.warn('[Test open_position] No suitable pool found for token');
+      //       return;
+      //     }
+
+      //     // Calculate ticks based on current price
+      //     const currentPrice = sqrtPriceToPrice(
+      //       bestPool.rawData.sqrtPrice,
+      //       bestPool.rawData.tickCurrentIndex,
+      //       bestPool.tickSpacing
+      //     );
+
+      //     // Open position with ±5% range around current price
+      //     const openParams = {
+      //       whirlpoolAddress: bestPool.address,
+      //       tokenAmount: testAmount,
+      //       lowerTick: bestPool.rawData.tickCurrentIndex - 100, // Approximately -5%
+      //       upperTick: bestPool.rawData.tickCurrentIndex + 100, // Approximately +5%
+      //     };
+
+      //     elizaLogger.log('[Test open_position] Opening position with params:', {
+      //       pool: bestPool.address.slice(0, 8) + '...',
+      //       pair: `${bestPool.tokenAMint.slice(0, 8)}-${bestPool.tokenBMint.slice(0, 8)}`,
+      //       range: `${openParams.lowerTick} to ${openParams.upperTick}`,
+      //       amount: testAmount
+      //     });
+
+      //     try {
+      //       const positionMint = await orcaService.open_position(openParams);
+      //       if (positionMint) {
+      //         elizaLogger.log('[Test open_position] Successfully opened position:', {
+      //           mint: positionMint.slice(0, 8) + '...',
+      //           pool: bestPool.address.slice(0, 8) + '...'
+      //         });
+      //       }
+      //     } catch (error) {
+      //       elizaLogger.error('[Test open_position] Failed to open position:', error.message);
+      //     }
+      //   } catch (testError) {
+      //     elizaLogger.error('[Test open_position] Error during open_position test:', testError);
+      //   }
+      // } else {
+      //   elizaLogger.warn('[Test open_position] orcaService.open_position is not available');
+      // }
+      // // --- END TEST CALL TO open_position ---
+
+      let positions = await orcaService.fetchPositions(ownerAddress);
       elizaLogger.log(`Found ${positions.length} existing positions for owner ${ownerAddress}.`);
 
       if (positions.length === 0) {
@@ -280,7 +372,7 @@ export const managePositions: Action = {
             if (newPositionMint) {
               elizaLogger.info(`Successfully opened initial position. Mint: ${newPositionMint}. Re-fetching positions.`);
               // Re-fetch positions to include the newly opened one
-              positions = await orcaService.fetchPositions(rpc, ownerAddress);
+              positions = await orcaService.fetchPositions(ownerAddress);
               elizaLogger.log(`Found ${positions.length} positions after opening initial one.`);
             } else {
               elizaLogger.warn("Attempted to open initial position, but open_position returned null (possibly an existing position was found by the service itself, or opening failed silently).");
