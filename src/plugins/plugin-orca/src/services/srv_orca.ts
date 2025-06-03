@@ -6,7 +6,7 @@ import { Connection, Keypair, PublicKey } from '@solana/web3.js';
 
 import { FetchedPosition, OpenPositionParams } from '../types';
 import { WhirlpoolData, PDAUtil as WhirlpoolPDAUtil } from '@orca-so/whirlpools-sdk';
-import { closePositionInstructions, openPositionInstructions, decreaseLiquidityInstructions, resetPositionRangeInstructions } from '@orca-so/whirlpools';
+import { closePositionInstructions, openPositionInstructions, decreaseLiquidityInstructions } from '@orca-so/whirlpools';
 import { fetchMaybePosition, fetchPosition, getPositionAddress } from '@orca-so/whirlpools-client';
 import { sendTransaction } from '../utils/sendTransaction';
 import { fetchPositionsForOwner, HydratedPosition, setDefaultFunder } from "@orca-so/whirlpools";
@@ -510,9 +510,12 @@ export class OrcaService extends Service {
       logger.info(`Decreased liquidity to 0. TX: ${decreaseTxId}`);
 
       // Reset position range
-      const { instructions: resetInstructions } = await resetPositionRangeInstructions(
+      const { instructions: resetInstructions } = await openPositionInstructions(
         this.rpc,
         positionMintAddress,
+        {
+          liquidity: position.data.liquidity
+        },
         newLowerPrice,
         newUpperPrice,
         this.signer
