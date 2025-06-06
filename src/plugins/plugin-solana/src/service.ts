@@ -1,12 +1,13 @@
 import { type IAgentRuntime, Service, logger, TEEMode } from '@elizaos/core';
-import { Connection, PublicKey, ComputeBudgetProgram, DeriveKeyProvider } from '@solana/web3.js';
-import BigNumber from 'bignumber.js';
+import { PublicKey, Connection } from '@solana/web3.js';
+import { getSetComputeUnitLimitInstruction, getSetComputeUnitPriceInstruction } from '@solana-program/compute-budget'
+import { BN as BigNumber } from './bignumber';
 import { SOLANA_SERVICE_NAME, SOLANA_WALLET_DATA_CACHE_KEY } from './constants';
 import { getWalletKey, KeypairResult } from './keypairUtils';
 import type { Item, Prices, WalletPortfolio } from './types';
 import { Keypair, VersionedTransaction, TransactionMessage } from '@solana/web3.js';
 import bs58 from 'bs58';
-
+import { address, createSolanaRpc } from "@solana/kit";
 const PROVIDER_CONFIG = {
   BIRDEYE_API: 'https://public-api.birdeye.so',
   MAX_RETRIES: 3,
@@ -708,8 +709,8 @@ export async function sendTransaction(
 
   // Add compute budget instructions
   const computeBudgetInstructions = [
-    ComputeBudgetProgram.setComputeUnitLimit({ units: safeComputeUnits }),
-    ComputeBudgetProgram.setComputeUnitPrice({ microLamports: prioritizationFee }),
+    getSetComputeUnitLimitInstruction({ units: safeComputeUnits }),
+    getSetComputeUnitPriceInstruction({ microLamports: prioritizationFee }),
   ];
 
   // Create final transaction

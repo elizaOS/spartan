@@ -1,5 +1,6 @@
 import { logger, type IAgentRuntime, parseJSONObjectFromText } from '@elizaos/core';
-import { Connection, Keypair, VersionedTransaction, PublicKey } from '@solana/web3.js';
+import { Keypair, VersionedTransaction, PublicKey } from '@solana/web3.js';
+import { address, createSolanaRpc } from "@solana/kit";
 import { decodeBase58 } from './utils';
 
 /**
@@ -31,7 +32,7 @@ export function getWalletKeypair(runtime?: IAgentRuntime): Keypair {
 export async function getWalletBalance(runtime: IAgentRuntime): Promise<number> {
   try {
     const walletKeypair = getWalletKeypair(runtime);
-    const connection = new Connection(runtime.getSetting('SOLANA_RPC_URL'));
+    const connection = createSolanaRpc(runtime.getSetting('SOLANA_RPC_URL'));
     const balance = await connection.getBalance(walletKeypair.publicKey);
     const solBalance = balance / 1e9;
 
@@ -49,7 +50,7 @@ export async function getWalletBalance(runtime: IAgentRuntime): Promise<number> 
 
 // Add helper function to get connection
 async function getConnection(runtime: IAgentRuntime): Promise<Connection> {
-  return new Connection(
+  return createSolanaRpc(
     runtime.getSetting('RPC_URL') || 'https://zondra-wil7oz-fast-mainnet.helius-rpc.com'
   );
 }
@@ -110,7 +111,7 @@ export async function executeTrade(
 
   try {
     const walletKeypair = getWalletKeypair(runtime);
-    const connection = new Connection(runtime.getSetting('RPC_URL'));
+    const connection = createSolanaRpc(runtime.getSetting('RPC_URL'));
 
     // Setup swap parameters
     const SOL_ADDRESS = 'So11111111111111111111111111111111111111112';
@@ -461,7 +462,7 @@ interface TokenBalance {
 export async function getWalletBalances(runtime: IAgentRuntime) {
   try {
     const walletKeypair = getWalletKeypair(runtime);
-    const connection = new Connection(runtime.getSetting('RPC_URL'));
+    const connection = createSolanaRpc(runtime.getSetting('RPC_URL'));
 
     const solBalance = await connection.getBalance(walletKeypair.publicKey);
     const tokenAccounts = await connection.getParsedTokenAccountsByOwner(walletKeypair.publicKey, {

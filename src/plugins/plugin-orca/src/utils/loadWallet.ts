@@ -1,7 +1,7 @@
 import { Keypair, PublicKey } from '@solana/web3.js';
 import bs58 from 'bs58';
 import { AgentRuntime, TEEMode } from '@elizaos/core';
-import { DeriveKeyProvider } from '@solana/web3.js';
+
 export interface WalletResult {
   signer?: Keypair;
   address?: PublicKey;

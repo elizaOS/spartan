@@ -4,14 +4,13 @@ import {
   TransactionMessage,
   VersionedTransaction,
   PublicKey,
-  Connection,
-  ComputeBudgetProgram,
+  SolanaRpcConnection,
   Keypair,
-} from '@solana/web3.js';
-
+} from '@solana/kit';
+import { ComputeBudgetProgram } from '@solana-program/compute-budget'
 // For more information: https://orca-so.github.io/whirlpools/Whirlpools%20SDKs/Whirlpools/Send%20Transaction
 export async function sendTransaction(
-  connection: Connection,
+  connection: SolanaRpcConnection,
   instructions: Array<any>,
   wallet: Keypair
 ): Promise<string> {
