@@ -14,15 +14,15 @@ export const deleteRegistration: Action = {
     //console.log('DELETE_REGISTRATION validate')
 
     // if not a discord/telegram message, we can ignore it
-    if (!message.metadata.authorId) return false
+    if (!message.metadata.fromId) return false
 
     // using the service to get this/components might be good way
-    const entityId = createUniqueUuid(runtime, message.metadata.authorId);
+    const entityId = createUniqueUuid(runtime, message.metadata.fromId);
     const entity = await runtime.getEntityById(entityId)
     const email = entity.components.find(c => c.type === EMAIL_TYPE)
     return email // can only clear what's set
   },
-  description: 'Allows a user to delete their account with Spartan services',
+  description: 'Replies, allowing a user to delete their account with Spartan services',
   handler: async (
     runtime: IAgentRuntime,
     message: Memory,
@@ -36,7 +36,7 @@ export const deleteRegistration: Action = {
 
     const roomDetails = await runtime.getRoom(message.roomId);
     // author entity for this runtime
-    const entityId = createUniqueUuid(runtime, message.metadata.authorId);
+    const entityId = createUniqueUuid(runtime, message.metadata.fromId);
 
     const entity = await runtime.getEntityById(entityId)
     console.log('entity', entity)
@@ -53,10 +53,10 @@ export const deleteRegistration: Action = {
 
     if (existingComponent) {
       console.log('deleting', existingComponent)
-      takeItPrivate(runtime, message, 'Just cleared your registration: ' + existingComponent.data.address)
+      takeItPrivate(runtime, message, 'Just cleared your registration: ' + existingComponent.data.address, responses)
       runtime.deleteComponent(existingComponent.id)
     } else {
-      takeItPrivate(runtime, message, 'Cant find your registration')
+      takeItPrivate(runtime, message, 'Cant find your registration', responses)
     }
     responses.length = 0 // just clear them all
   },

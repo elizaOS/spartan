@@ -44,7 +44,7 @@ export const servicesMenu: Action = {
   metadata: {
     entityName: "Odilitime",
     type: "message",
-    authorId: "580487826420793364",
+    fromId: "580487826420793364",
   },
 
 */
@@ -57,7 +57,7 @@ export const servicesMenu: Action = {
     //const isGroup = roomDetails.type === 'group'
     //const isDM = roomDetails.type === 'dm'
 
-    const entityId = createUniqueUuid(runtime, message.metadata.authorId);
+    const entityId = createUniqueUuid(runtime, message.metadata.fromId);
     const entity = await runtime.getEntityById(entityId)
     //console.log('SERVICES_MENU entity', entity)
     const signedup = entity.components.find(c => c.type === EMAIL_TYPE)

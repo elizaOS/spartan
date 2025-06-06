@@ -1,7 +1,4 @@
-import { Service, logger } from '@elizaos/core';
-
-import { IAgentRuntime, Service, logger } from '@elizaos/core';
-
+import { IAgentRuntime, getSalt, encryptStringValue, Service, logger } from '@elizaos/core';
 import { acquireService } from '../utils';
 
 export class TradeChainService extends Service {
@@ -33,6 +30,38 @@ export class TradeChainService extends Service {
 
   async listActiveChains() {
     return Object.values(this.registry).map(s => s.name)
+  }
+
+  forEachReg(key) {
+    const results = [];
+    // foreach provider
+    for (const dp of Object.values(this.registry)) {
+      // do they have this type of service
+      if (dp[key]) {
+        // if so get service handle
+        const infoService = this.runtime.getService(dp[key]);
+        if (infoService) {
+          //console.log('updateTrending - result', result)
+          results.push(infoService);
+        } else {
+          console.warn('Registered data provider service not found', key, dp[key]);
+        }
+      } else {
+        console.warn('registered service does not support', key, ':', dp)
+      }
+    }
+    return results
+  }
+
+  async makeKeypairs() {
+    const services = this.forEachReg('service')
+    const salt = await getSalt()
+    const wallets = await Promise.all(services.map(async service => {
+      // maybe we should encrypt
+      // get key from sparty
+      return { service: service.chain, wallet: await service.createWallet() }
+    }))
+    return wallets
   }
 
   async makeKeypair(regName) {

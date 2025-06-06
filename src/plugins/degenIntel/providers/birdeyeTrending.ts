@@ -1,5 +1,5 @@
 import type { Action, IAgentRuntime, Memory, Provider, State } from '@elizaos/core';
-import { addHeader, composeActionExamples, formatActionNames, formatActions } from '@elizaos/core';
+import { logger, addHeader, composeActionExamples, formatActionNames, formatActions } from '@elizaos/core';
 import type { IToken } from '../types';
 
 /**

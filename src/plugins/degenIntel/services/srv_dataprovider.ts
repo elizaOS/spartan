@@ -40,30 +40,35 @@ export class TradeDataProviderService extends Service {
     // get a list of positions (chains -> wallets -> positions)
   }
 
+  forEachReg(key) {
+    const results = [];
+    // foreach provider
+    for (const dp of Object.values(this.registry)) {
+      // do they have this type of service
+      if (dp[key]) {
+        // if so get service handle
+        const infoService = this.runtime.getService(dp[key]);
+        if (infoService) {
+          //console.log('updateTrending - result', result)
+          results.push(infoService);
+        } else {
+          console.warn('Registered data provider service not found', key, dp[key]);
+        }
+      } else {
+        console.warn('registered service does not support', key, ':', dp)
+      }
+    }
+    return results
+  }
+
   // should this be a task?
   async updateTrending() {
     console.log('checking trending');
     // collect all
-    const results = [];
-    for (const dp of Object.values(this.registry)) {
-      // foreach provider
-      // do they have this type of service
-      if (dp.trendingService) {
-        // if so register handler with event
-        const infoService = this.runtime.getService(dp.trendingService);
-        if (infoService) {
-          const result = await infoService.getTrending();
-          //console.log('updateTrending - result', result)
-          results.push(result);
-        } else {
-          console.warn('Registered data provider service not found', dp.trendingService);
-        }
-      } else {
-        console.warn('registered service does not support trending', dp)
-      }
-    }
+    const services = this.forEachReg('trendingService')
+    const results = await Promise.all(services.map(service => service.getTrending()))
     // process results
-    console.log('results', results);
+    //console.log('srv_dataprov::updateTrending - results', results);
 
     // emit event
     const event = 'trending';
@@ -99,10 +104,18 @@ export class TradeDataProviderService extends Service {
   }
 
   async getTokenInfo(chain, address) {
-    const token = await this.runtime.getCache<IToken[]>('token_' + chain + '_' + address);
-    console.log('token', token);
+    let token = await this.runtime.getCache<IToken>(`token_${chain}_${address}`);
+    //console.log('token', token);
     if (!token) {
       // not cache, go fetch realtime
+
+      const services = this.forEachReg('lookupService')
+      const results = await Promise.all(services.map(service => service.lookupToken(chain, address)))
+      //console.log('dataprovider - results', results)
+
+      // how to convert results into token better?
+      token = results[0] // reduce
+      await this.runtime.setCache<IToken>(`token_${chain}_${address}`, token);
     }
     // needs to include liquidity, 24h volume, suspicous atts
     return token;
@@ -147,8 +160,10 @@ export class TradeDataProviderService extends Service {
       },
       10 * 60 * 1000
     );
-    // this is actually too soon
-    //this.updateTrending()
+    // immediate is actually too soon
+    setTimeout(() => {
+      this.updateTrending()
+    }, 30 * 1000)
 
     try {
       logger.info('Starting info trading service...');

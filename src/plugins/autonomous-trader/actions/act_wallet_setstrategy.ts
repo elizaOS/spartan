@@ -12,13 +12,13 @@ export const setStrategy: Action = {
   similes: [
   ],
   validate: async (runtime: IAgentRuntime, message: Memory) => {
-    console.log('WALLET_SETSTRAT validate', message?.metadata?.authorId)
-    if (!message?.metadata?.authorId) {
+    console.log('WALLET_SETSTRAT validate', message?.metadata?.fromId)
+    if (!message?.metadata?.fromId) {
       console.log('WALLET_SETSTRAT validate - author not found')
       return false
     }
 
-    const entityId = createUniqueUuid(runtime, message.metadata.authorId);
+    const entityId = createUniqueUuid(runtime, message.metadata.fromId);
     if (entityId === null) return false;
     const entity = await runtime.getEntityById(entityId)
     //console.log('entity', entity)
@@ -47,7 +47,7 @@ export const setStrategy: Action = {
     console.log('WALLET_SETSTRAT handler')
 
     // using the service to get this/components might be good way
-    const entityId = createUniqueUuid(runtime, message.metadata.authorId);
+    const entityId = createUniqueUuid(runtime, message.metadata.fromId);
     const entity = await runtime.getEntityById(entityId)
     //console.log('entity', entity)
     const email = entity.components.find(c => c.type === EMAIL_TYPE)
@@ -78,25 +78,37 @@ export const setStrategy: Action = {
     const chains = await traderChainService.listActiveChains()
     console.log('chains', chains)
 
+    //console.log('email', email)
     const newData = email.data
+    //console.log('newData', newData)
+
     if (newData.metawallets === undefined) newData.metawallets = []
     const newWallet = {
       strategy: containsStrats[0],
     }
+    /*
     const keypairs = {}
     for(const c of chains) {
       console.log('chain', c)
       const kp = await traderChainService.makeKeypair(c)
+      if (!kp) {
+        runtime.logger.error('makeKeypair failed, chain plugin', c,'not compatible?')
+        continue
+      }
       console.log('kp', kp)
       keypairs[c] = kp
     }
+    */
+    const keypairs = await traderChainService.makeKeypairs()
+    //console.log('keypairs', keypairs)
     newWallet.keypairs = keypairs
     console.log('newWallet', newWallet)
-    takeItPrivate(runtime, message, 'Made a meta-wallet ' + JSON.stringify(newWallet) + ' please fund it to start trading')
+    responses.length = 0 // just clear them all
+    takeItPrivate(runtime, message, 'Made a meta-wallet ' + JSON.stringify(newWallet) + ' please fund it to start trading', responses)
 
     newData.metawallets.push(newWallet)
     // dev mode
-    newData.metawallets = [newWallet]
+    //newData.metawallets = [newWallet]
 
     await runtime.updateComponent({
       id: email.id,
@@ -108,9 +120,6 @@ export const setStrategy: Action = {
       data: newData,
       agentId: runtime.agentId,
     });
-
-
-    responses.length = 0 // just clear them all
   },
   examples: [
     [

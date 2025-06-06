@@ -59,7 +59,7 @@ export const userRegistration: Action = {
   similes: [
   ],
   validate: async (runtime: IAgentRuntime, message: Memory) => {
-    //console.log('USER_REGISTRATION validate')
+    console.log('USER_REGISTRATION validate') // , message.metadata
 /*
 sve:validate message {
   id: "1e574bcc-7d3d-04de-bb2e-a58ec153832f",
@@ -75,7 +75,7 @@ sve:validate message {
   },
   metadata: {
     entityName: "Odilitime",
-    authorId: "580487826420793364",
+    fromId: "580487826420793364",
   },
   createdAt: 1747348176395,
   embedding: [],
@@ -86,17 +86,32 @@ sve:validate message {
     //console.log('sve:validate message', message)
 
     // if not a discord/telegram message, we can ignore it
-    if (!message.metadata.authorId) return false
+    if (!message.metadata.fromId) return false
 
     // using the service to get this/components might be good way
-    const entityId = createUniqueUuid(runtime, message.metadata.authorId);
+    const entityId = createUniqueUuid(runtime, message.metadata.fromId);
     const entity = await runtime.getEntityById(entityId)
-    //console.log('reg:validate entity', entity)
+    // all clients should handle this
+    if (!entity) {
+      logger.warn('client did not set entity')
+      return false;
+    }
+    /*
+    if (!entity) {
+      entity = await runtime.createEntity({
+        id: entityId,
+        names: [message.metadata.entityName, message.metadata.entityUserName],
+        metadata: {},
+        agentId: existingAgent.id,
+      });
+    }
+    */
+    console.log('reg:validate entity', entity)
     const email = entity.components.find(c => c.type === EMAIL_TYPE)
     console.log('reg_start:validate - are signed up?', !!email)
     return !email
   },
-  description: 'Allows a user to start user registration',
+  description: 'Replies with starting a user registration',
   handler: async (
     runtime: IAgentRuntime,
     message: Memory,
@@ -133,7 +148,7 @@ sve:validate message {
 
 
     // using the service to get this/components might be good way
-    const entityId = createUniqueUuid(runtime, message.metadata.authorId);
+    const entityId = createUniqueUuid(runtime, message.metadata.fromId);
     const entity = await runtime.getEntityById(entityId)
     console.log('entity', entity)
     const email = entity.components.find(c => c.type === EMAIL_TYPE)
@@ -148,12 +163,13 @@ sve:validate message {
         // any overlap?
         console.log('Write overlap')
       } else {
-        takeItPrivate(runtime, message, 'What email address would you like to use for registration')
-        responses.length = 0 // just clear them all
+        takeItPrivate(runtime, message, 'What email address would you like to use for registration', responses)
+        //responses.length = 0 // just clear them all
       }
     } else
     if (emails.length === 1) {
-      const isLinking = spartanData.users.includes(email[0])
+      console.log('spartanData', spartanData)
+      const isLinking = spartanData.data.users.includes(emails[0])
 
       if (isLinking) {
         console.log('this email is already used else where', isLinking)
@@ -178,8 +194,8 @@ sve:validate message {
         spartanDataDelta = true
         spartanData.data.users.push(entityId)
         await sendVerifyEmail(emails[0], regCode)
-        takeItPrivate(runtime, message, 'I just sent you an email (might need to check your spam folder) to confirm ' + emails[0])
-        responses.length = 0 // just clear them all
+        takeItPrivate(runtime, message, 'I just sent you an email (might need to check your spam folder) to confirm ' + emails[0], responses)
+        //responses.length = 0 // just clear them all
       }
       // update spartanData
       async function updateSpartanData(agentEntityId, spartanData) {
@@ -224,8 +240,8 @@ sve:validate message {
         // set wizard state
         // set form state
         // yes/no
-        takeItPrivate(runtime, message, 'Do you want to use ' + email + ' for registration?')
-        responses.length = 0 // just clear them all
+        takeItPrivate(runtime, message, 'Do you want to use ' + email + ' for registration?', responses)
+        //responses.length = 0 // just clear them all
       } else {
         // set form state
 /*
@@ -243,8 +259,8 @@ sve:validate message {
           agentId: this.agentId,
         });
 */
-        takeItPrivate(runtime, message, 'What email address would you like to use for registration')
-        responses.length = 0 // just clear them all
+        takeItPrivate(runtime, message, 'What email address would you like to use for registration', responses)
+        //responses.length = 0 // just clear them all
       }
     }
   },
