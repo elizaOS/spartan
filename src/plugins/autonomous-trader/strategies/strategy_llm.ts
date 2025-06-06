@@ -1,6 +1,8 @@
-import type { IAgentRuntime } from '@elizaos/core';
+import { logger, type IAgentRuntime, createUniqueUuid } from '@elizaos/core';
 
 import { acquireService, askLlmObject } from '../utils';
+
+import { getSpartanWallets } from '../interfaces/int_wallets'
 
 // agentic personal application? separate strategy
 
@@ -41,18 +43,36 @@ Only return the following JSON and nothing else (even if no sentiment or trendin
 
 // exit_24hvolume_threshold/exit_price_drop_threshold what scale?
 
+const STRATEGY_NAME = 'LLM trading strategy'
+
 export async function llmStrategy(runtime: IAgentRuntime) {
   const service = await acquireService(runtime, 'TRADER_STRATEGY', 'llm trading strategy');
   const infoService = await acquireService(runtime, 'TRADER_DATAPROVIDER', 'llm trading info');
   //const solanaService = await acquireService(runtime, 'CHAIN_SOLANA', 'solana service info');
 
   const me = {
-    name: 'LLM trading strategy',
+    name: STRATEGY_NAME,
   };
   const hndl = await service.register_strategy(me);
   // we want trending
   await infoService.interested_trending(async (results) => {
-    console.log('LLM trading strategy', results);
+/*
+      name: 'Extractor-91',
+      rank: 1,
+      chain: 'solana',
+      price: 0.0010685977861034897,
+      symbol: 'E91',
+      address: 'GD8nFZrqEaXkNzPJAmA4ULjMmftoVfBfoGduWGEFpump',
+      logoURI: 'https://ipfs.io/ipfs/QmW5LnbEEL3iCoCvg2hmqSt8QGqfN6sg27TVvDLrckjADs',
+      decimals: 6,
+      provider: 'birdeye',
+      liquidity: 232302.83250444,
+      marketcap: 0,
+      last_updated: '2025-06-04T22:21:32.000Z',
+      volume24hUSD: 11520275.236061923,
+      price24hChangePercent: 8393.576124948027
+*/
+    console.log('LLM trading strategy, got trending', results.length);
     // update our cache?
 
     // temp hack
@@ -105,32 +125,39 @@ async function generateBuySignal(runtime, strategyService, hndl) {
     .replace('{{sentiment}}', sentiments)
     .replace('{{trending_tokens}}', tokens);
 
-  // FIXME: chain?
   const requiredFields = ['recommend_buy', 'reason', 'recommend_buy_address'];
   const response = await askLlmObject(
     runtime,
     { prompt, system: 'You are a buy signal analyzer.' },
     requiredFields
   );
-  console.log('response', response);
+  console.log('llm_strat trending response');
+
+  if (!response) {
+    return;
+  }
 
   // verify address for this chain (plugin-solana)
-  if (response.recommend_buy_chain !== 'solana') {
+  if (response.recommend_buy_chain.toLowerCase() !== 'solana') {
+    console.log('llm_strat chain not solana', response.recommend_buy_chain);
     // abort
     return;
   }
   const solanaService = await acquireService(runtime, 'chain_solana', 'llm trading strategy');
   if (!solanaService.validateAddress(response.recommend_buy_address)) {
+    console.log('no a valid address', response.recommend_buy_address)
     // handle failure
     // maybe just recall itself
   }
 
   // if looks good, get token(s) info (birdeye?) (infoService)
   const infoService = await acquireService(runtime, 'TRADER_DATAPROVIDER', 'llm trading info');
-  const token = await infoService.getToken(
+  //console.log('infoService', infoService)
+  const token = await infoService.getTokenInfo(
     response.recommend_buy_chain,
     response.recommend_buy_address
   );
+  console.log('got token info', token)
 
   // validateTokenForTrading (look at liquidity/volume/suspicious atts)
 
@@ -139,6 +166,10 @@ async function generateBuySignal(runtime, strategyService, hndl) {
   // phase 1 in parallel (fetch wallets/balance)
   // assess response, figure what wallet are buying based on balance
   // list of wallets WITH this strategy ODI
+  const wallets = await getSpartanWallets(runtime, { strategy: STRATEGY_NAME })
+  console.log('wallets', wallets)
+  // for each pubkey get balances
+
   // individualize
   // get balance of each ODI
   // and scale amount for each wallet based on available balance
