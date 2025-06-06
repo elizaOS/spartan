@@ -12,13 +12,13 @@ export const userMetawalletList: Action = {
   similes: [
   ],
   validate: async (runtime: IAgentRuntime, message: Memory) => {
-    console.log('USER_METAWALLET_LIST validate', message?.metadata?.authorId)
-    if (!message?.metadata?.authorId) {
+    console.log('USER_METAWALLET_LIST validate', message?.metadata?.fromId)
+    if (!message?.metadata?.fromId) {
       console.log('USER_METAWALLET_LIST validate - author not found')
       return false
     }
 
-    const entityId = createUniqueUuid(runtime, message.metadata.authorId);
+    const entityId = createUniqueUuid(runtime, message.metadata.fromId);
     if (entityId === null) return false;
     const entity = await runtime.getEntityById(entityId)
     //console.log('entity', entity)
@@ -43,7 +43,7 @@ export const userMetawalletList: Action = {
     console.log('USER_METAWALLET_LIST handler')
 
     // using the service to get this/components might be good way
-    const entityId = createUniqueUuid(runtime, message.metadata.authorId);
+    const entityId = createUniqueUuid(runtime, message.metadata.fromId);
     const entity = await runtime.getEntityById(entityId)
     //console.log('entity', entity)
     const email = entity.components.find(c => c.type === EMAIL_TYPE)
@@ -51,7 +51,7 @@ export const userMetawalletList: Action = {
 
     // should never hit it
     if (!email) {
-      runtime.runtimeLogger.log('Not registered')
+      runtime.logger.log('Not registered')
       return
     }
     const roomDetails = await runtime.getRoom(message.roomId);
@@ -74,8 +74,8 @@ export const userMetawalletList: Action = {
     const chains = await traderChainService.listActiveChains()
     console.log('chains', chains)
 
-    takeItPrivate(runtime, message, 'List wallets: ' + JSON.stringify(email))
     responses.length = 0 // just clear them all
+    takeItPrivate(runtime, message, 'List wallets: ' + JSON.stringify(email), responses)
   },
   examples: [
     [
