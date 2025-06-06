@@ -23,26 +23,34 @@ import {
 import { address } from "@solana/kit";
 import { getMint } from '@solana/spl-token';
 import { getPositionAddress, fetchPosition, fetchWhirlpool, } from '@orca-so/whirlpools-client';
-import { sqrtPriceToPrice } from '@orca-so/whirlpools-core';
+import { sqrtPriceToPrice, tickIndexToPrice } from '@orca-so/whirlpools-core';
 import { sendTransaction } from '../utils/sendTransaction';
 import {
   closePositionInstructions,
   IncreaseLiquidityQuoteParam,
   openPositionInstructions,
   setDefaultFunder,
-  setDefaultSlippageToleranceBps
+  setDefaultSlippageToleranceBps,
 } from '@orca-so/whirlpools';
 import { loadWallet } from '../utils/loadWallet';
 import { v4 as uuidv4 } from 'uuid';
 import {
   buildWhirlpoolClient,
-  WhirlpoolContext
+  PriceMath,
+  WhirlpoolContext,
+  Position,
+  getLiquidityFromTokenAmounts,
+  WhirlpoolClient
 } from '@orca-so/whirlpools-sdk';
 import { createSolanaRpc, Rpc } from '@solana/kit'
 import { Address } from '@solana/addresses';
 import { GetAccountInfoApi, GetMultipleAccountsApi, GetMinimumBalanceForRentExemptionApi, GetEpochInfoApi, SolanaRpcApi } from '@solana/rpc-api';
 import { acquireService } from '../utils/utils';
+import { fetchAllMint, fetchMint, Mint } from '@solana-program/token-2022';
+import BN from 'bn.js';
+import Decimal from 'decimal.js';
 //import { positionProvider } from '../providers/positionProvider';
+import { askLlmObject } from "../utils/utils";
 
 // Module-level flag to prevent concurrent execution of the handler's core logic
 let isManagingPositionsHandlerActive = false;
@@ -81,19 +89,41 @@ interface PositionService {
 
 interface OpenPositionParams {
   whirlpoolAddress: string;
-  lowerTick: number;
-  upperTick: number;
+  lowerPrice: number;
+  upperPrice: number;
   tokenAmount?: number;
 }
 
 // Helper function to validate the structure of an OpenPositionParams object
 function isValidOpenPositionParams(obj: any): obj is OpenPositionParams {
+  console.log('obj', obj)
   if (!obj || typeof obj !== 'object') return false;
   const params = obj as OpenPositionParams;
+  params.lowerTick = parseFloat(params.lowerTick)
+  if (isNaN(params.lowerTick)) {
+    console.log('lowerTick parse fail', obj.lowerTick, params.lowerTick)
+    return false;
+  }
+  params.upperTick = parseFloat(params.upperTick)
+  if (isNaN(params.upperTick)) {
+    console.log('upperTick parse fail', obj.upperTick, params.upperTick)
+    return false;
+  }
+  params.tokenAmount = parseFloat(params.tokenAmount)
+  if (isNaN(params.tokenAmount)) {
+    console.log('tokenAmount parse fail', obj.tokenAmount, params.tokenAmount)
+    return false;
+  }
+  console.log('isValidOpenPositionParams', params, {
+    wp: typeof (params.whirlpoolAddress),
+    lt: typeof (params.lowerTick),
+    ut: typeof (params.upperTick),
+    ta: typeof (params.tokenAmount),
+  })
   return (
     typeof params.whirlpoolAddress === 'string' && params.whirlpoolAddress.length > 0 &&
-    typeof params.lowerTick === 'number' && Number.isInteger(params.lowerTick) &&
-    typeof params.upperTick === 'number' && Number.isInteger(params.upperTick) &&
+    typeof params.lowerTick === 'number' && params.lowerTick &&
+    typeof params.upperTick === 'number' && params.upperTick &&
     params.lowerTick < params.upperTick && // Basic sanity: lower tick must be less than upper tick
     (params.tokenAmount === undefined || (typeof params.tokenAmount === 'number' && params.tokenAmount >= 0))
   );
@@ -101,28 +131,191 @@ function isValidOpenPositionParams(obj: any): obj is OpenPositionParams {
 
 async function getInitialPositionParametersFromLLM(
   runtime: AgentRuntime,
+  rpc,
   ownerAddress: string
 ): Promise<OpenPositionParams | null> {
   elizaLogger.log('[GIPPL] Attempting to get initial position parameters from LLM for owner:', ownerAddress);
-  const prompt = `
+
+  const asking = 'GIPPL';
+  const serviceType = 'chain_solana';
+  let solanaService = runtime.getService(serviceType) as any;
+  while (!solanaService) {
+    console.log(asking, 'waiting for', serviceType, 'service...');
+    solanaService = runtime.getService(serviceType) as any;
+    if (!solanaService) {
+      await new Promise((waitResolve) => setTimeout(waitResolve, 1000));
+    } else {
+      console.log(asking, 'Acquired', serviceType, 'service...');
+    }
+  }
+  const walletData = await solanaService.updateWalletData()
+  console.log('walletData', walletData)
+
+
+  // look at each token, get the best LP and see if there's any open pools
+  const orcaService = runtime.getService('ORCA_SERVICE');
+  const pools = {}
+  console.log('Checking wallet for pools')
+  // takes 4 mins rn
+  console.time('pools')
+  for (const t of walletData.items) {
+    // develop list of pools we could enter
+    const pool: any | null = await orcaService.best_lp(t.address)
+    console.log(t.address, 'pool', pool)
+    if (pool && !Array.isArray(pool)) {
+      pools[t.address] = pool
+    }
+  }
+  console.timeEnd('pools')
+
+  console.log('pools', pools)
+
+  if (!Object.keys(pools).length) {
+    console.log('[GIPPL] No pools to open an LP with')
+    return null;
+  }
+
+  // we have at least one pool! ask LLM about them
+
+  const promptTemplate = `
     You are an expert Solana DeFi assistant. A user with wallet address "${ownerAddress}" wants to open a new concentrated liquidity position on Orca.
     Please suggest parameters for an initial position. Consider common, relatively safe pairs and a reasonable starting token amount (e.g., for USDC or SOL).
     Provide the whirlpool address (as a string), lower tick (integer), upper tick (integer), and an optional token amount (number, representing the amount of one of the tokens, e.g., in its native decimal format, or a conceptual amount if the exact token isn't specified).
     If you suggest a tokenAmount, assume it's for one of the more liquid tokens in the pair (like USDC or SOL). If unsure, suggest a small tokenAmount like 10 (representing 10 units of the token).
     The lower tick must be less than the upper tick.
 
+    {{providers}}
+
+    Available Pools:
+    {{pools}}
+
     Return ONLY the JSON object with the following structure. Do not include any other text, explanations, or conversational preamble.
     Ensure the tick values are integers.
 
     {
         "whirlpoolAddress": "string",
-        "lowerTick": number,
-        "upperTick": number,
-        "tokenAmount": number (optional, default to 10 if not otherwise specified)
+        "lowerPrice": decimal, (lower bounds price where we should re-evaluate if it hits this bounds, should be lower than currentPrice)
+        "upperPrice": decimal, (upper bounds price where we should re-evaluate if it hits this bounds, should be higher than currentPrice)
+        "tokenPercentage": a number between 1 and 100% of how much available token to LP,
+        "reasoning: "string" (why you open this position in this manner)
     }
   `;
+  // pull yields?
+  // when do we harvest yield? ask llm
+
+  // rebalance makes sense
+  // when do we close out position?
+
+  // maybe fee growth for each token...
+  // single address against base pair (splitting)
+  let poolsStr = '\nwhirlpoolAddress,liquidity,currentPrice,feeRate,protocolFeeRate,nonBaseCA,holdingAmtInTokens,valueUsd\n'
+  for (const ca in pools) {
+    const p = pools[ca]
+    const wd = walletData.items.find(t => t.address === ca)
+    // look up amount by ca
+    // p.rawData.tickCurrentIndex,
+
+    // there is valueSol and valueUsd (but it's worth of what you're holding)
+    let caCoinA = p.rawData.tokenMintA === 'So11111111111111111111111111111111111111112' ? 'So11111111111111111111111111111111111111111' : p.rawData.tokenMintA
+    let caCoinB = p.rawData.tokenMintB === 'So11111111111111111111111111111111111111112' ? 'So11111111111111111111111111111111111111111' : p.rawData.tokenMintB
+
+    const coinA = walletData.items.find(t => t.address === caCoinA)
+    const coinB = walletData.items.find(t => t.address === caCoinB)
+    console.log('coinA', coinA)
+    console.log('coinB', coinB)
+
+    const currentPrice = coinA?.priceUsd / (coinB?.priceUsd || 1)
+
+    /*
+    const mintA = await fetchMint(rpc, p.rawData.tokenMintA);
+    console.log('mintA', mintA)
+    const mintB = await fetchMint(rpc, p.rawData.tokenMintB);
+    console.log('mintB', mintB)
+    */
+    //const currentPrice = tickIndexToPrice(p.rawData.tickCurrentIndex, mintA.decimals, mintB.decimals);
+    // is just priceUsd tbh...
+    // but we want SOL per JUP
+    // get USD for both?
+    console.log(p.rawData.tickCurrentIndex, '=> currentPrice', currentPrice)
+    poolsStr += [p.address, p.liquidity, currentPrice, p.rawData.feeRate, p.rawData.protocolFeeRate, ca, wd.uiAmount, wd.valueUsd].join(',') + '\n'
+  }
+  const promptsWPools = promptTemplate.replace('{{pools}}', poolsStr)
 
   elizaLogger.log('[GIPPL] Prompt constructed. Calling generateText.');
+
+  const memory: Memory = {
+    content: { text: '' }
+  }
+  // use state to get other contexts/providers (wallet info)
+  const state = await runtime.composeState(memory, ['OrcaLP_positions', 'solana-wallet'])
+  //console.log('state', state)
+  const prompt = composePromptFromState({ state, template: promptsWPools })
+  console.log('finalPrompt', prompt)
+
+  const llmResponse = await askLlmObject(runtime, { prompt }, ['whirlpoolAddress', 'lowerPrice', 'upperPrice', 'tokenPercentage'])
+  console.log('llmResponse', llmResponse)
+
+  // we need take 'tokenPercentage' and create tokenAmount
+  if (llmResponse?.tokenPercentage) {
+    //console.log('parsedResult', parsedResult)
+    // whirlpoolCA
+    const ca = Object.keys(pools).find(key => pools[key].address === llmResponse.whirlpoolAddress);
+    const pool = pools[ca]
+    console.log('pool', pool)
+    // likely will be A (but not always?)
+    const wd = walletData.items.find(t => t.address === ca)
+    console.log('wd', wd)
+
+    let caCoinA = pool.rawData.tokenMintA === 'So11111111111111111111111111111111111111112' ? 'So11111111111111111111111111111111111111111' : pool.rawData.tokenMintA
+    let caCoinB = pool.rawData.tokenMintB === 'So11111111111111111111111111111111111111112' ? 'So11111111111111111111111111111111111111111' : pool.rawData.tokenMintB
+
+    const wdA = walletData.items.find(t => t.address === caCoinA)
+    console.log('wdA', wdA)
+    const wdB = walletData.items.find(t => t.address === caCoinB)
+    console.log('wdB', wdB)
+
+    const currentSqrtPrice = pool.rawData.sqrtPrice
+    const mintA = await fetchMint(rpc, pool.rawData.tokenMintA);
+    console.log('mintA', mintA)
+    const mintB = await fetchMint(rpc, pool.rawData.tokenMintB);
+    console.log('mintB', mintB)
+
+    llmResponse.tokenAmount = (llmResponse.tokenPercentage / 100) * wd.uiAmount
+    console.log('tokenAmount', llmResponse.tokenAmount)
+    const valueTokenAUsd = llmResponse.tokenAmount * wdA.priceUsd
+    console.log('valueTokenAUsd', valueTokenAUsd)
+
+    const amountA = BigInt(Math.floor(llmResponse.tokenAmount * 10 ** mintA.data.decimals));
+    console.log('amountA', amountA)
+    const tokenBAmountUi = valueTokenAUsd / wdB.priceUsd;
+    console.log('tokenBAmountUi', tokenBAmountUi)
+    const amountB = BigInt(Math.floor(tokenBAmountUi * 10 ** mintB.data.decimals));
+    console.log('amountB', amountB)
+
+    const lowerSqrtPrice = PriceMath.priceToSqrtPriceX64(
+      new Decimal(llmResponse.lowerPrice), mintA.data.decimals, mintB.data.decimals
+    )
+    console.log('lowerSqrtPrice', lowerSqrtPrice)
+    const upperSqrtPrice = PriceMath.priceToSqrtPriceX64(
+      new Decimal(llmResponse.upperPrice), mintA.data.decimals, mintB.data.decimals
+    )
+    console.log('upperSqrtPrice', upperSqrtPrice)
+
+    const liquidity = getLiquidityFromTokenAmounts(
+      currentSqrtPrice,
+      lowerSqrtPrice,
+      upperSqrtPrice,
+      amountA,
+      amountB,
+      true // Use this flag based on whether amountA is the limiting factor
+    );
+    console.log('liquidity', liquidity)
+
+    console.log(llmResponse.tokenPercentage + '% of ', wd.uiAmount, '=', llmResponse.tokenAmount)
+  }
+  return llmResponse as OpenPositionParams;
+
+  /*
   let llmResponse: string | null = null;
   try {
     llmResponse = await runtime.useModel(ModelType.SMALL, { prompt });
@@ -159,11 +352,30 @@ async function getInitialPositionParametersFromLLM(
     let parsedResult = JSON.parse(jsonStringToParse);
     elizaLogger.log('[GIPPL] Attempt 1 JSON.parse result:', parsedResult);
 
+    // we need take 'tokenPercentage' and create tokenAmount
+    if (parsedResult?.tokenPercentage) {
+      //console.log('parsedResult', parsedResult)
+      const ca = Object.keys(pools).find(key => pools[key].address === parsedResult.whirlpoolAddress);
+      const wd = walletData.items.find(t => t.address === ca)
+      parsedResult.tokenAmount = (parsedResult.tokenPercentage / 100) * wd.uiAmount
+      console.log(parsedResult.tokenPercentage + '% of ', wd.uiAmount, '=', parsedResult.tokenAmount)
+    }
+
     if (!isValidOpenPositionParams(parsedResult)) {
       elizaLogger.warn('[GIPPL] Parsed result from attempt 1 is not valid OpenPositionParams. Trying parseJSONObjectFromText.');
       parsedResult = parseJSONObjectFromText(llmResponse); // Try with original full response
       elizaLogger.log('[GIPPL] Attempt 2 parseJSONObjectFromText result:', parsedResult);
     }
+
+    if (parsedResult?.tokenPercentage) {
+      //console.log('parsedResult', parsedResult)
+      const ca = Object.keys(pools).find(key => pools[key].address === parsedResult.whirlpoolAddress);
+      const wd = walletData.items.find(t => t.address === ca)
+      parsedResult.tokenAmount = (parsedResult.tokenPercentage / 100) * wd.uiAmount
+      console.log(parsedResult.tokenPercentage + '% of ', wd.uiAmount, '=', parsedResult.tokenAmount)
+    }
+
+    //console.log('parsedResult', parsedResult)
 
     if (isValidOpenPositionParams(parsedResult)) {
       // Ensure tokenAmount has a default if not provided or invalid
@@ -172,13 +384,15 @@ async function getInitialPositionParametersFromLLM(
         parsedResult.tokenAmount = 10; // Default token amount
       }
       // Ensure ticks are integers
-      parsedResult.lowerTick = Math.round(parsedResult.lowerTick);
-      parsedResult.upperTick = Math.round(parsedResult.upperTick);
+      // odi: I don't think we want this...
+      //parsedResult.lowerTick = Math.round(parsedResult.lowerTick);
+      //parsedResult.upperTick = Math.round(parsedResult.upperTick);
 
-      if (parsedResult.lowerTick >= parsedResult.upperTick) {
-        elizaLogger.error(`[GIPPL] Invalid tick range after parsing/rounding: lowerTick ${parsedResult.lowerTick} >= upperTick ${parsedResult.upperTick}.`);
-        return null;
-      }
+      // we already checked this in isValidOpenPositionParams
+      // if (parsedResult.lowerTick >= parsedResult.upperTick) {
+      //   elizaLogger.error(`[GIPPL] Invalid tick range after parsing/rounding: lowerTick ${parsedResult.lowerTick} >= upperTick ${parsedResult.upperTick}.`);
+      //   return null;
+      // }
 
       elizaLogger.log('[GIPPL] Successfully parsed and validated OpenPositionParams:', parsedResult);
       return parsedResult as OpenPositionParams;
@@ -186,30 +400,31 @@ async function getInitialPositionParametersFromLLM(
       elizaLogger.error('[GIPPL] Failed to parse valid OpenPositionParams from LLM response after all attempts. Parsed data:', parsedResult);
       return null;
     }
-  } catch (error) {
-    elizaLogger.error('[GIPPL] Error parsing LLM response for initial position parameters:', error);
-    // Try parseJSONObjectFromText on the original llmResponse as a final fallback if JSON.parse failed
-    try {
-      const fallbackResult = parseJSONObjectFromText(llmResponse);
-      elizaLogger.log('[GIPPL] Fallback parseJSONObjectFromText result:', fallbackResult);
-      if (isValidOpenPositionParams(fallbackResult)) {
-        if (fallbackResult.tokenAmount === undefined || typeof fallbackResult.tokenAmount !== 'number' || fallbackResult.tokenAmount < 0) {
-          fallbackResult.tokenAmount = 10;
-        }
-        fallbackResult.lowerTick = Math.round(fallbackResult.lowerTick);
-        fallbackResult.upperTick = Math.round(fallbackResult.upperTick);
-        if (fallbackResult.lowerTick >= fallbackResult.upperTick) {
-          elizaLogger.error(`[GIPPL] Fallback - Invalid tick range: lowerTick ${fallbackResult.lowerTick} >= upperTick ${fallbackResult.upperTick}.`);
-          return null;
-        }
-        elizaLogger.log('[GIPPL] Successfully parsed and validated OpenPositionParams via fallback:', fallbackResult);
-        return fallbackResult as OpenPositionParams;
+} catch (error) {
+  elizaLogger.error('[GIPPL] Error parsing LLM response for initial position parameters:', error);
+  // Try parseJSONObjectFromText on the original llmResponse as a final fallback if JSON.parse failed
+  try {
+    const fallbackResult = parseJSONObjectFromText(llmResponse);
+    elizaLogger.log('[GIPPL] Fallback parseJSONObjectFromText result:', fallbackResult);
+    if (isValidOpenPositionParams(fallbackResult)) {
+      if (fallbackResult.tokenAmount === undefined || typeof fallbackResult.tokenAmount !== 'number' || fallbackResult.tokenAmount < 0) {
+        fallbackResult.tokenAmount = 10;
       }
-    } catch (fallbackError) {
-      elizaLogger.error('[GIPPL] Error in fallback parsing attempt:', fallbackError);
+      fallbackResult.lowerTick = Math.round(fallbackResult.lowerTick);
+      fallbackResult.upperTick = Math.round(fallbackResult.upperTick);
+      if (fallbackResult.lowerTick >= fallbackResult.upperTick) {
+        elizaLogger.error(`[GIPPL] Fallback - Invalid tick range: lowerTick ${fallbackResult.lowerTick} >= upperTick ${fallbackResult.upperTick}.`);
+        return null;
+      }
+      elizaLogger.log('[GIPPL] Successfully parsed and validated OpenPositionParams via fallback:', fallbackResult);
+      return fallbackResult as OpenPositionParams;
     }
-    return null;
+  } catch (fallbackError) {
+    elizaLogger.error('[GIPPL] Error in fallback parsing attempt:', fallbackError);
   }
+  return null;
+}
+*/
 }
 
 export const managePositions: Action = {
@@ -361,30 +576,28 @@ export const managePositions: Action = {
       let positions = await orcaService.fetchPositions(ownerAddress);
       elizaLogger.log(`Found ${positions.length} existing positions for owner ${ownerAddress}.`);
 
-      if (positions.length === 0) {
-        elizaLogger.info("No existing positions found. Attempting to open an initial position.");
-        const initialParams = await getInitialPositionParametersFromLLM(runtime, ownerAddress.toString());
+      const initialParams = await getInitialPositionParametersFromLLM(runtime, rpc, ownerAddress.toString());
 
-        if (initialParams) {
-          elizaLogger.log("Received initial position parameters from LLM:", initialParams);
-          try {
-            const newPositionMint = await orcaService.open_position(initialParams);
-            if (newPositionMint) {
-              elizaLogger.info(`Successfully opened initial position. Mint: ${newPositionMint}. Re-fetching positions.`);
-              // Re-fetch positions to include the newly opened one
-              positions = await orcaService.fetchPositions(ownerAddress);
-              elizaLogger.log(`Found ${positions.length} positions after opening initial one.`);
-            } else {
-              elizaLogger.warn("Attempted to open initial position, but open_position returned null (possibly an existing position was found by the service itself, or opening failed silently).");
-            }
-          } catch (openError) {
-            elizaLogger.error("Error opening initial position:", openError);
+      elizaLogger.log("Received initial position parameters from LLM:", initialParams);
+
+      if (initialParams) {
+
+        try {
+          const newPositionMint = await orcaService.open_position(initialParams);
+          if (newPositionMint) {
+            elizaLogger.info(`Successfully opened initial position. Mint: ${newPositionMint}. Re-fetching positions.`);
+            // Re-fetch positions to include the newly opened one
+            positions = await orcaService.fetchPositions(ownerAddress);
+            elizaLogger.log(`Found ${positions.length} positions after opening initial one.`);
+          } else {
+            elizaLogger.warn("Attempted to open initial position, but open_position returned null (possibly an existing position was found by the service itself, or opening failed silently).");
           }
-        } else {
-          elizaLogger.warn("Failed to get initial position parameters from LLM. Cannot open a new position automatically.");
+        } catch (openError) {
+          elizaLogger.error("Error opening initial position:", openError);
         }
+      } else {
+        elizaLogger.warn("Failed to get initial position parameters from LLM. Cannot open a new position automatically.");
       }
-
 
       if (positions.length === 0) {
         elizaLogger.info("Still no positions found after attempting to open an initial one. No monitoring tasks will be created.");
@@ -775,55 +988,105 @@ async function checkAndRebalancePosition(
   orcaService: any
 ) {
   elizaLogger.log(`Checking position ${position.positionMint}. InRange: ${position.inRange}, DistanceBps: ${position.distanceCenterPositionFromPoolPriceBps}, ThresholdBps: ${thresholdBps}`);
+
   if (!position.inRange || position.distanceCenterPositionFromPoolPriceBps > thresholdBps) {
-    elizaLogger.info(`Position ${position.positionMint} needs rebalancing. InRange: ${position.inRange}, Distance: ${position.distanceCenterPositionFromPoolPriceBps} > ${thresholdBps}`);
+    elizaLogger.info(`Position ${position.positionMint} needs rebalancing.`);
     try {
+      // Get whirlpool data first
+      const whirlpool = await fetchWhirlpool(orcaService.rpc, position.whirlpoolAddress as Address);
+      if (!whirlpool) {
+        elizaLogger.error(`Could not fetch whirlpool data for ${position.whirlpoolAddress}`);
+        return;
+      }
+
+      // Get mint information for decimals
+      const [mintA, mintB] = await fetchAllMint(orcaService.rpc, [
+        whirlpool.data.tokenMintA,
+        whirlpool.data.tokenMintB
+      ]);
+      if (!mintA || !mintB) {
+        elizaLogger.error(`Could not fetch mint data for tokens in whirlpool ${position.whirlpoolAddress}`);
+        return;
+      }
+
+      // Fetch full position details to get current token amounts
+      const fullPositionData = await fetchPosition(orcaService.rpc, position.positionMint as Address);
+      if (!fullPositionData) {
+        elizaLogger.error(`Could not fetch full position data for ${position.positionMint}`);
+        return;
+      }
+
+      // Create Position instance from data
+      const client = buildWhirlpoolClient(orcaService.rpc);
+      const positionObj = await client.getPosition(position.positionMint as Address);
+      const positionData = positionObj.getData();
+
+      // Convert to BN for calculations
+      const amountToReinvestBN = new BN(positionData.liquidity.toString());
+
+      let reinvestTokenAmount = amountToReinvestBN.toNumber();
+      if (reinvestTokenAmount === 0) {
+        elizaLogger.warn(`Position ${position.positionMint} had zero reinvestable liquidity based on old amounts. Using minimal amount (1 raw unit) for new position.`);
+        reinvestTokenAmount = 1; // Default to a minimal raw unit if position was empty or amounts are zero
+      }
+
+      // Calculate current price
+      const currentPrice = sqrtPriceToPrice(
+        whirlpool.data.sqrtPrice, // This is BigInt
+        mintA.data.decimals,
+        mintB.data.decimals
+      );
+
+      // Calculate new price range (e.g., ±5% around current price)
+      const newLowerPriceDecimal = new Decimal(currentPrice.toString()).mul(0.95);
+      const newUpperPriceDecimal = new Decimal(currentPrice.toString()).mul(1.05);
+
+      // Convert prices to tick indexes
+      const tickSpacing = whirlpool.data.tickSpacing;
+      const newLowerTick = PriceMath.priceToTickIndex(newLowerPriceDecimal, mintA.data.decimals, mintB.data.decimals);
+      const newUpperTick = PriceMath.priceToTickIndex(newUpperPriceDecimal, mintA.data.decimals, mintB.data.decimals);
+
       // Close existing position
       elizaLogger.log(`Attempting to close position: ${position.positionMint}`);
-      const closed = await orcaService.close_position(position.positionMint); // Assumes positionMint is the ID
+      const closed = await orcaService.close_position(position.positionMint);
       if (!closed) {
-        elizaLogger.warn(`Failed to close position ${position.positionMint}. Aborting rebalance for this position.`);
+        elizaLogger.warn(`Failed to close position ${position.positionMint}. Rebalancing aborted.`);
         return;
       }
       elizaLogger.info(`Successfully closed position ${position.positionMint}.`);
 
-      // TODO: Get parameters for the new position. This is crucial.
-      // For now, using placeholders or parameters from the old position, which needs refinement.
-      // This part should ideally involve an LLM or a defined strategy to get new ticks and amount.
-      elizaLogger.warn(`Placeholder logic for new position parameters in checkAndRebalancePosition for whirlpool ${position.whirlpoolAddress}. This needs to be replaced with actual logic (e.g., LLM call or strategy).`);
+      // Add delay to avoid potential RPC congestion or state update lags
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Increased delay slightly
+
+      // Open new position with calculated range and reinvestment amount
       const newPositionParams: OpenPositionParams = {
         whirlpoolAddress: position.whirlpoolAddress,
-        lowerTick: 0, // Placeholder: Calculate based on new desired range
-        upperTick: 0,  // Placeholder: Calculate based on new desired range
-        tokenAmount: 0 // Placeholder: Determine based on closed position's value or new strategy
+        lowerTick: newLowerTick,
+        upperTick: newUpperTick,
+        tokenAmount: reinvestTokenAmount
       };
-      elizaLogger.log(`Attempting to open new position with placeholder params:`, newPositionParams);
 
+      elizaLogger.log(`Opening new position with params:`, {
+        pool: position.whirlpoolAddress.slice(0, 8) + '...',
+        lowerTick: newPositionParams.lowerTick,
+        upperTick: newPositionParams.upperTick,
+        tokenAmount: newPositionParams.tokenAmount,
+        approxLowerPrice: newLowerPriceDecimal.toFixed(mintB.data.decimals), // For logging
+        approxUpperPrice: newUpperPriceDecimal.toFixed(mintB.data.decimals)  // For logging
+      });
 
-      // Before opening, ensure the LLM can provide better parameters
-      // For now, we'll log a warning and use placeholders which will likely fail or be suboptimal.
-      // Ideally, call a function similar to getInitialPositionParametersFromLLM or a more specific one for rebalancing.
-      // e.g., const rebalanceParams = await getRebalancePositionParametersFromLLM(runtime, position /* pass old position context */);
-      // if (rebalanceParams) {
-      //    await orcaService.open_position(rebalanceParams);
-      //    elizaLogger.info(`Successfully opened rebalanced position for original mint ${position.positionMint}.`);
-      // } else {
-      //    elizaLogger.warn(`Failed to get rebalancing parameters for position ${position.positionMint}.`);
-      // }
-
-      // Using placeholder params for now as per existing structure:
       const newMint = await orcaService.open_position(newPositionParams);
       if (newMint) {
-        elizaLogger.info(`Successfully opened new (rebalanced) position with mint ${newMint} for whirlpool ${position.whirlpoolAddress}. Old mint was ${position.positionMint}.`);
+        elizaLogger.info(`Successfully opened new position: ${newMint}. Old position: ${position.positionMint}`);
       } else {
-        elizaLogger.warn(`Failed to open new (rebalanced) position for whirlpool ${position.whirlpoolAddress} after closing ${position.positionMint}.`);
+        elizaLogger.warn(`Failed to open new position after closing ${position.positionMint}. 'open_position' returned null.`);
       }
 
     } catch (error) {
       elizaLogger.error(`Rebalancing error for position ${position.positionMint}:`, error);
-      // Do not throw error here to allow other tasks to continue, but log it.
+      if (error instanceof Error && error.stack) {
+        elizaLogger.error('Stack trace for rebalancing error:', error.stack);
+      }
     }
-  } else {
-    elizaLogger.log(`Position ${position.positionMint} is within range and does not need rebalancing.`);
   }
 }

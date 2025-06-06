@@ -20,6 +20,7 @@ export interface FetchedPositionStatistics {
 }
 
 export const positionProvider: Provider = {
+  name: 'OrcaLP_positions',
   description: 'Get liquidity positions for orca whirlpools',
   dynamic: true,
   get: async (
@@ -34,14 +35,25 @@ export const positionProvider: Provider = {
       state = await runtime.composeState(message) as State;
     }
     try {
+      console.log('have state, loading wallet')
       const { address: ownerAddress } = await loadWallet(
         runtime as AgentRuntime,
         false
       );
       const rpc = createSolanaRpc((runtime as AgentRuntime).getSetting('SOLANA_RPC_URL'));
-      const positions = await fetchPositions(rpc, ownerAddress);
-      const positionsString = JSON.stringify(positions);
-      return positionsString
+      console.log('getting positions')
+      const positions = await fetchPositions(rpc, ownerAddress.toBase58());
+      // FIXME: convert to CSV
+      const positionsString = positions.length > 0 ? addHeader('# Open positions', JSON.stringify(positions)) : '';
+      return {
+        data: {
+          positionsData: positions,
+        },
+        text: positionsString,
+        values: {
+          positions: positionsString,
+        }
+      }
     } catch (error) {
       elizaLogger.error("Error in wallet provider:", error);
       return null;

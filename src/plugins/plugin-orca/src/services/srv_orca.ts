@@ -48,7 +48,7 @@ export interface FetchedPositionStatistics {
 
 export class OrcaService extends Service {
   private connection: Connection;
-  private rpc;
+  public rpc;
   private wallet: Keypair;
   private isRunning = false;
   private registeredPositions: Map<string, FetchedPosition> = new Map(); // For register_position
@@ -69,7 +69,7 @@ export class OrcaService extends Service {
     this.wallet = Keypair.fromSecretKey(privateKeyBytes);
     createKeyPairSignerFromBytes(privateKeyBytes).then(signer => {
       this.signer = signer
-      console.log('this.signer', this.signer)
+      logger.success('orca signer set')
     })
     logger.debug('ORCA_SERVICE: Wallet initialized');
     console.log('ORCA_SERVICE cstr');
@@ -195,15 +195,9 @@ export class OrcaService extends Service {
         return false;
       }
 
-      // Add delay before sending transaction
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
       // Send transaction
       const txId = await sendTransaction(this.rpc, instructions, this.wallet);
       logger.info(`Position close transaction sent: ${txId}`);
-
-      // Add delay before verification
-      await new Promise(resolve => setTimeout(resolve, 1000));
 
       // Verify position was closed
       const positionAfter = await fetchMaybePosition(this.rpc, positionAddress);
@@ -239,18 +233,19 @@ export class OrcaService extends Service {
 
       setDefaultFunder(this.signer);
 
+      /*
       // Get token mints for price calculation
       const mintA = await fetchMint(this.rpc, whirlpool.data.tokenMintA);
       const mintB = await fetchMint(this.rpc, whirlpool.data.tokenMintB);
 
       // Convert price to tick indexes
       const lowerTickIndex = priceToTickIndex(
-        params.lowerTick,
+        params.lowerPrice,
         mintA.data.decimals,
         mintB.data.decimals
       );
       const upperTickIndex = priceToTickIndex(
-        params.upperTick,
+        params.upperPrice,
         mintA.data.decimals,
         mintB.data.decimals
       );
@@ -266,15 +261,32 @@ export class OrcaService extends Service {
         whirlpool.data.tickSpacing,
         true
       );
+      */
+
+      /*
+      const liquidity = getLiquidityFromTokenAmounts(
+        currentSqrtPrice,
+        lowerSqrtPrice,
+        upperSqrtPrice,
+        amountA,
+        amountB,
+        true // Use this flag based on whether amountA is the limiting factor
+      );
+      */
+
+      const callParams = {
+        liquidity: BigInt(params.tokenAmount * 1_000_000_000)
+      }
+      console.log('open', initializableLowerTick, initializableUpperTick, callParams)
 
       const { instructions, positionMint } = await openPositionInstructions(
         this.rpc,
         params.whirlpoolAddress as Address,
-        {
-          liquidity: BigInt(1_000_000_000)
-        },
-        initializableLowerTick,
-        initializableUpperTick
+        callParams,
+        params.lowerPrice,
+        //initializableLowerTick,
+        params.upperPrice,
+        //initializableUpperTick
       );
 
       const txId = await sendTransaction(this.rpc, instructions, this.wallet);
@@ -401,17 +413,79 @@ export class OrcaService extends Service {
 
   async best_lp(
     inputTokenMintStr: string,
-    amount: number
   ): Promise<BestWhirlpoolInfo | null> {
     let bestPoolFound: BestWhirlpoolInfo | null = null;
     let maxLiquidity = new BN(0);
 
-    // First check existing positions
-    const positions = await this.fetchPositions(this.wallet.publicKey.toBase58() as Address);
+    const result = (await this.runtime.getCache<BestWhirlpoolInfo>('orca_bestlp_' + inputTokenMintStr)) || [];
+    if (result && !Array.isArray(result)) {
+      console.log('using', inputTokenMintStr, 'cache', typeof (result))
+      return result
+    }
+
+    // First check existing positions (this works)
+    // this is what takes 3 minutes
+    let positions = []
+    const walletAddr: Address = this.wallet.publicKey.toBase58()
+    const wResult = (await this.runtime.getCache<any[]>('orca_bestlp_walletPositions' + walletAddr)) || [];
+    if (wResult && !Array.isArray(wResult)) {
+      console.log('using', walletAddr, 'wallet cache', typeof (wResult))
+      positions = wResult
+    } else {
+      positions = await this.fetchPositions(walletAddr);
+      await this.runtime.setCache<any[]>('orca_bestorca_bestlp_walletPositionslp_' + walletAddr, positions);
+    }
+
+    // might need a rate limiter
+    //const results = Promise.all(positions.map(p => fetchWhirlpool(this.rpc, p.whirlpoolAddress as Address)))
+    //console.log('results', results)
+
+    await new Promise(resolve => setTimeout(resolve, 4 * 1000)); // waits 5 seconds
 
     // Look for positions containing the input token
     for (const position of positions) {
+      /*
+      whirlpoolAddress: 'C1MgLojNLWBKADvu9BHdtgzz1oZX4dZ5zGdGcgvvW8Wz',
+      positionMint: 'DTYNBwdb78dwexW3KLXapxqqr1d36WfcTxk65NzT3zQv',
+      inRange: true,
+      distanceCenterPositionFromPoolPriceBps: 184.2003238468105,
+      positionWidthBps: 259.9284388204526
+      */
       const whirlpool = await fetchWhirlpool(this.rpc, position.whirlpoolAddress as Address);
+      //console.log('position', position, 'whirlpool', whirlpool)
+      /*
+      executable: false,
+      lamports: 9774257n,
+      programAddress: 'whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc',
+      space: 653n,
+      address: 'C1MgLojNLWBKADvu9BHdtgzz1oZX4dZ5zGdGcgvvW8Wz',
+      data: {
+        discriminator: Uint8Array(8) [
+          63, 149, 209, 12,
+          225, 128,  99,  9
+        ],
+        whirlpoolsConfig: '2LecshUwdy9xi7meFgHtFJQNSKk4KdTrcpvaB56dP2NQ',
+        whirlpoolBump: Uint8Array(1) [ 254 ],
+        tickSpacing: 8,
+        feeTierIndexSeed: Uint8Array(2) [ 8, 0 ],
+        feeRate: 500,
+        protocolFeeRate: 1300,
+        liquidity: 41118208077056n,
+        sqrtPrice: 33941288481997110145n,
+        tickCurrentIndex: 12195,
+        protocolFeeOwedA: 4741793n,
+        protocolFeeOwedB: 10260595n,
+        tokenMintA: 'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN',
+        tokenVaultA: 'HVJuVW2dRbZ2fynWEY2JK6Ak2YTfVpji73sHZMCqiXSb',
+        feeGrowthGlobalA: 708771796274187471n,
+        tokenMintB: 'So11111111111111111111111111111111111111112',
+        tokenVaultB: '8MFbZEaXp8Ky8ufhZRgphgMgKVwsjhDhZtNqmEPcxvQK',
+        feeGrowthGlobalB: 3582600857000075757n,
+        rewardLastUpdatedTimestamp: 1749078446n,
+        rewardInfos: [ [Object], [Object], [Object] ]
+      },
+      exists: true
+      */
       if (whirlpool &&
         (whirlpool.data.tokenMintA === inputTokenMintStr ||
           whirlpool.data.tokenMintB === inputTokenMintStr)) {
@@ -424,10 +498,13 @@ export class OrcaService extends Service {
           rawData: whirlpool.data as unknown as WhirlpoolData
         };
         logger.info(`Found existing pool: ${result.address} (${result.tokenAMint}-${result.tokenBMint}) with liquidity ${result.liquidity}`);
+        await this.runtime.setCache<BestWhirlpoolInfo>('orca_bestlp_' + inputTokenMintStr, result);
         return result;
       }
     }
 
+    // this is borked
+    /*
     // If no existing positions found, search for new pools
     logger.debug(`OrcaService: Searching for new pools for token ${inputTokenMintStr}`);
 
@@ -465,6 +542,7 @@ export class OrcaService extends Service {
         }
       }
     }
+    */
 
     if (bestPoolFound) {
       logger.info(`Found best new pool: ${bestPoolFound.address} with liquidity ${bestPoolFound.liquidity}`);

@@ -28,7 +28,7 @@
   },
   "dependencies": {
     "@elizaos/cli": "^1.0.0-beta.75",
-    "@elizaos/core": "^1.0.0-beta.75",
+    "@elizaos/core": "workspace:*",
     "@elizaos/plugin-anthropic": "^1.0.0-beta.52",
     "@elizaos/plugin-bootstrap": "^1.0.0-beta.76",
     "@elizaos/plugin-discord": "^1.0.0-beta.55",

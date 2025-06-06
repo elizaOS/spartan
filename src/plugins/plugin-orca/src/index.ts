@@ -89,7 +89,7 @@ export const orcaPlugin: Plugin = {
         metadata: {
           createdAt: Date.now(),
           updatedAt: Date.now(),
-          updateInterval: 1000 * 60 * 5, // 5 minutes
+          updateInterval: 1000 * 60 * 5, // 15 minutes
         },
         tags: ['queue', 'repeat', 'orca', 'immediate'],
       });
