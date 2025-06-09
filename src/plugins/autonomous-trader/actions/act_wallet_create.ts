@@ -28,7 +28,7 @@ sve:validate message {
   },
   metadata: {
     entityName: "Odilitime",
-    authorId: "580487826420793364",
+    fromId: "580487826420793364",
   },
   createdAt: 1747348176395,
   embedding: [],
@@ -40,16 +40,17 @@ sve:validate message {
 
     /*
     // if not a discord/telegram message, we can ignore it
-    if (!message.metadata.authorId) return false
+    if (!message.metadata.fromId) return false
 
     // using the service to get this/components might be good way
-    const entityId = createUniqueUuid(runtime, message.metadata.authorId);
+    const entityId = createUniqueUuid(runtime, message.metadata.fromId);
     const entity = await runtime.getEntityById(entityId)
     //console.log('reg:validate entity', entity)
     const email = entity.components.find(c => c.type === EMAIL_TYPE)
     console.log('wallet_create:validate - are signed up?', !!email)
     return !!email
     */
+    // don't they have to be registered?
     const traderChainService = runtime.getService('TRADER_STRATEGY') as any;
     return traderChainService
   },
@@ -75,25 +76,25 @@ sve:validate message {
     //console.log('roomEntity', roomEntity)
 
     // using the service to get this/components might be good way
-    const entityId = createUniqueUuid(runtime, message.metadata.authorId);
+    const entityId = createUniqueUuid(runtime, message.metadata.fromId);
     const entity = await runtime.getEntityById(entityId)
     //console.log('entity', entity)
     const email = entity.components.find(c => c.type === EMAIL_TYPE)
     //console.log('email', email)
 
+    responses.length = 0 // just clear them all
     if (!email) {
-      runtime.runtimeLogger.log('Not registered')
+      runtime.logger.info('Not registered')
       //takeItPrivate(runtime, message, 'You need to sign up for my services first')
       messageReply(runtime, message, 'You need to sign up for my services first', responses)
-      responses.length = 0 // just clear them all
       return
     }
 
     const traderChainService = runtime.getService('TRADER_STRATEGY') as any;
     const stratgiesList = await traderChainService.listActiveStrategies()
     console.log('stratgiesList', stratgiesList)
-    takeItPrivate(runtime, message, 'Hrm youve already signed up, here are the available strategies: \n-' + stratgiesList.join('\n-') + '\n')
-    responses.length = 0 // just clear them all
+    // Hrm youve already signed up,
+    takeItPrivate(runtime, message, 'Please select an available strategies for the wallet: \n-' + stratgiesList.join('\n-') + '\n', responses)
   },
   examples: [
     [

@@ -18,7 +18,7 @@ export const checkRegistration: Action = {
     //console.log('CHECK_REGISTRATION validate')
     return true
   },
-  description: 'Allows a user to see if they are registered',
+  description: 'Replies with if a user is registered or not',
   handler: async (
     runtime: IAgentRuntime,
     message: Memory,
@@ -29,22 +29,26 @@ export const checkRegistration: Action = {
   ): Promise<boolean> => {
     console.log('CHECK_REGISTRATION handler')
     // using the service to get this/components might be good way
-    const entityId = createUniqueUuid(runtime, message.metadata.authorId);
+    const entityId = createUniqueUuid(runtime, message.metadata.fromId);
     const entity = await runtime.getEntityById(entityId)
+    if (!entity) {
+
+    }
     //console.log('sve:validate entity', entity)
     const email = entity.components.find(c => c.type === EMAIL_TYPE)
     console.log('CHECK_REGISTRATION', email, email?.data.verified)
+    responses.length = 0 // just clear them all
     if (email) {
       // what stage we in?
       if (email.data.verified) {
-        takeItPrivate(runtime, message, 'You are signed up under ' + email.data.address)
+        takeItPrivate(runtime, message, 'You are signed up under ' + email.data.address, responses)
       } else {
-        takeItPrivate(runtime, message, 'You are signed up under ' + email.data.address + ', waiting to be verified')
+        takeItPrivate(runtime, message, 'You are signed up under ' + email.data.address + ', waiting to be verified', responses)
       }
     } else {
-      takeItPrivate(runtime, message, 'You are not signed up')
+      takeItPrivate(runtime, message, 'You are not signed up', responses)
     }
-    responses.length = 0 // just clear them all
+    console.log('CHECK_REGISTRATION outResponses', responses)
   },
   examples: [
     [

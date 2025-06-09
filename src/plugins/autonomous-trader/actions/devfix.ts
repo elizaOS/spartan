@@ -47,23 +47,35 @@ export const devFix: Action = {
       spartanDataNew = true
       spartanDataDelta = true
       spartanData = {
-        users: [],
+        data: {
+          users: [],
+        }
       }
     }
-
+    //console.log('DEVFIX message', message)
 
     // using the service to get this/components might be good way
-    const entityId = createUniqueUuid(runtime, message.metadata.authorId);
-    /*
+    const entityId = createUniqueUuid(runtime, message.metadata.fromId);
+    if (spartanData.data.users.indexOf(entityId) === -1) {
+      spartanData.data.users.push(entityId)
+    } // else already there... repsond differently?
     const entity = await runtime.getEntityById(entityId)
+    if (!entity) {
+      console.log('need to create entity')
+      const created = await runtime.createEntity({
+        id: entityId,
+        names: [message.metadata.entityName],
+        metadata: {},
+        agentId: runtime.agentId,
+      });
+    }
+    /*
     console.log('entity', entity)
     const email = entity.components.find(c => c.type === EMAIL_TYPE)
     console.log('email', email)
     */
-
-
-    console.log('would have responded', responses)
-    return
+    //console.log('DEVFIX would update users list', spartanData)
+    console.log('DEVFIX would have responded', responses)
 
     // update spartanData
     async function updateSpartanData(agentEntityId, spartanData) {
@@ -76,7 +88,7 @@ export const devFix: Action = {
           sourceEntityId: entityId,
           entityId: agentEntityId,
           type: SPARTAN_SERVICE_TYPE,
-          data: spartanData,
+          data: spartanData.data,
         });
       } else {
         await runtime.updateComponent({
@@ -88,7 +100,7 @@ export const devFix: Action = {
           //sourceEntityId: entityId,
           //entityId: entityId,
           //type: SPARTAN_SERVICE_TYPE,
-          data: agentEntity.components,
+          data: spartanData.data,
         });
       }
     }
@@ -97,7 +109,7 @@ export const devFix: Action = {
       updateSpartanData(agentEntityId, spartanData)
     }
 
-    takeItPrivate(runtime, message, 'What you want me to fix boss')
+    takeItPrivate(runtime, message, 'What you want me to fix boss', responses)
     responses.length = 0 // just clear them all
   },
   examples: [
