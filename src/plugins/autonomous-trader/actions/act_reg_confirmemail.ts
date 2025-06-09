@@ -24,19 +24,19 @@ export const checkRegistrationCode: Action = {
     //console.log('VERIFY_REGISTRATION_CODE validate')
 
     // if not a discord/telegram message, we can ignore it
-    if (!message.metadata.authorId) return false
+    if (!message.metadata.fromId) return false
 
     // using the service to get this/components might be good way
-    const entityId = createUniqueUuid(runtime, message.metadata.authorId);
+    const entityId = createUniqueUuid(runtime, message.metadata.fromId);
     const entity = await runtime.getEntityById(entityId)
     const email = entity.components.find(c => c.type === EMAIL_TYPE)
     const containsGeneratedCode = findGeneratedCode(message.content.text, 16)
     if (containsGeneratedCode !== null) {
-      runtime.runtimeLogger.log('VERIFY_REGISTRATION_CODE containsGeneratedCode', typeof(containsGeneratedCode), containsGeneratedCode)
+      runtime.logger.log('VERIFY_REGISTRATION_CODE containsGeneratedCode', typeof(containsGeneratedCode), containsGeneratedCode)
     }
     return email && containsGeneratedCode !== null && !email.data?.verified // can only check what's set and not verified
   },
-  description: 'Allows a user set their email address',
+  description: 'Replies, allows a user set their email address',
   handler: async (
     runtime: IAgentRuntime,
     message: Memory,
@@ -50,7 +50,7 @@ export const checkRegistrationCode: Action = {
     // get room and it's components?
     const roomDetails = await runtime.getRoom(message.roomId);
 
-    const entityId = createUniqueUuid(runtime, message.metadata.authorId);
+    const entityId = createUniqueUuid(runtime, message.metadata.fromId);
     const entity = await runtime.getEntityById(entityId)
     console.log('VERIFY_REGISTRATION_CODE entity', entity)
     const email = entity.components.find(c => c.type === EMAIL_TYPE)
@@ -65,23 +65,22 @@ export const checkRegistrationCode: Action = {
     }
     console.log('VERIFY_REGISTRATION_CODE email', email, 'code', passedCode)
     if (email.data.tries === undefined) email.data.tries = 0
+    responses.length = 0 // just clear them all
     if (email.data.tries > 3) {
       console.log('hacker...')
-      takeItPrivate(runtime, message, 'You can no longer validate, you must delete your registration and restart')
-      responses.length = 0 // just clear them all
+      takeItPrivate(runtime, message, 'You can no longer validate, you must delete your registration and restart', responses)
       return
     }
     if (passedCode === email.data.code) {
       // verify account
       email.data.verified = true
-      takeItPrivate(runtime, message, 'Looks good, you are now registered and have access to my services')
+      takeItPrivate(runtime, message, 'Looks good, you are now registered and have access to my services', responses)
     } else {
       // fail
       // increase tries
       email.data.tries++
-      takeItPrivate(runtime, message, 'That does not match my records, please double check, it is case sensitive')
+      takeItPrivate(runtime, message, 'That does not match my records, please double check, it is case sensitive', responses)
     }
-    responses.length = 0 // just clear them all
     await runtime.updateComponent({
       id: email.id,
       worldId: roomDetails.worldId,

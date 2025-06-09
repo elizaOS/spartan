@@ -4,9 +4,9 @@ import { registerTasks } from './tasks';
 import { logger } from '@elizaos/core';
 
 import { sentimentProvider } from './providers/sentiment';
-import { cmcMarketProvider } from './providers/cmcMarket';
-import { birdeyeTrendingProvider } from './providers/birdeyeTrending';
-import { birdeyeTradePortfolioProvider } from './providers/birdeyeWallet';
+//import { cmcMarketProvider } from './providers/cmcMarket';
+//import { birdeyeTrendingProvider } from './providers/birdeyeTrending';
+//import { birdeyeTradePortfolioProvider } from './providers/birdeyeWallet';
 // INTEL_SYNC_WALLET provider? or solana handles this?
 
 // Services
@@ -43,6 +43,8 @@ export const degenIntelPlugin: Plugin = {
     const plugins = runtime.plugins.map((p) => p.name);
     let notUsed = true;
 
+    // let the plugins handle this
+    /*
     // check for cmc key, if have then register provider
     if (runtime.getSetting('COINMARKETCAP_API_KEY')) {
       runtime.registerProvider(cmcMarketProvider);
@@ -55,6 +57,7 @@ export const degenIntelPlugin: Plugin = {
       runtime.registerProvider(birdeyeTradePortfolioProvider);
       notUsed = false;
     }
+    */
 
     // twitter for sentiment
     if (plugins.indexOf('twitter') !== -1) {
