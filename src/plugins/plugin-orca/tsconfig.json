@@ -3,12 +3,11 @@
     "outDir": "dist",
     "rootDir": "src",
     "lib": ["ESNext", "dom"],
-    "target": "ESNext",
     "module": "Preserve",
     "moduleResolution": "Bundler",
-    "strict": true,
+    "strict": false,
     "esModuleInterop": true,
-    "skipLibCheck": false,
+    "skipLibCheck": true,
     "forceConsistentCasingInFileNames": false,
     "allowImportingTsExtensions": true,
     "declaration": true,
@@ -19,12 +18,7 @@
     "checkJs": false,
     "noEmitOnError": false,
     "moduleDetection": "force",
-    "allowArbitraryExtensions": true,
-    "baseUrl": "../..",
-    "paths": {
-      "@elizaos/core": ["../core/src"],
-      "@elizaos/core/*": ["../core/src/*"]
-    }
+    "allowArbitraryExtensions": true
   },
   "include": ["src/**/*.ts"]
 }

@@ -5,8 +5,11 @@ import {
   logger as logger3,
   parseJSONObjectFromText
 } from "@elizaos/core";
-import { Connection, PublicKey as PublicKey2, VersionedTransaction } from "@solana/web3.js";
+import { PublicKey as PublicKey2, VersionedTransaction } from "@solana/web3.js";
+
+// src/bignumber.ts
 import BigNumber from "bignumber.js";
+var BN = BigNumber;
 
 // src/constants.ts
 var SOLANA_SERVICE_NAME = "chain_solana";
@@ -61,10 +64,10 @@ async function getTokenDecimals(connection, mintAddress) {
 }
 async function swapToken(connection, walletPublicKey, inputTokenCA, outputTokenCA, amount) {
   try {
-    const decimals = inputTokenCA === process.env.SOL_ADDRESS ? new BigNumber(9) : new BigNumber(await getTokenDecimals(connection, inputTokenCA));
+    const decimals = inputTokenCA === process.env.SOL_ADDRESS ? new BN(9) : new BN(await getTokenDecimals(connection, inputTokenCA));
     logger3.log("Decimals:", decimals.toString());
-    const amountBN = new BigNumber(amount);
-    const adjustedAmount = amountBN.multipliedBy(new BigNumber(10).pow(decimals));
+    const amountBN = new BN(amount);
+    const adjustedAmount = amountBN.multipliedBy(new BN(10).pow(decimals));
     logger3.log("Fetching quote with params:", {
       inputMint: inputTokenCA,
       outputMint: outputTokenCA,
@@ -502,7 +505,6 @@ Transaction hash: ${signature}`,
 };
 
 // src/providers/wallet.ts
-import BigNumber2 from "bignumber.js";
 var walletProvider = {
   name: "solana-wallet",
   description: "your solana wallet information",
@@ -524,22 +526,22 @@ var walletProvider = {
       const portfolio = portfolioCache;
       const agentName = state?.agentName || runtime.character.name || "The agent";
       const values = {
-        total_usd: new BigNumber2(portfolio.totalUsd).toFixed(2),
+        total_usd: new BN(portfolio.totalUsd).toFixed(2),
         total_sol: portfolio.totalSol.toString()
       };
       portfolio.items.forEach((item, index) => {
-        if (new BigNumber2(item.uiAmount).isGreaterThan(0)) {
+        if (new BN(item.uiAmount).isGreaterThan(0)) {
           values[`token_${index}_name`] = item.name;
           values[`token_${index}_symbol`] = item.symbol;
-          values[`token_${index}_amount`] = new BigNumber2(item.uiAmount).toFixed(6);
-          values[`token_${index}_usd`] = new BigNumber2(item.valueUsd).toFixed(2);
+          values[`token_${index}_amount`] = new BN(item.uiAmount).toFixed(6);
+          values[`token_${index}_usd`] = new BN(item.valueUsd).toFixed(2);
           values[`token_${index}_sol`] = item.valueSol.toString();
         }
       });
       if (portfolio.prices) {
-        values.sol_price = new BigNumber2(portfolio.prices.solana.usd).toFixed(2);
-        values.btc_price = new BigNumber2(portfolio.prices.bitcoin.usd).toFixed(2);
-        values.eth_price = new BigNumber2(portfolio.prices.ethereum.usd).toFixed(2);
+        values.sol_price = new BN(portfolio.prices.solana.usd).toFixed(2);
+        values.btc_price = new BN(portfolio.prices.bitcoin.usd).toFixed(2);
+        values.eth_price = new BN(portfolio.prices.ethereum.usd).toFixed(2);
       }
       let text = `
 
@@ -550,14 +552,14 @@ ${agentName}'s Main Solana Wallet${pubkeyStr}
 `;
       text += "Token Balances:\n";
       const nonZeroItems = portfolio.items.filter(
-        (item) => new BigNumber2(item.uiAmount).isGreaterThan(0)
+        (item) => new BN(item.uiAmount).isGreaterThan(0)
       );
       if (nonZeroItems.length === 0) {
         text += "No tokens found with non-zero balance\n";
       } else {
         for (const item of nonZeroItems) {
-          const valueUsd = new BigNumber2(item.valueUsd).toFixed(2);
-          text += `${item.name} (${item.symbol}): ${new BigNumber2(item.uiAmount).toFixed(
+          const valueUsd = new BN(item.valueUsd).toFixed(2);
+          text += `${item.name} (${item.symbol}): ${new BN(item.uiAmount).toFixed(
             6
           )} ($${valueUsd} | ${item.valueSol} SOL)
 `;
@@ -586,8 +588,7 @@ ${agentName}'s Main Solana Wallet${pubkeyStr}
 
 // src/service.ts
 import { Service, logger as logger5, TEEMode } from "@elizaos/core";
-import { Connection as Connection3, PublicKey as PublicKey4, ComputeBudgetProgram, DeriveKeyProvider } from "@solana/web3.js";
-import BigNumber3 from "bignumber.js";
+import { PublicKey as PublicKey4, Connection as Connection3 } from "@solana/web3.js";
 import { Keypair as Keypair2, VersionedTransaction as VersionedTransaction3, TransactionMessage as TransactionMessage2 } from "@solana/web3.js";
 import bs582 from "bs58";
 var PROVIDER_CONFIG = {
@@ -799,9 +800,9 @@ var SolanaService = class _SolanaService extends Service {
           );
           if (walletData?.success && walletData?.data) {
             const data = walletData.data;
-            const totalUsd = new BigNumber3(data.totalUsd.toString());
+            const totalUsd = new BN(data.totalUsd.toString());
             const prices = await this.fetchPrices();
-            const solPriceInUSD = new BigNumber3(prices.solana.usd);
+            const solPriceInUSD = new BN(prices.solana.usd);
             const portfolio2 = {
               totalUsd: totalUsd.toString(),
               totalSol: totalUsd.div(solPriceInUSD).toFixed(6),
@@ -809,7 +810,7 @@ var SolanaService = class _SolanaService extends Service {
               lastUpdated: now,
               items: data.items.map((item) => ({
                 ...item,
-                valueSol: new BigNumber3(item.valueUsd || 0).div(solPriceInUSD).toFixed(6),
+                valueSol: new BN(item.valueUsd || 0).div(solPriceInUSD).toFixed(6),
                 name: item.name || "Unknown",
                 symbol: item.symbol || "Unknown",
                 priceUsd: item.priceUsd || "0",
@@ -1085,31 +1086,34 @@ var SolanaService = class _SolanaService extends Service {
 
 // src/index.ts
 var solanaPlugin = {
-  name: SOLANA_SERVICE_NAME,
+  name: "solana",
   description: "Solana Plugin for Eliza",
   actions: [transfer_default, executeSwap],
   evaluators: [],
   providers: [walletProvider],
   services: [SolanaService],
   init: async (_, runtime) => {
-    console.log("solana init");
-    const asking = "solana";
-    const serviceType = "TRADER_CHAIN";
-    let traderChainService = runtime.getService(serviceType);
-    while (!traderChainService) {
-      console.log(asking, "waiting for", serviceType, "service...");
-      traderChainService = runtime.getService(serviceType);
-      if (!traderChainService) {
-        await new Promise((waitResolve) => setTimeout(waitResolve, 1e3));
-      } else {
-        console.log(asking, "Acquired", serviceType, "service...");
+    console.log("NEOplugins solana init");
+    new Promise(async (resolve) => {
+      resolve();
+      const asking = "solana";
+      const serviceType = "TRADER_CHAIN";
+      let traderChainService = runtime.getService(serviceType);
+      while (!traderChainService) {
+        console.log(asking, "waiting for", serviceType, "service...");
+        traderChainService = runtime.getService(serviceType);
+        if (!traderChainService) {
+          await new Promise((waitResolve) => setTimeout(waitResolve, 1e3));
+        } else {
+          console.log(asking, "Acquired", serviceType, "service...");
+        }
       }
-    }
-    const me = {
-      name: "Solana services"
-    };
-    traderChainService.registerChain(me);
-    console.log("jupiter init done");
+      const me = {
+        name: "Solana services"
+      };
+      traderChainService.registerChain(me);
+      console.log("jupiter init done");
+    });
   }
 };
 var index_default = solanaPlugin;

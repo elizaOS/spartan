@@ -2,13 +2,18 @@ import { defineConfig } from 'tsup';
 
 export default defineConfig({
   entry: ['src/index.ts'],
-  outDir: 'dist',
-  tsconfig: './tsconfig.build.json', // Use build-specific tsconfig
+  format: ['esm'],
+  dts: true,
+  splitting: false,
   sourcemap: true,
-  clean: false, // Don't clean dist folder before building
-  format: ['esm'], // Ensure you're targeting CommonJS
-  dts: true, // Generate TypeScript declaration files (.d.ts) for better type support
+  clean: true,
   external: [
+    '@elizaos/core',
+    'buffer',
+    'safe-buffer',
+    'bs58',
+    'events',
+    '@solana/web3.js',
     'dotenv', // Externalize dotenv to prevent bundling
     '@reflink/reflink',
     'agentkeepalive',
@@ -26,7 +31,5 @@ export default defineConfig({
     'node:path', // Externalize other built-ins if necessary
     'node:http',
     '@elizaos/cli',
-    '@elizaos/core',
-    'zod',
   ],
 });
