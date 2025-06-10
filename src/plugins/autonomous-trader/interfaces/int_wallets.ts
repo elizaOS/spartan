@@ -43,6 +43,20 @@ export async function getSpartanWallets(runtime, options = {}) {
 
 // list metawallets by userId
 
+export async function getWalletByUserEntityIds(runtime, userEntityIds: UUID[]) {
+  // find these users metawallets
+  // each id will have a list of wallets
+  const userWallets = {}
+  const emails = await interface_users_ByIds(runtime, userEntityIds)
+  for(const email of emails) {
+    console.log(email.entityId, 'wallets', email.metawallets)
+    if (email.metawallets) {
+      userWallets[email.entityId] = email.metawallets
+    }
+  }
+  return userWallets
+}
+
 // add/update/delete
 
 // look up wallet by Ids
