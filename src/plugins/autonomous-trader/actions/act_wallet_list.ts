@@ -84,8 +84,30 @@ export const userMetawalletList: Action = {
     /*
     [{"keypairs":{"Solana":{"publicKey":"CPNHuuGHpskEp4Fmr8cg9x6ZyEMokYvJTaBST5gywqA2","privateKey":"4vcbDoRNsRjmLSJEQjYFBi2ooG5EAY61t8K39vkNBoHaFSvcRmXB9imHx3azhMLxcPcPw67SCdEZYhKiAQDa1Y9Y"}},"strategy":"LLM trading strategy"}]
     */
+
+    // metawallet
+    //   strategy
+    //   keypairs
+    let wStr = '\n\n'
+    for(const mw of email.data.metawallets) {
+      //console.log('mw', mw)
+      wStr += 'Wallet:\n'
+      wStr += '  Strategy: ' + mw.strategy + '\n'
+      // mw.keypairs [{ chain, keypair {publicKey, privateKey} }]
+      // ' + JSON.stringify(mw.keypairs) +
+      wStr += '  Keypairs: \n'
+      // no keypairs?
+      for(const c in mw.keypairs) {
+        const kp = mw.keypairs[c]
+        //console.log('c', c, 'kp', kp)
+        wStr += '    Chain: ' + c + "\n"
+        wStr += '    Address: ' + kp.publicKey + "\n"
+      }
+      wStr += '\n\n'
+    }
+
     responses.length = 0 // just clear them all
-    takeItPrivate(runtime, message, 'List wallets: ' + JSON.stringify(email.data.metawallets), responses)
+    takeItPrivate(runtime, message, 'List wallets: ' + wStr, responses)
   },
   examples: [
     [
