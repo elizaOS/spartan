@@ -1,0 +1,243 @@
+[0m[2m[35m$[0m [2m[1melizaos dev[0m
+Not in a recognized ElizaOS project, plugin, or monorepo directory. Current directory is: elizaos-subdir. Running in standalone mode.
+Starting server...
+
+[38;5;27m⠀⠀⠀⠀⠀⠀⠀⠀⢀⣐⣿⣿⢰⡀⠀⠀⠀[38;5;255m ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[38;5;255m⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[0m
+[38;5;27m⠀⠀⠀⠀⠀⢀⣴⠤⠾⠛⠛⣿⣶⣇⠀⠀⡆[38;5;255m ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[38;5;255m⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[0m
+[38;5;27m⢰⣋⡳⡄⠀⢨⣭⡀⠀⡤⠀⣀⣝⢿⣶⣿⡅[38;5;255m ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[38;5;255m⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[0m
+[38;5;27m⢸⣯⠀⣇⠀⣼⣿⣿⣆⢷⣴⣿⣿⡏⣛⡉⠀[38;5;255m ⢸⣿⣿⣿⣿⣿⣿⢸⣿⣿⠀⠀⠀⠀⠀⣿⣿⡇⣿⣿⣿⣿⣿⣿⣿⡇⠀⠀⠀⣾⣿⣿⣧⠀⠀⠀[38;5;255m⢸⠟⢀⣴⣿⣿⣿⣿⣦⡀⣠⣾⣿⣿⣿⣿⣦⡙⢿[0m
+[38;5;27m⠀⠙⢷⣮⢸⣿⣿⣿⣿⣷⣯⣟⣏⣼⣷⣅⠾[38;5;255m ⢸⣿⣇⣀⣀⣀⠀⢸⣿⣿⠀⠀⠀⠀⠀⣿⣿⡇⠀⠀⠀⣠⣿⣿⠟⠁⠀⠀⣼⣿⡟⣿⣿⣆⠀⠀[38;5;255m⠀⠀⣿⣿⠋⠀⠈⠻⣿⡇⣿⣿⣅⣀⣀⡛⠛⠃⠀[0m
+[38;5;27m⠀⠀⠀⠁⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠋⠀[38;5;255m ⢸⣿⡿⠿⠿⠿⠀⢸⣿⣿⠀⠀⠀⠀⠀⣿⣿⡇⠀⣠⣾⣿⠟⠁⠀⠀⠀⣰⣿⣿⣁⣸⣿⣿⡄⠀[38;5;255m⠀⠀⣿⣿ ⠀⠀ ⣿⣿⢈⣛⠿⠿⠿⣿⣷⡄⠀[0m
+[38;5;27m⠀⠀⠀⠀⠸⣿⣿⣿⣿⣿⣿⣿⣿⣉⡟⠀⠀[38;5;255m ⢸⣿⣧⣤⣤⣤⣤⢸⣿⣿⣦⣤⣤⣤⡄⣿⣿⡇⣾⣿⣿⣧⣤⣤⣤⡄⢰⣿⣿⠟⠛⠛⠻⣿⣿⡄[38;5;255m⢠⡀⠻⣿⣿⣦⣴⣿⣿⠇⢿⣿⣦⣤⣤⣿⣿⠇⣠[0m
+[38;5;27m⠀⠀⠀⠀⢰⡈⠛⠿⣿⣿⣿⣿⣿⠋⠀  [38;5;255m ⠘⠛⠛⠛⠛⠛⠛⠈⠛⠛⠛⠛⠛⠛⠃⠛⠛⠃⠛⠛⠛⠛⠛⠛⠛⠃⠛⠛⠃⠀⠀⠀⠀⠙⠛⠃[38;5;255m⠘⠛⠀⠈⠛⠛⠛⠛⠁⠀⠀⠙⠛⠛⠛⠛⠁⠚⠛[0m
+[38;5;27m⠀⠀⠀⠀⢸⣿⡦⠀⠀⠉⠛⠿⠃⠀⠀⠀ [38;5;255m ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[38;5;255m⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[0m
+
+[38;5;51mVersion: 1.0.7[0m
+[2025-06-09 22:55:57] DEBUG: [36m[UserEnvironment] Gathering environment information for directory: cwd[39m
+[2025-06-09 22:55:57] DEBUG: [36m[UserEnvironment] Detecting OS information[39m
+[2025-06-09 22:55:57] DEBUG: [36m[UserEnvironment] Getting CLI information[39m
+[2025-06-09 22:55:57] DEBUG: [36m[UserEnvironment] Using bun as the package manager for ElizaOS CLI[39m
+[2025-06-09 22:55:57] DEBUG: [36m[UserEnvironment] Detected monorepo root: /root/spartan-05-26-neo[39m
+[2025-06-09 22:55:57] DEBUG: [36m[UserEnvironment] Bun version: 1.2.15[39m
+[2025-06-09 22:55:57] DEBUG: [36m[UserEnvironment] Detected monorepo root: /root/spartan-05-26-neo[39m
+[2025-06-09 22:55:57] DEBUG: [36mEliza directories:[39m
+    elizaDir: "/root/spartan-05-26-neo/.eliza"
+    projectRoot: "/root/spartan-05-26-neo"
+    targetProjectDir: "none"
+[2025-06-09 22:55:57] DEBUG: [36m[UserEnvironment] Detected monorepo root: /root/spartan-05-26-neo[39m
+[2025-06-09 22:55:57] DEBUG: [36m[Config] .env file already exists and has content at: /root/spartan-05-26-neo/.env[39m
+[2025-06-09 22:55:57] DEBUG: [36m[UserEnvironment] Detected monorepo root: /root/spartan-05-26-neo[39m
+[2025-06-09 22:55:57] DEBUG: [36mConfiguration check - POSTGRES_URL: NOT SET[39m
+[2025-06-09 22:55:57] DEBUG: [36mConfiguration check - PGLITE_DATA_DIR: SET[39m
+[2025-06-09 22:55:57] DEBUG: [36mConfiguration check - reconfigure: false[39m
+[2025-06-09 22:55:57] DEBUG: [36mUsing existing PGLite configuration: /root/.eliza/.pglite[39m
+[2025-06-09 22:55:57] DEBUG: [36m[UserEnvironment] Detected monorepo root: /root/spartan-05-26-neo[39m
+[2025-06-09 22:55:57] DEBUG: [36mInitializing AgentServer (constructor)...[39m
+[2025-06-09 22:55:57] DEBUG: [36mInitializing AgentServer (async operations)...[39m
+[2025-06-09 22:55:57] DEBUG: [36m[UserEnvironment] Detected monorepo root: /root/spartan-05-26-neo[39m
+[2025-06-09 22:55:57] INFO: [36m[INIT] Database Dir for SQL plugin: /root/.eliza/.pglite[39m
+[2025-06-09 22:55:57] DEBUG: [36mResolved migrations path (pglite) using import.meta.resolve: /root/spartan-05-26-neo/packages/spartan/node_modules/@elizaos/cli/node_modules/@elizaos/plugin-sql/drizzle/migrations[39m
+[2025-06-09 22:55:57] SUCCESS: [36mConsolidated database initialized successfully[39m
+[2025-06-09 22:55:58] INFO: [36m[INIT] Ensuring default server exists...[39m
+[2025-06-09 22:55:58] INFO: [36m[AgentServer] Checking for default server...[39m
+[2025-06-09 22:55:58] DEBUG: [36m[AgentServer] Found 1 existing servers[39m
+[2025-06-09 22:55:58] DEBUG: [36m[AgentServer] Existing server: ID=00000000-0000-0000-0000-000000000000, Name=Default Server[39m
+[2025-06-09 22:55:58] INFO: [36m[AgentServer] Default server already exists with ID: 00000000-0000-0000-0000-000000000000[39m
+[2025-06-09 22:55:58] SUCCESS: [36m[INIT] Default server setup complete[39m
+[2025-06-09 22:55:58] DEBUG: [36mSetting up standard middlewares...[39m
+[2025-06-09 22:55:58] WARN: [36mServer authentication is disabled. Set ELIZA_SERVER_AUTH_TOKEN environment variable to enable.[39m
+[2025-06-09 22:55:58] INFO: [36m[SocketIO] Router initialized with 0 agents[39m
+[2025-06-09 22:55:58] INFO: [36m[SocketIO] Setting up Socket.IO event listeners[39m
+[2025-06-09 22:55:58] INFO: [36m[SocketIO] Registered message types: 1: ROOM_JOINING, 2: SEND_MESSAGE, 3: MESSAGE, 4: ACK, 5: THINKING, 6: CONTROL, ROOM_JOINING: 1, SEND_MESSAGE: 2, MESSAGE: 3, ACK: 4, THINKING: 5, CONTROL: 6[39m
+[2025-06-09 22:55:58] SUCCESS: [36mAgentServer HTTP server and Socket.IO initialized[39m
+[2025-06-09 22:55:58] DEBUG: [36mAttempting to start server on port: 3000[39m
+[32mStartup successful!
+Go to the dashboard at [1mhttp://localhost:3000[22m[0m
+AgentServer is listening on port 3000
+[2025-06-09 22:55:58] DEBUG: [36mStarting server on port 3000...[39m
+[2025-06-09 22:55:58] DEBUG: [36mCurrent agents count: 0[39m
+[2025-06-09 22:55:58] DEBUG: [36mEnvironment: undefined[39m
+[2025-06-09 22:55:58] DEBUG: [36mShutdown handlers registered[39m
+[2025-06-09 22:55:58] DEBUG: [36mUsing default Eliza character with plugins: @elizaos/plugin-sql, @elizaos/plugin-anthropic, @elizaos/plugin-openai, @elizaos/plugin-bootstrap[39m
+[2025-06-09 22:55:58] DEBUG: [36mGenerated salt with length: 10 (truncated for security)[39m
+[2025-06-09 22:55:58] DEBUG: [36mProcessing plugin: @elizaos/plugin-sql[39m
+[2025-06-09 22:55:58] DEBUG: [36mLoading ElizaOS plugin: @elizaos/plugin-sql (7 strategies)[39m
+[2025-06-09 22:55:58] SUCCESS: [36mREST API bound to 0.0.0.0:3000. If running locally, access it at http://localhost:3000.[39m
+[2025-06-09 22:55:58] DEBUG: [36mActive agents: 0[39m
+[2025-06-09 22:55:58] SUCCESS: [36mSuccessfully loaded plugin '@elizaos/plugin-sql' using workspace dependency (/root/spartan-05-26-neo/packages/plugin-sql/dist/index.js)[39m
+[2025-06-09 22:55:58] SUCCESS: [36mFound valid plugin export using default export[39m
+[2025-06-09 22:55:58] DEBUG: [36mProcessing plugin: @elizaos/plugin-anthropic[39m
+[2025-06-09 22:55:58] DEBUG: [36mLoading ElizaOS plugin: @elizaos/plugin-anthropic (7 strategies)[39m
+[2025-06-09 22:55:58] SUCCESS: [36mSuccessfully loaded plugin '@elizaos/plugin-anthropic' using direct path (@elizaos/plugin-anthropic)[39m
+[2025-06-09 22:55:58] SUCCESS: [36mFound valid plugin export using expected name: anthropicPlugin[39m
+[2025-06-09 22:55:58] DEBUG: [36mProcessing plugin: @elizaos/plugin-openai[39m
+[2025-06-09 22:55:58] DEBUG: [36mLoading ElizaOS plugin: @elizaos/plugin-openai (7 strategies)[39m
+[2025-06-09 22:55:58] SUCCESS: [36mSuccessfully loaded plugin '@elizaos/plugin-openai' using direct path (@elizaos/plugin-openai)[39m
+[2025-06-09 22:55:58] SUCCESS: [36mFound valid plugin export using expected name: openaiPlugin[39m
+[2025-06-09 22:55:58] DEBUG: [36mProcessing plugin: @elizaos/plugin-bootstrap[39m
+[2025-06-09 22:55:58] DEBUG: [36mLoading ElizaOS plugin: @elizaos/plugin-bootstrap (7 strategies)[39m
+[2025-06-09 22:55:58] SUCCESS: [36mSuccessfully loaded plugin '@elizaos/plugin-bootstrap' using workspace dependency (/root/spartan-05-26-neo/packages/plugin-bootstrap/dist/index.js)[39m
+[elizaos] Resolved .env file from: /root/spartan-05-26-neo/.env
+[2025-06-09 22:55:58] SUCCESS: [36mDatabase connection established successfully[39m
+[2025-06-09 22:55:58] DEBUG: [36m[OpenAI] Default base URL: https://api.openai.com/v1[39m
+[2025-06-09 22:55:58] SUCCESS: [36mFound valid plugin export using expected name: bootstrapPlugin[39m
+[2025-06-09 22:55:58] DEBUG: [36mFinal loaded plugins (4): sql, anthropic, openai, bootstrap[39m
+[2025-06-09 22:55:58] LOG: [36mLoaded .env file from: /root/spartan-05-26-neo/.env[39m
+[2025-06-09 22:55:58] DEBUG: [36mGenerated salt with length: 10 (truncated for security)[39m
+[2025-06-09 22:55:58] DEBUG: [36mGenerated salt with length: 10 (truncated for security)[39m
+[2025-06-09 22:55:58] DEBUG: [36mGenerated salt with length: 10 (truncated for security)[39m
+[2025-06-09 22:55:58] DEBUG: [36mGenerated salt with length: 10 (truncated for security)[39m
+[2025-06-09 22:55:58] DEBUG: [36mGenerated salt with length: 10 (truncated for security)[39m
+[2025-06-09 22:55:58] DEBUG: [36mGenerated salt with length: 10 (truncated for security)[39m
+[2025-06-09 22:55:58.945 +0000] [34mDEBUG[39m: [36m[AgentRuntime] Process working directory: /root/spartan-05-26-neo/packages/spartan[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.945 +0000] [34mDEBUG[39m: [36mSuccess: Agent ID: b850bc30-45f8-0041-a00a-83df46d8555d[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.946 +0000] [34mDEBUG[39m: [36mSuccess: Plugin sql added to active plugins for Eliza(b850bc30-45f8-0041-a00a-83df46d8555d).[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.947 +0000] [34mDEBUG[39m: [36mSuccess: Database adapter registered successfully.[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.947 +0000] [34mDEBUG[39m: [36mSuccess: Plugin anthropic added to active plugins for Eliza(b850bc30-45f8-0041-a00a-83df46d8555d).[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.947 +0000] [34mDEBUG[39m: [36mSuccess: Plugin openai added to active plugins for Eliza(b850bc30-45f8-0041-a00a-83df46d8555d).[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.965 +0000] [34mDEBUG[39m: [36mSuccess: Plugin bootstrap added to active plugins for Eliza(b850bc30-45f8-0041-a00a-83df46d8555d).[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.965 +0000] [34mDEBUG[39m: [36mEliza(b850bc30-45f8-0041-a00a-83df46d8555d) - Registering action: REPLY[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.965 +0000] [34mDEBUG[39m: [36mEliza(b850bc30-45f8-0041-a00a-83df46d8555d) - Action REPLY registered successfully.[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.965 +0000] [34mDEBUG[39m: [36mEliza(b850bc30-45f8-0041-a00a-83df46d8555d) - Registering action: FOLLOW_ROOM[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.965 +0000] [34mDEBUG[39m: [36mEliza(b850bc30-45f8-0041-a00a-83df46d8555d) - Action FOLLOW_ROOM registered successfully.[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.965 +0000] [34mDEBUG[39m: [36mEliza(b850bc30-45f8-0041-a00a-83df46d8555d) - Registering action: UNFOLLOW_ROOM[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.965 +0000] [34mDEBUG[39m: [36mEliza(b850bc30-45f8-0041-a00a-83df46d8555d) - Action UNFOLLOW_ROOM registered successfully.[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.965 +0000] [34mDEBUG[39m: [36mEliza(b850bc30-45f8-0041-a00a-83df46d8555d) - Registering action: IGNORE[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.965 +0000] [34mDEBUG[39m: [36mEliza(b850bc30-45f8-0041-a00a-83df46d8555d) - Action IGNORE registered successfully.[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.965 +0000] [34mDEBUG[39m: [36mEliza(b850bc30-45f8-0041-a00a-83df46d8555d) - Registering action: NONE[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.965 +0000] [34mDEBUG[39m: [36mEliza(b850bc30-45f8-0041-a00a-83df46d8555d) - Action NONE registered successfully.[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.965 +0000] [34mDEBUG[39m: [36mEliza(b850bc30-45f8-0041-a00a-83df46d8555d) - Registering action: MUTE_ROOM[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.965 +0000] [34mDEBUG[39m: [36mEliza(b850bc30-45f8-0041-a00a-83df46d8555d) - Action MUTE_ROOM registered successfully.[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.965 +0000] [34mDEBUG[39m: [36mEliza(b850bc30-45f8-0041-a00a-83df46d8555d) - Registering action: UNMUTE_ROOM[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.965 +0000] [34mDEBUG[39m: [36mEliza(b850bc30-45f8-0041-a00a-83df46d8555d) - Action UNMUTE_ROOM registered successfully.[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.965 +0000] [34mDEBUG[39m: [36mEliza(b850bc30-45f8-0041-a00a-83df46d8555d) - Registering action: SEND_MESSAGE[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.965 +0000] [34mDEBUG[39m: [36mEliza(b850bc30-45f8-0041-a00a-83df46d8555d) - Action SEND_MESSAGE registered successfully.[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.965 +0000] [34mDEBUG[39m: [36mEliza(b850bc30-45f8-0041-a00a-83df46d8555d) - Registering action: UPDATE_CONTACT[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.965 +0000] [34mDEBUG[39m: [36mEliza(b850bc30-45f8-0041-a00a-83df46d8555d) - Action UPDATE_CONTACT registered successfully.[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.965 +0000] [34mDEBUG[39m: [36mEliza(b850bc30-45f8-0041-a00a-83df46d8555d) - Registering action: CHOOSE_OPTION[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.965 +0000] [34mDEBUG[39m: [36mEliza(b850bc30-45f8-0041-a00a-83df46d8555d) - Action CHOOSE_OPTION registered successfully.[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.965 +0000] [34mDEBUG[39m: [36mEliza(b850bc30-45f8-0041-a00a-83df46d8555d) - Registering action: UPDATE_ROLE[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.965 +0000] [34mDEBUG[39m: [36mEliza(b850bc30-45f8-0041-a00a-83df46d8555d) - Action UPDATE_ROLE registered successfully.[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.965 +0000] [34mDEBUG[39m: [36mEliza(b850bc30-45f8-0041-a00a-83df46d8555d) - Registering action: UPDATE_SETTINGS[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.965 +0000] [34mDEBUG[39m: [36mEliza(b850bc30-45f8-0041-a00a-83df46d8555d) - Action UPDATE_SETTINGS registered successfully.[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.965 +0000] [34mDEBUG[39m: [36mSuccess: Provider EVALUATORS registered successfully.[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.965 +0000] [34mDEBUG[39m: [36mSuccess: Provider ANXIETY registered successfully.[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.965 +0000] [34mDEBUG[39m: [36mSuccess: Provider TIME registered successfully.[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.965 +0000] [34mDEBUG[39m: [36mSuccess: Provider ENTITIES registered successfully.[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.965 +0000] [34mDEBUG[39m: [36mSuccess: Provider RELATIONSHIPS registered successfully.[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.965 +0000] [34mDEBUG[39m: [36mSuccess: Provider CHOICE registered successfully.[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.965 +0000] [34mDEBUG[39m: [36mSuccess: Provider FACTS registered successfully.[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.965 +0000] [34mDEBUG[39m: [36mSuccess: Provider ROLES registered successfully.[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.965 +0000] [34mDEBUG[39m: [36mSuccess: Provider SETTINGS registered successfully.[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.965 +0000] [34mDEBUG[39m: [36mSuccess: Provider CAPABILITIES registered successfully.[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.965 +0000] [34mDEBUG[39m: [36mSuccess: Provider ATTACHMENTS registered successfully.[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.965 +0000] [34mDEBUG[39m: [36mSuccess: Provider PROVIDERS registered successfully.[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.965 +0000] [34mDEBUG[39m: [36mSuccess: Provider ACTIONS registered successfully.[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.965 +0000] [34mDEBUG[39m: [36mSuccess: Provider CHARACTER registered successfully.[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.965 +0000] [34mDEBUG[39m: [36mSuccess: Provider RECENT_MESSAGES registered successfully.[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.965 +0000] [34mDEBUG[39m: [36mSuccess: Provider WORLD registered successfully.[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.965 +0000] [34mDEBUG[39m: [36mSuccess: Plugin sql initialized successfully[39m
+    agentName: "Eliza"
+[2025-06-09 22:55:58.965 +0000] [34mDEBUG[39m: [36mSuccess: Plugin anthropic initialized successfully[39m
+    agentName: "Eliza"
+[2025-06-09 22:56:00] LOG: [36mOpenAI API key validated successfully[39m
+[2025-06-09 22:56:00] DEBUG: [36mResolved migrations path (pglite) using import.meta.resolve: /root/spartan-05-26-neo/packages/spartan/node_modules/@elizaos/cli/node_modules/@elizaos/plugin-sql/drizzle/migrations[39m
+[2025-06-09 22:56:00] DEBUG: [36mAgent updated successfully:[39m
+    agentId: "b850bc30-45f8-0041-a00a-83df46d8555d"
+[2025-06-09 22:56:00] DEBUG: [36mGenerated salt with length: 10 (truncated for security)[39m
+[2025-06-09 22:56:00] DEBUG: [36mGenerated salt with length: 10 (truncated for security)[39m
+[2025-06-09 22:56:00] DEBUG: [36mAgent Eliza (b850bc30-45f8-0041-a00a-83df46d8555d) added to agents map[39m
+[2025-06-09 22:56:00] INFO: [36m[Eliza] MessageBusService: Subscribing to internal message bus for 'new_message' events.[39m
+[2025-06-09 22:56:00] LOG: [36mStarted Eliza as b850bc30-45f8-0041-a00a-83df46d8555d[39m
+[2025-06-09 22:56:00] INFO: [36m[AgentServer] Automatically registered MessageBusConnector for agent Eliza[39m
+[2025-06-09 22:56:00] SUCCESS: [36mSuccessfully registered agent Eliza (b850bc30-45f8-0041-a00a-83df46d8555d) with core services.[39m
+[2025-06-09 22:56:00] INFO: [36m[AgentServer] Auto-associated agent Eliza with server ID: 00000000-0000-0000-0000-000000000000[39m
+[2025-06-09 22:56:00] DEBUG: [36m[OpenAI] Using embedding model: text-embedding-3-small with dimension: 1536[39m
+[2025-06-09 22:56:00] DEBUG: [36mCreating test embedding for initialization[39m
+[2025-06-09 22:56:00] DEBUG: [36mHandling plugin request in the plugin route handler[39m
+    path: "/api/messages/agents/b850bc30-45f8-0041-a00a-83df46d8555d/servers"
+    method: "GET"
+    query: {}
+[2025-06-09 22:56:00] DEBUG: [36mNo valid agentId in query. Trying global match for path: /api/messages/agents/b850bc30-45f8-0041-a00a-83df46d8555d/servers[39m
+[2025-06-09 22:56:00] DEBUG: [36mNo plugin route handled GET /api/messages/agents/b850bc30-45f8-0041-a00a-83df46d8555d/servers, passing to next middleware.[39m
+[2025-06-09 22:56:00] DEBUG: [36mAPI request: GET /messages/agents/b850bc30-45f8-0041-a00a-83df46d8555d/servers[39m
+[2025-06-09 22:56:00] INFO: [36m[Eliza] MessageBusService: Agent is subscribed to 1 servers[39m
+[2025-06-09 22:56:00.567 +0000] [34mDEBUG[39m: [36mSuccess: Plugin openai initialized successfully[39m
+    agentName: "Eliza"
+[2025-06-09 22:56:00.579 +0000] [34mDEBUG[39m: [36mUpdated existing agent Eliza on restart[39m
+    agentName: "Eliza"
+[2025-06-09 22:56:00.584 +0000] [34mDEBUG[39m: [36m[AgentRuntime][Eliza] Using model TEXT_EMBEDDING from provider openai[39m
+    agentName: "Eliza"
+[2025-06-09 22:56:00.584 +0000] [34mDEBUG[39m: [36m[AgentRuntime][Eliza] Starting ensureEmbeddingDimension[39m
+    agentName: "Eliza"
+[2025-06-09 22:56:00.584 +0000] [34mDEBUG[39m: [36m[AgentRuntime][Eliza] Using model TEXT_EMBEDDING from provider openai[39m
+    agentName: "Eliza"
+[2025-06-09 22:56:00.584 +0000] [34mDEBUG[39m: [36m[AgentRuntime][Eliza] Getting embedding dimensions[39m
+    agentName: "Eliza"
+[2025-06-09 22:56:00.584 +0000] [34mDEBUG[39m: [36m[AgentRuntime][Eliza] Using model TEXT_EMBEDDING from provider openai[39m
+    agentName: "Eliza"
+[2025-06-09 22:56:00.584 +0000] [34mDEBUG[39m: [36m[useModel] TEXT_EMBEDDING input: null[39m
+    agentName: "Eliza"
+[2025-06-09 22:56:00.591 +0000] [34mDEBUG[39m: [36m[useModel] TEXT_EMBEDDING output (took 0.28ms): [0.1,0,0,0,0]...[0,0,0,0,0] (1536 items)[39m
+    agentName: "Eliza"
+[2025-06-09 22:56:00.591 +0000] [34mDEBUG[39m: [36m[AgentRuntime][Eliza] Setting embedding dimension: 1536[39m
+    agentName: "Eliza"
+[2025-06-09 22:56:00.598 +0000] [34mDEBUG[39m: [36m[AgentRuntime][Eliza] Successfully set embedding dimension[39m
+    agentName: "Eliza"
+[2025-06-09 22:56:00.598 +0000] [34mDEBUG[39m: [36mEliza(b850bc30-45f8-0041-a00a-83df46d8555d) - Registering service: task[39m
+    agentName: "Eliza"
+[2025-06-09 22:56:00.598 +0000] [34mDEBUG[39m: [36mEliza(b850bc30-45f8-0041-a00a-83df46d8555d) - Service task registered successfully[39m
+    agentName: "Eliza"
+[2025-06-09 22:56:00.598 +0000] [34mDEBUG[39m: [36mSuccess: Plugin internal-message-bus-connector added to active plugins for Eliza(b850bc30-45f8-0041-a00a-83df46d8555d).[39m
+    agentName: "Eliza"
+[2025-06-09 22:56:00.598 +0000] [34mDEBUG[39m: [36mEliza(b850bc30-45f8-0041-a00a-83df46d8555d) - Registering service: message-bus-service[39m
+    agentName: "Eliza"
+[2025-06-09 22:56:00.600 +0000] [34mDEBUG[39m: [36mEliza(b850bc30-45f8-0041-a00a-83df46d8555d) - Service message-bus-service registered successfully[39m
+    agentName: "Eliza"
