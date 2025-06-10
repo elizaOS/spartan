@@ -3,6 +3,7 @@ import path from 'node:path';
 import type { Character, IAgentRuntime, OnboardingConfig, ProjectAgent } from '@elizaos/core';
 import dotenv from 'dotenv';
 import { communityInvestorPlugin } from './plugins/communityInvestor';
+import { autonomousTraderPlugin } from './plugins/autonomous-trader';
 import { degenIntelPlugin } from './plugins/degenIntel';
 import { degenTraderPlugin } from './plugins/degenTrader';
 import { heliusPlugin } from './plugins/helius';
@@ -40,11 +41,11 @@ export const character: Character = {
     ...(process.env.OPENAI_API_KEY ? ['@elizaos/plugin-openai'] : []),
     ...(!process.env.OPENAI_API_KEY ? ['@elizaos/plugin-local-ai'] : []),
     '@elizaos/plugin-twitter',
-    //'@elizaos/plugin-discord',
+    '@elizaos/plugin-discord',
     //'@elizaos/plugin-telegram',
     '@elizaos/plugin-bootstrap',
     '@elizaos/plugin-solana',
-    '@elizaos/plugin-orca',
+    //'@elizaos/plugin-orca',
   ],
   settings: {
     GROQ_PLUGIN_LARGE:
@@ -522,8 +523,9 @@ const config: OnboardingConfig = {
 
 export const spartan: ProjectAgent = {
   plugins: [
-    heliusPlugin,
+    //heliusPlugin,
     //solanaPlugin,
+    autonomousTraderPlugin,
     //degenTraderPlugin, // can't load buffer issue
     degenIntelPlugin,
     //orcaPlugin,
