@@ -53,15 +53,47 @@ export class TradeChainService extends Service {
     return results
   }
 
+  forEachRegWithReg(key) {
+    const results = [];
+    // foreach provider
+    for (const dp of Object.values(this.registry)) {
+      // do they have this type of service
+      if (dp[key]) {
+        // if so get service handle
+        const infoService = this.runtime.getService(dp[key]);
+        if (infoService) {
+          //console.log('updateTrending - result', result)
+          results.push({
+            registry: dp,
+            service: infoService,
+          });
+        } else {
+          console.warn('Registered data provider service not found', key, dp[key]);
+        }
+      } else {
+        console.warn('registered service does not support', key, ':', dp)
+      }
+    }
+    return results
+  }
+
   async makeKeypairs() {
-    const services = this.forEachReg('service')
+    const services = this.forEachRegWithReg('service')
     const salt = await getSalt()
-    const wallets = await Promise.all(services.map(async service => {
+    const wallets = await Promise.all(services.map(async i => {
       // maybe we should encrypt
+      // so service isn't the registration but the plugin service itself...
+      console.log('makeKeypairs has service', i.registry.name, i.registry.chain)
       // get key from sparty
-      return { service: service.chain, wallet: await service.createWallet() }
+      return { chain: i.registry.chain, keypair: await i.service.createWallet() }
     }))
-    return wallets
+    // should be keyed by chain
+    const walletsByChain = {}
+    for(const w of wallets) {
+      walletsByChain[w.chain] = w.keypair
+    }
+    console.log('made', walletsByChain)
+    return walletsByChain
   }
 
   async makeKeypair(regName) {
