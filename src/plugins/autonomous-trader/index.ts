@@ -15,6 +15,10 @@ import { devFix } from "./actions/devfix";
 import { llmStrategy } from './strategies/strategy_llm';
 import { copyStrategy } from './strategies/strategy_copy';
 
+// Services
+import { InterfaceUserService } from './services/srv_users';
+import { InterfaceWalletService } from './services/srv_wallets';
+
 export const autonomousTraderPlugin: Plugin = {
   name: 'autonomous-trader',
   description: 'Spartan Autonomous trading agent plugin',
@@ -24,7 +28,7 @@ export const autonomousTraderPlugin: Plugin = {
     userRegistration, checkRegistrationCode, checkRegistration, deleteRegistration,
     servicesMenu, walletCreate, setStrategy, userMetawalletList, devFix
   ],
-  services: [],
+  services: [InterfaceUserService, InterfaceWalletService],
   init: async (_, runtime: IAgentRuntime) => {
     console.log('autonomous-trader init');
     // register strategies
