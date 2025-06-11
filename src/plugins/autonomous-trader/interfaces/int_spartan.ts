@@ -19,8 +19,10 @@ export async function interface_spartan_get(runtime) {
   if (!spartanData) {
     // initialize
     //spartanDataNew = true
-    spartanData.data = {
-      users: [],
+    spartanData = {
+      data: {
+        users: [],
+      }
     }
   }
   return spartanData
