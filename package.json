@@ -1,5 +1,6 @@
 {
   "name": "@elizaos/spartan",
+  "packageType": "project",
   "version": "1.0.0-beta.57",
   "main": "dist/index.js",
   "module": "dist/index.js",
@@ -9,7 +10,7 @@
     "access": "public"
   },
   "scripts": {
-    "start": "elizaos dev",
+    "start": "LOG_LEVEL=debug ../cli/dist/index.js dev",
     "build": "tsup",
     "lint": "prettier --write ./src",
     "dev": "elizaos dev",

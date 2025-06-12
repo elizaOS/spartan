@@ -12,7 +12,7 @@ export const userMetawalletList: Action = {
   similes: [
   ],
   validate: async (runtime: IAgentRuntime, message: Memory) => {
-    console.log('USER_METAWALLET_LIST validate', message?.metadata?.fromId)
+    //console.log('USER_METAWALLET_LIST validate', message?.metadata?.fromId)
     if (!message?.metadata?.fromId) {
       console.log('USER_METAWALLET_LIST validate - author not found')
       return false

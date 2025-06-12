@@ -43,6 +43,7 @@ export async function getSpartanWallets(runtime, options = {}) {
 
 // list metawallets by userId
 
+// linking wallets
 export async function getWalletByUserEntityIds(runtime, userEntityIds: UUID[]) {
   // find these users metawallets
   // each id will have a list of wallets

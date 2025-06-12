@@ -9,6 +9,7 @@ import {
     type State,
     composePromptFromState,
     logger,
+    createUniqueUuid,
     parseJSONObjectFromText,
 } from '@elizaos/core';
 import {
@@ -18,14 +19,17 @@ import {
 } from '@solana/spl-token';
 import {
     Connection,
+    Keypair,
     PublicKey,
     SystemProgram,
     TransactionMessage,
     VersionedTransaction,
 } from '@solana/web3.js';
-import { getWalletKey } from '../keypairUtils';
+import bs58 from 'bs58';
 import { v4 as uuidv4 } from 'uuid';
 import { UUID } from 'crypto';
+import { getWalletKey } from '../keypairUtils';
+import { SOLANA_SERVICE_NAME } from '../constants';
 
 /**
  * Interface representing the content of a transfer with a specific address.
@@ -38,7 +42,8 @@ import { UUID } from 'crypto';
  */
 interface TransferAddressContent extends Content {
     tokenAddress: string | null; // null for SOL transfers
-    recipient: string;
+    senderWalletAddress: string;
+    recipientWalletAddress: string;
     amount: string | number;
 }
 
@@ -51,7 +56,7 @@ function isTransferAddressContent(content: TransferAddressContent): boolean {
     logger.log('Content for transfer', content);
 
     // Base validation
-    if (!content.recipient || typeof content.recipient !== 'string' || !content.amount) {
+    if (!content.recipientWalletAddress || typeof content.recipientWalletAddress !== 'string' || !content.amount) {
         return false;
     }
 
@@ -93,13 +98,17 @@ function isTransferAddressContent(content: TransferAddressContent): boolean {
  */
 const transferAddressTemplate = `Respond with a JSON markdown block containing only the extracted values. Use null for any values that cannot be determined.
 
+This user only have these in his wallet and can only send from these options
+{{possibleWallets}}
+
 Example responses:
 For SPL tokens:
 \`\`\`json
 {
     "tokenAddress": "BieefG47jAHCGZBxi2q87RDuHyGZyYC3vAzxpyu8pump",
-    "recipient": "9jW8FPr6BSSsemWPV22UUCzSqkVdTp6HTyPqeqyuBbCa",
-    "amount": "1000"
+    "senderWalletAddress": "9jW8FPr6BSSsemWPV22UUCzSqkVdTp6HTyPqeqyuBbCa",
+    "recipientWalletAddress": "3nMBmufBUBVnk28sTp3NsrSJsdVGTyLZYmsqpMFaUT9J",
+    "amount": "15000"
 }
 \`\`\`
 
@@ -107,8 +116,9 @@ For SOL:
 \`\`\`json
 {
     "tokenAddress": "So11111111111111111111111111111111111111111",
-    "recipient": "9jW8FPr6BSSsemWPV22UUCzSqkVdTp6HTyPqeqyuBbCa",
-    "amount": 1.5
+    "senderWalletAddress": "FcfoYfudjC6hnAWRrGw1zEkb87jSSky79A82hddzBFd1",
+    "recipientWalletAddress": "BzsJQeZ7cvk3pTHmKeuvdhNDkDxcZ6uCXxW2rjwC7RTq",
+    "amount": "0.1"
 }
 \`\`\`
 
@@ -119,6 +129,28 @@ Extract the following information about the requested transfer:
 - Recipient wallet address
 - Amount to transfer
 `;
+
+const sourceAddressTemplate = `Respond with a JSON markdown block containing only the extracted values. Use null for any values that cannot be determined.
+
+Recent Messages:
+{{recentMessages}}
+
+Extract the following information about the requested transfer:
+
+
+Example responses:
+\`\`\`json
+{
+    "sourceWalletAddress": "FcfoYfudjC6hnAWRrGw1zEkb87jSSky79A82hddzBFd1",
+    "reasoning": "Your reasoning here",
+}
+\`\`\`
+Do NOT include any thinking, reasoning, or <think> sections in your response.
+Go directly to the JSON response format without any preamble or explanation.
+
+IMPORTANT: Your response must ONLY contain the json block above. Do not include any text, thinking, or reasoning before or after this JSON block. Start your response immediately with { and end with }.
+`;
+
 
 export default {
     name: 'MULTIWALLET_TRANSFER',
@@ -137,7 +169,7 @@ export default {
         'MULTIWALLET_PAY',
     ],
     validate: async (_runtime: IAgentRuntime, message: Memory) => {
-        //logger.log('Validating transfer from entity:', message.entityId);
+        //logger.log('MULTIWALLET_TRANSFER Validating transfer from entity:', message.entityId);
 
         // extract a list of base58 address (of what length?) from message.context.text
         // ensure there's 2
@@ -151,14 +183,100 @@ export default {
     description: 'Transfer SOL or SPL tokens to a specified Solana address.',
     handler: async (
         runtime: IAgentRuntime,
-        _message: Memory,
+        message: Memory,
         state: State,
         options: { [key: string]: unknown },
         callback?: HandlerCallback,
         responses: any[]
     ): Promise<boolean> => {
-        logger.log('Starting TRANSFER_ADDRESS handler...');
+        logger.log('MULTIWALLET_TRANSFER Starting TRANSFER_ADDRESS handler...');
         //console.log('options', options)
+
+        const sourcePrompt = composePromptFromState({
+            state: state,
+            template: sourceAddressTemplate,
+        });
+        const sourceResult = await runtime.useModel(ModelType.OBJECT_LARGE, {
+            prompt: sourcePrompt,
+        });
+        console.log('MULTIWALLET_TRANSFER sourceResult', sourceResult)
+
+        if (!sourceResult.sourceWalletAddress) {
+            console.log('MULTIWALLET_TRANSFER cant determine source wallet address')
+            return false
+        }
+
+        // find this user's wallet
+        const entityId = createUniqueUuid(runtime, message.metadata.fromId);
+        //console.log('MULTIWALLET_TRANSFER entityId', entityId)
+
+        const asking = 'solana';
+        const serviceType = 'AUTONOMOUS_TRADER_INTERFACE_WALLETS';
+        let interfaceWalletService = runtime.getService(serviceType) as any;
+        while (!interfaceWalletService) {
+            console.log(asking, 'waiting for', serviceType, 'service...');
+            interfaceWalletService = runtime.getService(serviceType) as any;
+            if (!interfaceWalletService) {
+                await new Promise((waitResolve) => setTimeout(waitResolve, 1000));
+            } else {
+                console.log(asking, 'Acquired', serviceType, 'service...');
+            }
+        }
+
+        const metawallets = await interfaceWalletService.getWalletByUserEntityIds([entityId])
+        const userMetawallets = metawallets[entityId]
+        //console.log('MULTIWALLET_TRANSFER wallets', userMetawallets)
+
+        // confirm wallet is in this list
+        let found = false
+        for (const mw of userMetawallets) {
+            const kp = mw.keypairs.solana
+            if (kp) {
+                console.log('kp', kp)
+                if (kp.publicKey.toString() === sourceResult.sourceWalletAddress) {
+                    if (found === false) found = []
+                    found.push(kp)
+                }
+            }
+        }
+
+        if (!found.length) {
+            console.log('MULTIWALLET_TRANSFER did not find any local wallet with this source address', sourceResult)
+            return false
+        }
+        console.log('MULTIWALLET_TRANSFER found', found)
+
+        // gather possibilities
+        let contextStr = ''
+        const solanaService = runtime.getService(SOLANA_SERVICE_NAME) as any;
+        for (const kp of found) {
+            const pubKey = kp.publicKey
+            contextStr += 'Wallet Address: ' + pubKey + '\n'
+            // get wallet contents
+            const pubKeyObj = new PublicKey(pubKey)
+            const [solBal, heldTokens] = await Promise.all([
+                solanaService.getBalanceByAddr(pubKeyObj), solanaService.getTokenAccountsByKeypair(pubKeyObj),
+            ]);
+            contextStr += '  Token Address (Symbol)' + "\n"
+            contextStr += '  So11111111111111111111111111111111111111111 ($sol) balance: ' + (solBal ?? 'unknown') + "\n"
+            console.log('solBal', solBal, 'heldTokens', heldTokens)
+            // loop on remaining tokens and output
+            for (const t of heldTokens) {
+                // data.program, data.space, data.parsed
+                // data.parsed: .type and .info which has (isNative, mint, owner, state, tokenAmount)
+                //console.log('data', t.account.data) // parsed.info.mint
+                const amountRaw = t.account.data.parsed.info.tokenAmount.amount;
+                const mintKey = new PublicKey(t.account.data.parsed.info.mint);
+                const decimals = t.account.data.parsed.info.tokenAmount.decimals;
+                const balance = Number(amountRaw) / (10 ** decimals);
+                const symbol = await solanaService.getTokenSymbol(mintKey)
+                console.log('MULTIWALLET_TRANSFER symbol', symbol)
+                contextStr += '  ' + t.pubkey.toString() + ' ($' + symbol + ') balance: ' + balance + "\n"
+            }
+            contextStr += '\n'
+        }
+        console.log('contextStr', contextStr)
+
 
         const transferPrompt = composePromptFromState({
             state: state,
@@ -166,33 +284,30 @@ export default {
         });
 
         const result = await runtime.useModel(ModelType.TEXT_LARGE, {
-            prompt: transferPrompt,
+            prompt: transferPrompt.replace('{{possibleWallets}}', contextStr),
         });
 
         const content = parseJSONObjectFromText(result);
-        console.log('content', content)
+        console.log('MULTIWALLET_TRANSFER content', content)
 
-        // Override the recipient from the model with the one from options
-        /*
-        if (content) {
-            content.recipient = recipientAddress;
+        const sourceKp = found.find(kp => kp.publicKey === content.senderWalletAddress)
+
+        if (!sourceKp) {
+            console.log('MULTIWALLET_TRANSFER did not find any local wallet with this source address', content.senderWalletAddress)
+            return false
         }
-        */
+        const secretKey = bs58.decode(sourceKp.privateKey);
+        const senderKeypair = Keypair.fromSecretKey(secretKey);
 
-        // Get the recipient address from options
-        //const recipientAddress = options.recipientAddress as string;
-        const recipientAddress = content.recipient
-        console.log('recipientAddress', recipientAddress)
+        // Get the recipient address from content
+        const recipientAddress = content.recipientWalletAddress
+        console.log('MULTIWALLET_TRANSFER recipientAddress', recipientAddress)
         if (!recipientAddress) {
-
-            //
-            // NEW WAY
-            //
             runtime.logger.info("No recipient address provided.")
             responses.length = 0
             const memory: Memory = {
                 entityId: uuidv4() as UUID,
-                roomId: _message.roomId,
+                roomId: message.roomId,
                 text: 'No recipient address provided.',
                 content: {
                     //thought: responseContent.thought,
@@ -202,18 +317,6 @@ export default {
                 }
             }
             responses.push(memory)
-
-            //
-            // OLD WAY
-            //
-            /*
-            if (callback) {
-                callback({
-                    text: 'No recipient address provided.',
-                    content: { error: 'Missing recipient address' },
-                });
-            }
-            */
             return false;
         }
 
@@ -225,7 +328,7 @@ export default {
             responses.length = 0
             const memory: Memory = {
                 entityId: uuidv4() as UUID,
-                roomId: _message.roomId,
+                roomId: message.roomId,
                 text: 'Invalid recipient address provided.',
                 content: {
                     text: 'Invalid recipient address provided.',
@@ -236,14 +339,15 @@ export default {
             return false;
         }
 
-
-
+        // ensure decimal
+        content.amount = parseFloat(content.amount)
         if (!isTransferAddressContent(content)) {
+            // FIXME: more than amount could be wrong here...
             runtime.logger.info("Need a valid amount to transfer.")
             responses.length = 0
             const memory: Memory = {
                 entityId: uuidv4() as UUID,
-                roomId: _message.roomId,
+                roomId: message.roomId,
                 text: 'Need a valid amount to transfer.',
                 content: {
                     text: 'Need a valid amount to transfer.',
@@ -254,8 +358,10 @@ export default {
             return false;
         }
 
+        console.log('MULTIWALLET_TRANSFER ATTEMPTING SEND')
+
         try {
-            const { keypair: senderKeypair } = await getWalletKey(runtime, true);
+            //const { keypair: senderKeypair } = await getWalletKey(runtime, true);
             const connection = new Connection(
                 runtime.getSetting('SOLANA_RPC_URL') || 'https://api.mainnet-beta.solana.com'
             );
@@ -264,7 +370,7 @@ export default {
             let signature: string;
 
             // Handle SOL transfer
-            if (content.tokenAddress === null) {
+            if (content.tokenAddress === "So11111111111111111111111111111111111111111") {
                 const lamports = Number(content.amount) * 1e9;
 
                 const instruction = SystemProgram.transfer({
@@ -284,16 +390,18 @@ export default {
 
                 signature = await connection.sendTransaction(transaction);
 
-                runtime.logger.info(`Sent ${content.amount} SOL. Transaction hash: ${signature}`)
+                runtime.logger.info(`Sent ${content.amount} SOL from ${content.senderWalletAddress} to ${recipientAddress}. Transaction hash: ${signature}`)
                 responses.length = 0
                 const memory: Memory = {
                     entityId: uuidv4() as UUID,
-                    roomId: _message.roomId,
+                    roomId: message.roomId,
                     text: `Sent ${content.amount} SOL. Transaction hash: ${signature}`,
                     content: {
+                        text: `Sent ${content.amount} SOL. Transaction hash: ${signature}`,
                         success: true,
                         signature,
                         amount: content.amount,
+                        sender: content.senderWalletAddress,
                         recipient: recipientAddress,
                     }
                 }
@@ -349,12 +457,14 @@ export default {
                 responses.length = 0
                 const memory: Memory = {
                     entityId: uuidv4() as UUID,
-                    roomId: _message.roomId,
-                    text: `Sent ${content.amount} tokens to ${recipientAddress}\nTransaction hash: ${signature}`,
+                    roomId: message.roomId,
+                    text: `Sent ${content.amount} tokens to ${recipientAddress} from ${content.senderWalletAddress}\nTransaction hash: ${signature}`,
                     content: {
+                        text: `Sent ${content.amount} tokens to ${recipientAddress}\nTransaction hash: ${signature}`,
                         success: true,
                         signature,
                         amount: content.amount,
+                        sender: content.senderWalletAddress,
                         recipient: recipientAddress,
                     }
                 }
@@ -368,7 +478,7 @@ export default {
             responses.length = 0
             const memory: Memory = {
                 entityId: uuidv4() as UUID,
-                roomId: _message.roomId,
+                roomId: message.roomId,
                 text: `Transfer failed: ${error.message}`,
                 content: {
                     error: error.message
