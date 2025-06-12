@@ -3,9 +3,9 @@ import path from 'node:path';
 import type { Character, IAgentRuntime, OnboardingConfig, ProjectAgent } from '@elizaos/core';
 import dotenv from 'dotenv';
 import { communityInvestorPlugin } from './plugins/communityInvestor';
-import { autonomousTraderPlugin } from './plugins/autonomous-trader';
 import { degenIntelPlugin } from './plugins/degenIntel';
 import { degenTraderPlugin } from './plugins/degenTrader';
+import { autonomousTraderPlugin } from './plugins/autonomous-trader';
 import { heliusPlugin } from './plugins/helius';
 //import { solanaPlugin } from './plugins/plugin-solana/src';
 import { initCharacter } from './init';
@@ -523,13 +523,13 @@ const config: OnboardingConfig = {
 
 export const spartan: ProjectAgent = {
   plugins: [
+    degenIntelPlugin, // tasks for autonomousTraderPlugin, degenTraderPlugin
+    //degenTraderPlugin, // This trade Spartan's wallet: can't load buffer issue
+    autonomousTraderPlugin, // multiple wallet support (Required degenIntelPlugin)
     //heliusPlugin,
     //solanaPlugin,
-    autonomousTraderPlugin,
-    //degenTraderPlugin, // can't load buffer issue
-    degenIntelPlugin,
     //orcaPlugin,
-    // communityInvestorPlugin,
+    //communityInvestorPlugin,
   ],
   character,
   init: async (runtime: IAgentRuntime) => await initCharacter({ runtime, config }),

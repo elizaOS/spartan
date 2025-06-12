@@ -12,7 +12,7 @@ export const setStrategy: Action = {
   similes: [
   ],
   validate: async (runtime: IAgentRuntime, message: Memory) => {
-    console.log('WALLET_SETSTRAT validate', message?.metadata?.fromId)
+    //console.log('WALLET_SETSTRAT validate', message?.metadata?.fromId)
     if (!message?.metadata?.fromId) {
       console.log('WALLET_SETSTRAT validate - author not found')
       return false
@@ -32,7 +32,7 @@ export const setStrategy: Action = {
     const stratgiesList = await traderStrategyService.listActiveStrategies()
     // maybe sub words?
     const containsStrat = stratgiesList.some(word => message.content.text.includes(word))
-    console.log('containsStrat', containsStrat, message.content.text)
+    //console.log('containsStrat', containsStrat, message.content.text)
     return containsStrat
   },
   description: 'Allows a user to create a wallet with a strategy',

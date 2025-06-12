@@ -106,9 +106,9 @@ sve:validate message {
       });
     }
     */
-    console.log('reg:validate entity', entity)
+    //console.log('reg:validate entity', entity)
     const email = entity.components.find(c => c.type === EMAIL_TYPE)
-    console.log('reg_start:validate - are signed up?', !!email)
+    //console.log('reg_start:validate - are signed up?', !!email)
     return !email
   },
   description: 'Replies with starting a user registration',
