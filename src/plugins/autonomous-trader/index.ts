@@ -31,9 +31,13 @@ export const autonomousTraderPlugin: Plugin = {
   services: [InterfaceUserService, InterfaceWalletService],
   init: async (_, runtime: IAgentRuntime) => {
     console.log('autonomous-trader init');
-    // register strategies
-    llmStrategy(runtime); // is async
-    copyStrategy(runtime); // is async
+
+    new Promise(resolve => {
+      resolve()
+      // register strategies
+      llmStrategy(runtime); // is async
+      //copyStrategy(runtime); // is async
+    })
   }
 };
 
