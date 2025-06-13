@@ -9,11 +9,15 @@ import { servicesMenu } from "./actions/act_menu";
 import { walletCreate } from "./actions/act_wallet_create";
 import { setStrategy } from "./actions/act_wallet_setstrategy";
 import { userMetawalletList } from "./actions/act_wallet_list";
-import { devFix } from "./actions/devfix";
+//import { devFix } from "./actions/devfix";
+import userMetawalletSwap from "./actions/act_wallet_swap";
+import userMetawalletSweep from "./actions/act_wallet_sweep";
+import userMetawalletXfer from "./actions/act_wallet_xfer";
 
 // Strategies
 import { llmStrategy } from './strategies/strategy_llm';
 import { copyStrategy } from './strategies/strategy_copy';
+import { noneStrategy } from './strategies/strategy_none';
 
 // Services
 import { InterfaceUserService } from './services/srv_users';
@@ -26,18 +30,17 @@ export const autonomousTraderPlugin: Plugin = {
   providers: [],
   actions: [
     userRegistration, checkRegistrationCode, checkRegistration, deleteRegistration,
-    servicesMenu, walletCreate, setStrategy, userMetawalletList, devFix
+    servicesMenu, walletCreate, setStrategy, userMetawalletList, userMetawalletSwap,
+    userMetawalletSweep, userMetawalletXfer
   ],
   services: [InterfaceUserService, InterfaceWalletService],
   init: async (_, runtime: IAgentRuntime) => {
-    console.log('autonomous-trader init');
+    //console.log('autonomous-trader init');
 
-    new Promise(resolve => {
-      resolve()
-      // register strategies
-      llmStrategy(runtime); // is async
-      //copyStrategy(runtime); // is async
-    })
+    // register strategies (are async)
+    noneStrategy(runtime);
+    llmStrategy(runtime);
+    //copyStrategy(runtime);
   }
 };
 
