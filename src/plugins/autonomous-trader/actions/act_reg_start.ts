@@ -89,11 +89,11 @@ sve:validate message {
     if (!message.metadata.fromId) return false
 
     // using the service to get this/components might be good way
-    const entityId = createUniqueUuid(runtime, message.metadata.fromId);
-    const entity = await runtime.getEntityById(entityId)
+    //const entityId = createUniqueUuid(runtime, message.metadata.fromId);
+    const entity = await runtime.getEntityById(message.entityId)
     // all clients should handle this
     if (!entity) {
-      logger.warn('client did not set entity')
+      logger.warn('USER_REGISTRATION client did not set entity')
       return false;
     }
     /*
@@ -150,8 +150,8 @@ sve:validate message {
 
 
     // using the service to get this/components might be good way
-    const entityId = createUniqueUuid(runtime, message.metadata.fromId);
-    const entity = await runtime.getEntityById(entityId)
+    //const entityId = createUniqueUuid(runtime, message.metadata.fromId);
+    const entity = await runtime.getEntityById(message.entityId)
     console.log('entity', entity)
     const email = entity.components.find(c => c.type === EMAIL_TYPE)
     console.log('email', email)
@@ -185,7 +185,7 @@ sve:validate message {
           worldId: roomDetails.worldId,
           roomId: message.roomId,
           sourceEntityId: message.entityId,
-          entityId: entityId,
+          entityId: message.entityId,
           type: EMAIL_TYPE,
           data: {
             address: emails[0],
@@ -194,7 +194,7 @@ sve:validate message {
           },
         });
         spartanDataDelta = true
-        spartanData.data.users.push(entityId)
+        spartanData.data.users.push(message.entityId)
         await sendVerifyEmail(emails[0], regCode)
         takeItPrivate(runtime, message, 'I just sent you an email (might need to check your spam folder) to confirm ' + emails[0], responses)
         //responses.length = 0 // just clear them all
@@ -207,7 +207,7 @@ sve:validate message {
             agentId: runtime.agentId,
             worldId: roomDetails.worldId,
             roomId: message.roomId,
-            sourceEntityId: entityId,
+            sourceEntityId: message.entityId,
             entityId: agentEntityId,
             type: SPARTAN_SERVICE_TYPE,
             data: spartanData.data,

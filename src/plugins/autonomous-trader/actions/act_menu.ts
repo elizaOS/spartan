@@ -57,8 +57,12 @@ export const servicesMenu: Action = {
     //const isGroup = roomDetails.type === 'group'
     //const isDM = roomDetails.type === 'dm'
 
-    const entityId = createUniqueUuid(runtime, message.metadata.fromId);
-    const entity = await runtime.getEntityById(entityId)
+    //const entityId = createUniqueUuid(runtime, message.metadata.fromId);
+    const entity = await runtime.getEntityById(message.entityId)
+    if (!entity) {
+      logger.warn('SERVICES_MENU client did not set entity')
+      return false;
+    }
     //console.log('SERVICES_MENU entity', entity)
     const signedup = entity.components.find(c => c.type === EMAIL_TYPE)
 

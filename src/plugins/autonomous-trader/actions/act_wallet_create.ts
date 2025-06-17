@@ -54,7 +54,7 @@ sve:validate message {
     const traderChainService = runtime.getService('TRADER_STRATEGY') as any;
     return traderChainService
   },
-  description: 'Allows a user to create a wallet',
+  description: 'Replies, and allows a user to create a wallet',
   handler: async (
     runtime: IAgentRuntime,
     message: Memory,
@@ -76,8 +76,12 @@ sve:validate message {
     //console.log('roomEntity', roomEntity)
 
     // using the service to get this/components might be good way
-    const entityId = createUniqueUuid(runtime, message.metadata.fromId);
-    const entity = await runtime.getEntityById(entityId)
+    //const entityId = createUniqueUuid(runtime, message.metadata.fromId);
+    const entity = await runtime.getEntityById(message.entityId)
+    if (!entity) {
+      logger.warn('WALLET_CREATION client did not set entity')
+      return false;
+    }
     //console.log('entity', entity)
     const email = entity.components.find(c => c.type === EMAIL_TYPE)
     //console.log('email', email)

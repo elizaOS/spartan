@@ -12,15 +12,19 @@ export const setStrategy: Action = {
   similes: [
   ],
   validate: async (runtime: IAgentRuntime, message: Memory) => {
-    console.log('WALLET_SETSTRAT validate', message?.metadata?.fromId)
+    //console.log('WALLET_SETSTRAT validate', message?.metadata?.fromId)
     if (!message?.metadata?.fromId) {
       console.log('WALLET_SETSTRAT validate - author not found')
       return false
     }
 
-    const entityId = createUniqueUuid(runtime, message.metadata.fromId);
-    if (entityId === null) return false;
-    const entity = await runtime.getEntityById(entityId)
+    //const entityId = createUniqueUuid(runtime, message.metadata.fromId);
+    //if (entityId === null) return false;
+    const entity = await runtime.getEntityById(message.entityId)
+    if (!entity) {
+      logger.warn('WALLET_SETSTRAT client did not set entity')
+      return false;
+    }
     //console.log('entity', entity)
     const reg = !!entity.components.find(c => c.type === EMAIL_TYPE)
     if (!reg) return false;
@@ -31,8 +35,8 @@ export const setStrategy: Action = {
     if (!traderStrategyService) return false
     const stratgiesList = await traderStrategyService.listActiveStrategies()
     // maybe sub words?
-    const containsStrat = stratgiesList.some(word => message.content.text.includes(word))
-    console.log('containsStrat', containsStrat, message.content.text)
+    const containsStrat = stratgiesList.some(word => message.content.text.toUpperCase().includes(word.toUpperCase()))
+    //console.log('containsStrat', containsStrat, message.content.text)
     return containsStrat
   },
   description: 'Allows a user to create a wallet with a strategy',
@@ -47,8 +51,8 @@ export const setStrategy: Action = {
     console.log('WALLET_SETSTRAT handler')
 
     // using the service to get this/components might be good way
-    const entityId = createUniqueUuid(runtime, message.metadata.fromId);
-    const entity = await runtime.getEntityById(entityId)
+    //const entityId = createUniqueUuid(runtime, message.metadata.fromId);
+    const entity = await runtime.getEntityById(message.entityId)
     //console.log('entity', entity)
     const email = entity.components.find(c => c.type === EMAIL_TYPE)
     //console.log('email', email)
@@ -63,7 +67,7 @@ export const setStrategy: Action = {
     const traderStrategyService = runtime.getService('TRADER_STRATEGY') as any;
     const stratgiesList = await traderStrategyService.listActiveStrategies()
     // maybe we use an LLM call to get their exact meaning
-    const containsStrats = stratgiesList.filter(word => message.content.text.includes(word))
+    const containsStrat = stratgiesList.some(word => message.content.text.toUpperCase().includes(word.toUpperCase()))
     console.log('containsStrats', containsStrats)
     //takeItPrivate(runtime, message, 'Hrm you\'ve selected a strategy, time to make a wallet')
 
@@ -115,7 +119,7 @@ export const setStrategy: Action = {
       worldId: roomDetails.worldId,
       roomId: message.roomId,
       sourceEntityId: message.entityId,
-      entityId: entityId,
+      entityId: message.entityId,
       type: EMAIL_TYPE,
       data: newData,
       agentId: runtime.agentId,

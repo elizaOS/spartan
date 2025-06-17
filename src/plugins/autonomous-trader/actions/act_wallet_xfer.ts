@@ -207,7 +207,7 @@ export default {
         }
 
         // find this user's wallet
-        const entityId = createUniqueUuid(runtime, message.metadata.fromId);
+        //const entityId = createUniqueUuid(runtime, message.metadata.fromId);
         //console.log('MULTIWALLET_TRANSFER entityId', entityId)
 
         const asking = 'solana';
@@ -223,8 +223,8 @@ export default {
           }
         }
 
-        const metawallets = await interfaceWalletService.getWalletByUserEntityIds([entityId])
-        const userMetawallets = metawallets[entityId]
+        const metawallets = await interfaceWalletService.getWalletByUserEntityIds([message.entityId])
+        const userMetawallets = metawallets[message.entityId]
         //console.log('MULTIWALLET_TRANSFER wallets', userMetawallets)
 
         // confirm wallet is in this list

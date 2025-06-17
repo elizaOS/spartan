@@ -11,14 +11,19 @@ export const deleteRegistration: Action = {
   ],
   // can only enter this if we don't have an email
   validate: async (runtime: IAgentRuntime, message: Memory) => {
-    //console.log('DELETE_REGISTRATION validate')
+    console.log('DELETE_REGISTRATION validate')
 
     // if not a discord/telegram message, we can ignore it
     if (!message.metadata.fromId) return false
 
     // using the service to get this/components might be good way
-    const entityId = createUniqueUuid(runtime, message.metadata.fromId);
-    const entity = await runtime.getEntityById(entityId)
+    // why generate this, instead of using message.entityId?
+    //const entityId = createUniqueUuid(runtime, message.metadata.fromId);
+    const entity = await runtime.getEntityById(message.entityId)
+    if (!entity) {
+      logger.warn('DELETE_REGISTRATION client did not set entity', message.entityId)
+      return false;
+    }
     const email = entity.components.find(c => c.type === EMAIL_TYPE)
     return email // can only clear what's set
   },
@@ -36,9 +41,13 @@ export const deleteRegistration: Action = {
 
     const roomDetails = await runtime.getRoom(message.roomId);
     // author entity for this runtime
-    const entityId = createUniqueUuid(runtime, message.metadata.fromId);
+    //const entityId = createUniqueUuid(runtime, message.metadata.fromId);
 
-    const entity = await runtime.getEntityById(entityId)
+    const entity = await runtime.getEntityById(message.entityId)
+    if (!entity) {
+      logger.warn('client did not set entity')
+      return false;
+    }
     console.log('entity', entity)
     const existingComponent = entity.components.find(c => c.type === EMAIL_TYPE)
     /*

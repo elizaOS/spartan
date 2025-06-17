@@ -61,6 +61,11 @@ export const devFix: Action = {
     } // else already there... repsond differently?
     const entity = await runtime.getEntityById(entityId)
     if (!entity) {
+      logger.warn('client did not set entity')
+      return false;
+    }
+    /*
+    if (!entity) {
       console.log('need to create entity')
       const created = await runtime.createEntity({
         id: entityId,
@@ -69,6 +74,7 @@ export const devFix: Action = {
         agentId: runtime.agentId,
       });
     }
+    */
     /*
     console.log('entity', entity)
     const email = entity.components.find(c => c.type === EMAIL_TYPE)

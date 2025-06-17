@@ -12,15 +12,19 @@ export const userMetawalletList: Action = {
   similes: [
   ],
   validate: async (runtime: IAgentRuntime, message: Memory) => {
-    console.log('USER_METAWALLET_LIST validate', message?.metadata?.fromId)
+    //console.log('USER_METAWALLET_LIST validate', message?.metadata?.fromId)
     if (!message?.metadata?.fromId) {
       console.log('USER_METAWALLET_LIST validate - author not found')
       return false
     }
 
-    const entityId = createUniqueUuid(runtime, message.metadata.fromId);
-    if (entityId === null) return false;
-    const entity = await runtime.getEntityById(entityId)
+    //const entityId = createUniqueUuid(runtime, message.metadata.fromId);
+    //if (entityId === null) return false;
+    const entity = await runtime.getEntityById(message.entityId)
+    if (!entity) {
+      logger.warn('USER_METAWALLET_LIST client did not set entity')
+      return false;
+    }
     //console.log('entity', entity)
     const reg = !!entity.components.find(c => c.type === EMAIL_TYPE)
     if (!reg) return false;
@@ -43,8 +47,8 @@ export const userMetawalletList: Action = {
     console.log('USER_METAWALLET_LIST handler')
 
     // using the service to get this/components might be good way
-    const entityId = createUniqueUuid(runtime, message.metadata.fromId);
-    const entity = await runtime.getEntityById(entityId)
+    //const entityId = createUniqueUuid(runtime, message.metadata.fromId);
+    const entity = await runtime.getEntityById(message.entityId)
     //console.log('entity', entity)
     const email = entity.components.find(c => c.type === EMAIL_TYPE)
     //console.log('email', email)

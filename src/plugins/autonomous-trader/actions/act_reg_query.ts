@@ -29,10 +29,11 @@ export const checkRegistration: Action = {
   ): Promise<boolean> => {
     console.log('CHECK_REGISTRATION handler')
     // using the service to get this/components might be good way
-    const entityId = createUniqueUuid(runtime, message.metadata.fromId);
-    const entity = await runtime.getEntityById(entityId)
+    //const entityId = createUniqueUuid(runtime, message.metadata.fromId);
+    const entity = await runtime.getEntityById(message.entityId)
     if (!entity) {
-
+      logger.warn('CHECK_REGISTRATION client did not set entity')
+      return false;
     }
     //console.log('sve:validate entity', entity)
     const email = entity.components.find(c => c.type === EMAIL_TYPE)

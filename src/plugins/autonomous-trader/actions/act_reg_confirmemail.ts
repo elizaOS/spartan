@@ -27,8 +27,12 @@ export const checkRegistrationCode: Action = {
     if (!message.metadata.fromId) return false
 
     // using the service to get this/components might be good way
-    const entityId = createUniqueUuid(runtime, message.metadata.fromId);
-    const entity = await runtime.getEntityById(entityId)
+    //const entityId = createUniqueUuid(runtime, message.metadata.fromId);
+    const entity = await runtime.getEntityById(message.entityId)
+    if (!entity) {
+      logger.warn('VERIFY_REGISTRATION_CODE client did not set entity')
+      return false;
+    }
     const email = entity.components.find(c => c.type === EMAIL_TYPE)
     const containsGeneratedCode = findGeneratedCode(message.content.text, 16)
     if (containsGeneratedCode !== null) {
@@ -50,8 +54,8 @@ export const checkRegistrationCode: Action = {
     // get room and it's components?
     const roomDetails = await runtime.getRoom(message.roomId);
 
-    const entityId = createUniqueUuid(runtime, message.metadata.fromId);
-    const entity = await runtime.getEntityById(entityId)
+    //const entityId = createUniqueUuid(runtime, message.metadata.fromId);
+    const entity = await runtime.getEntityById(message.entityId)
     console.log('VERIFY_REGISTRATION_CODE entity', entity)
     const email = entity.components.find(c => c.type === EMAIL_TYPE)
     if (!email) {
@@ -86,7 +90,7 @@ export const checkRegistrationCode: Action = {
       worldId: roomDetails.worldId,
       roomId: message.roomId,
       sourceEntityId: message.entityId,
-      entityId: entityId,
+      entityId: message.entityId,
       type: EMAIL_TYPE,
       data: email.data,
       agentId: runtime.agentId,
