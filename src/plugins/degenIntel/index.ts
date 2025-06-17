@@ -37,39 +37,45 @@ export const degenIntelPlugin: Plugin = {
   ],
   init: async (_, runtime: IAgentRuntime) => {
     console.log('intel init');
+    new Promise(async resolve => {
+      resolve()
+      // db needs some time...
+      setTimeout(async () => {
+        await registerTasks(runtime);
+        console.log('intel init - tasks registered');
+      }, 60 * 1000)
 
-    await registerTasks(runtime);
+      const plugins = runtime.plugins.map((p) => p.name);
+      let notUsed = true;
 
-    const plugins = runtime.plugins.map((p) => p.name);
-    let notUsed = true;
+      // let the plugins handle this
+      /*
+      // check for cmc key, if have then register provider
+      if (runtime.getSetting('COINMARKETCAP_API_KEY')) {
+        runtime.registerProvider(cmcMarketProvider);
+        notUsed = false;
+      }
 
-    // let the plugins handle this
-    /*
-    // check for cmc key, if have then register provider
-    if (runtime.getSetting('COINMARKETCAP_API_KEY')) {
-      runtime.registerProvider(cmcMarketProvider);
-      notUsed = false;
-    }
+      // check for birdeeye key, if have then register provider
+      if (runtime.getSetting('BIRDEYE_API_KEY')) {
+        runtime.registerProvider(birdeyeTrendingProvider);
+        runtime.registerProvider(birdeyeTradePortfolioProvider);
+        notUsed = false;
+      }
+      */
 
-    // check for birdeeye key, if have then register provider
-    if (runtime.getSetting('BIRDEYE_API_KEY')) {
-      runtime.registerProvider(birdeyeTrendingProvider);
-      runtime.registerProvider(birdeyeTradePortfolioProvider);
-      notUsed = false;
-    }
-    */
+      // twitter for sentiment
+      if (plugins.indexOf('twitter') !== -1) {
+        runtime.registerProvider(sentimentProvider);
+        notUsed = false;
+      }
 
-    // twitter for sentiment
-    if (plugins.indexOf('twitter') !== -1) {
-      runtime.registerProvider(sentimentProvider);
-      notUsed = false;
-    }
-
-    if (notUsed) {
-      logger.warn(
-        'degen-intel plugin is included but not providing any value (COINMARKETCAP_API_KEY/BIRDEYE_API_KEY or twitter are suggested)'
-      );
-    }
-    console.log('degenIntel done')
+      if (notUsed) {
+        logger.warn(
+          'degen-intel plugin is included but not providing any value (COINMARKETCAP_API_KEY/BIRDEYE_API_KEY or twitter are suggested)'
+        );
+      }
+      console.log('degenIntel done')
+    })
   },
 };
