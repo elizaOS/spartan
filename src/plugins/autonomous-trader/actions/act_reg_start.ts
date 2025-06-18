@@ -262,6 +262,19 @@ sve:validate message {
         });
 */
         takeItPrivate(runtime, message, 'What email address would you like to use for registration', responses)
+
+        const isDM = roomDetails.type === 'dm'
+        if (!isDM) {
+          const responseContent = {
+            text: 'I\'ll DM you',
+            // for the web UI
+            //actions: ['REPLY'],
+            attachments: [],
+            inReplyTo: createUniqueUuid(runtime, message.id)
+          };
+          callback(responseContent)
+        }
+
         //responses.length = 0 // just clear them all
       }
     }
@@ -313,19 +326,6 @@ sve:validate message {
       },
     ],
     [
-      {
-        name: '{{name1}}',
-        content: {
-          text: 'I\'m thinking about signing up with openai',
-        },
-      },
-      {
-        name: '{{name2}}',
-        content: {
-          actions: ['IGNORE'],
-        },
-      },
-    ], [
       {
         name: '{{name1}}',
         content: {
