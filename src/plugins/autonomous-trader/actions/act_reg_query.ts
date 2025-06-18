@@ -82,33 +82,5 @@ export const checkRegistration: Action = {
         },
       },
     ],
-    [
-      {
-        name: '{{name1}}',
-        content: {
-          text: 'am I signed up for openai?',
-        },
-      },
-      {
-        name: '{{name2}}',
-        content: {
-          actions: ['IGNORE'],
-        },
-      },
-    ],
-    [
-      {
-        name: '{{name1}}',
-        content: {
-          text: 'what is bob signed up under?',
-        },
-      },
-      {
-        name: '{{name2}}',
-        content: {
-          actions: ['IGNORE'],
-        },
-      },
-    ],
   ] as ActionExample[][],
 }
