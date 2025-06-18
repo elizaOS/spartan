@@ -66,7 +66,14 @@ export const servicesMenu: Action = {
     //console.log('SERVICES_MENU entity', entity)
     const signedup = entity.components.find(c => c.type === EMAIL_TYPE)
 
-    await messageReply(runtime, message, 'You can ask me to create a wallet for autonomous trading', responses)
+    //await messageReply(runtime, message, 'You can ask me to create a wallet for autonomous trading', responses)
+    const responseContent = {
+      text: 'You can ask me to create a wallet for autonomous trading',
+      // for the web UI
+      //actions: ['REPLY'],
+    };
+    callback(responseContent)
+    return
   },
   examples: [
     [
@@ -111,20 +118,6 @@ export const servicesMenu: Action = {
         content: {
           text: menutext,
           actions: ['SERVICES_MENU'],
-        },
-      },
-    ],
-    [
-      {
-        name: '{{name1}}',
-        content: {
-          text: 'What can I do with openai?',
-        },
-      },
-      {
-        name: '{{name2}}',
-        content: {
-          text: "IDK, ask them"
         },
       },
     ],
