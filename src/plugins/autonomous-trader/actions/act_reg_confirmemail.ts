@@ -116,20 +116,6 @@ export const checkRegistrationCode: Action = {
       {
         name: '{{name1}}',
         content: {
-          text: 'This is the code openai sent CODE',
-        },
-      },
-      {
-        name: '{{name2}}',
-        content: {
-          actions: ['IGNORE'],
-        },
-      },
-    ],
-    [
-      {
-        name: '{{name1}}',
-        content: {
           text: 'what was the code you emailed me?',
         },
       },
