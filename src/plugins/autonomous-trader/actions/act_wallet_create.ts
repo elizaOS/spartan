@@ -79,7 +79,7 @@ sve:validate message {
     //const entityId = createUniqueUuid(runtime, message.metadata.fromId);
     const entity = await runtime.getEntityById(message.entityId)
     if (!entity) {
-      logger.warn('WALLET_CREATION client did not set entity')
+      runtime.logger.warn('WALLET_CREATION client did not set entity')
       return false;
     }
     //console.log('entity', entity)
@@ -88,10 +88,19 @@ sve:validate message {
 
     responses.length = 0 // just clear them all
     if (!email) {
-      runtime.logger.info('Not registered')
+      runtime.logger.info('WALLET_CREATION - Not registered')
       //takeItPrivate(runtime, message, 'You need to sign up for my services first')
-      messageReply(runtime, message, 'You need to sign up for my services first', responses)
-      return
+      const responseContent = {
+        text: 'You need to sign up for my services first',
+        // for the web UI
+        //actions: ['REPLY'],
+        attachments: [],
+        inReplyTo: createUniqueUuid(runtime, message.id)
+      };
+      console.log('created callback', responseContent)
+      return callback(responseContent)
+      //messageReply(runtime, message, 'You need to sign up for my services first', responses)
+      //return
     }
 
     const traderChainService = runtime.getService('TRADER_STRATEGY') as any;
@@ -150,19 +159,6 @@ sve:validate message {
       {
         name: '{{name1}}',
         content: {
-          text: 'I want to trade with a friend',
-        },
-      },
-      {
-        name: '{{name2}}',
-        content: {
-          actions: ['IGNORE'],
-        },
-      },
-    ], [
-      {
-        name: '{{name1}}',
-        content: {
           text: 'generate a wallet',
         },
       },
@@ -170,6 +166,21 @@ sve:validate message {
         name: '{{name2}}',
         content: {
           text: "I'll help generate one, what trading strategy do you want to use?",
+          actions: ['WALLET_CREATION'],
+        },
+      },
+    ],
+    [
+      {
+        name: '{{name1}}',
+        content: {
+          text: 'can you create a wallet for me?',
+        },
+      },
+      {
+        name: '{{name2}}',
+        content: {
+          text: "First you need to sign up",
           actions: ['WALLET_CREATION'],
         },
       },
