@@ -68,7 +68,7 @@ export const setStrategy: Action = {
     const stratgiesList = await traderStrategyService.listActiveStrategies()
     // maybe we use an LLM call to get their exact meaning
     const containsStrat = stratgiesList.some(word => message.content.text.toUpperCase().includes(word.toUpperCase()))
-    console.log('containsStrats', containsStrats)
+    console.log('containsStrat', containsStrat)
     //takeItPrivate(runtime, message, 'Hrm you\'ve selected a strategy, time to make a wallet')
 
     // should we check to see if we already a wallet with this strategy? no
@@ -88,7 +88,7 @@ export const setStrategy: Action = {
 
     if (newData.metawallets === undefined) newData.metawallets = []
     const newWallet = {
-      strategy: containsStrats[0],
+      strategy: containsStrat[0],
     }
     /*
     const keypairs = {}
@@ -172,19 +172,6 @@ export const setStrategy: Action = {
       },
     ],
     [
-      {
-        name: '{{name1}}',
-        content: {
-          text: 'I want to trade with a friend',
-        },
-      },
-      {
-        name: '{{name2}}',
-        content: {
-          actions: ['IGNORE'],
-        },
-      },
-    ], [
       {
         name: '{{name1}}',
         content: {
