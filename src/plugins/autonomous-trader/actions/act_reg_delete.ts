@@ -60,6 +60,7 @@ export const deleteRegistration: Action = {
     console.log('existingComponent', existingComponent)
     */
 
+    responses.length = 0 // just clear them all
     if (existingComponent) {
       console.log('deleting', existingComponent)
       takeItPrivate(runtime, message, 'Just cleared your registration: ' + existingComponent.data.address, responses)
@@ -67,7 +68,6 @@ export const deleteRegistration: Action = {
     } else {
       takeItPrivate(runtime, message, 'Cant find your registration', responses)
     }
-    responses.length = 0 // just clear them all
   },
   examples: [
     [
@@ -101,19 +101,6 @@ export const deleteRegistration: Action = {
       },
     ],
     [
-      {
-        name: '{{name1}}',
-        content: {
-          text: 'Please delete my email on openai',
-        },
-      },
-      {
-        name: '{{name2}}',
-        content: {
-          actions: ['IGNORE'],
-        },
-      },
-    ], [
       {
         name: '{{name1}}',
         content: {
