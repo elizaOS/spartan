@@ -1,7 +1,9 @@
 import { IAgentRuntime, getSalt, encryptStringValue, Service, logger } from '@elizaos/core';
 import { acquireService } from '../utils';
 
-import { getWalletByUserEntityIds } from '../interfaces/int_wallets';
+import { getWalletByUserEntityIds, getWalletsByPubkey } from '../interfaces/int_wallets';
+import { getUserIdsByPubkeys } from '../interfaces/int_users';
+import { createPosition } from '../interfaces/int_positions';
 
 export class InterfaceWalletService extends Service {
   private isRunning = false;
@@ -19,6 +21,11 @@ export class InterfaceWalletService extends Service {
 
   async getWalletByUserEntityIds(entities) {
     const metawallets = await getWalletByUserEntityIds(this.runtime, entities)
+    return metawallets
+  }
+
+  async getWalletsByPubkey(pubKey) {
+    const metawallets = await getWalletsByPubkey(pubKey)
     return metawallets
   }
 
