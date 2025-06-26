@@ -3,14 +3,15 @@ import {
   logger,
 } from '@elizaos/core';
 import { v4 as uuidv4 } from 'uuid';
-import { takeItPrivate, messageReply } from '../utils'
-import { EMAIL_TYPE } from '../constants'
+import { takeItPrivate, messageReply, HasEntityIdFromMessage, getAccountFromMessage, getDataFromMessage } from '../utils'
 
 // handle starting new form and collecting first field
+// maybe combine with setstrategy, so the mode can help steer outcome
 export const walletCreate: Action = {
-  name: 'WALLET_CREATION',
+  name: 'WALLET_OPTIONS',
   similes: [
   ],
+  description: 'Replies, and gives a list of available strategies that you can make a wallet with',
   validate: async (runtime: IAgentRuntime, message: Memory) => {
     //console.log('WALLET_CREATION validate')
 /*
@@ -38,23 +39,21 @@ sve:validate message {
 */
     //console.log('sve:validate message', message)
 
-    /*
-    // if not a discord/telegram message, we can ignore it
-    if (!message.metadata.fromId) return false
+    // they have to be registered
+    if (!await HasEntityIdFromMessage(runtime, message)) {
+      //console.log('WALLET_CREATION validate - author not found')
+      return false
+    }
 
-    // using the service to get this/components might be good way
-    const entityId = createUniqueUuid(runtime, message.metadata.fromId);
-    const entity = await runtime.getEntityById(entityId)
-    //console.log('reg:validate entity', entity)
-    const email = entity.components.find(c => c.type === EMAIL_TYPE)
-    console.log('wallet_create:validate - are signed up?', !!email)
-    return !!email
-    */
-    // don't they have to be registered?
+    const account = await getAccountFromMessage(runtime, message)
+    if (!account) {
+      //console.log('WALLET_CREATION validate - account not found')
+      return false;
+    }
+
     const traderChainService = runtime.getService('TRADER_STRATEGY') as any;
     return traderChainService
   },
-  description: 'Replies, and allows a user to create a wallet',
   handler: async (
     runtime: IAgentRuntime,
     message: Memory,
@@ -66,48 +65,12 @@ sve:validate message {
     console.log('WALLET_CREATION handler')
     //console.log('message', message)
 
-    // ok we need to change a state on this author
-
-    // get room and it's components?
-    //const roomDetails = await runtime.getRoom(message.roomId);
-    // doesn't have components
-    //console.log('roomDetails', roomDetails)
-    //const roomEntity = await runtime.getEntityById(message.roomId)
-    //console.log('roomEntity', roomEntity)
-
-    // using the service to get this/components might be good way
-    //const entityId = createUniqueUuid(runtime, message.metadata.fromId);
-    const entity = await runtime.getEntityById(message.entityId)
-    if (!entity) {
-      runtime.logger.warn('WALLET_CREATION client did not set entity')
-      return false;
-    }
-    //console.log('entity', entity)
-    const email = entity.components.find(c => c.type === EMAIL_TYPE)
-    //console.log('email', email)
-
-    responses.length = 0 // just clear them all
-    if (!email) {
-      runtime.logger.info('WALLET_CREATION - Not registered')
-      //takeItPrivate(runtime, message, 'You need to sign up for my services first')
-      const responseContent = {
-        text: 'You need to sign up for my services first',
-        // for the web UI
-        //actions: ['REPLY'],
-        attachments: [],
-        inReplyTo: createUniqueUuid(runtime, message.id)
-      };
-      console.log('created callback', responseContent)
-      return callback(responseContent)
-      //messageReply(runtime, message, 'You need to sign up for my services first', responses)
-      //return
-    }
-
+    // Hrm youve already signed up,
     const traderChainService = runtime.getService('TRADER_STRATEGY') as any;
     const stratgiesList = await traderChainService.listActiveStrategies()
-    console.log('stratgiesList', stratgiesList)
-    // Hrm youve already signed up,
-    takeItPrivate(runtime, message, 'Please select an available strategies for the wallet: \n-' + stratgiesList.join('\n-') + '\n', responses)
+    //console.log('stratgiesList', stratgiesList)
+    const output = takeItPrivate(runtime, message, 'Please select an available strategies for the wallet: \n-' + stratgiesList.join('\n-') + '\n')
+    callback(output)
   },
   examples: [
     [
@@ -121,7 +84,7 @@ sve:validate message {
         name: '{{name2}}',
         content: {
           text: "I'll help you get started",
-          actions: ['WALLET_CREATION'],
+          actions: ['WALLET_OPTIONS'],
         },
       },
     ],
@@ -136,7 +99,7 @@ sve:validate message {
         name: '{{name2}}',
         content: {
           text: "What strategy u wanna use",
-          actions: ['WALLET_CREATION'],
+          actions: ['WALLET_OPTIONS'],
         },
       },
     ],
@@ -151,7 +114,7 @@ sve:validate message {
         name: '{{name2}}',
         content: {
           text: "based. what strategy u want me to use",
-          actions: ['WALLET_CREATION'],
+          actions: ['WALLET_OPTIONS'],
         },
       },
     ],
@@ -166,7 +129,7 @@ sve:validate message {
         name: '{{name2}}',
         content: {
           text: "I'll help generate one, what trading strategy do you want to use?",
-          actions: ['WALLET_CREATION'],
+          actions: ['WALLET_OPTIONS'],
         },
       },
     ],
@@ -181,7 +144,7 @@ sve:validate message {
         name: '{{name2}}',
         content: {
           text: "First you need to sign up",
-          actions: ['WALLET_CREATION'],
+          actions: ['WALLET_OPTIONS'],
         },
       },
     ],

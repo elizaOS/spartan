@@ -6,9 +6,10 @@ import {
   createUniqueUuid,
   logger,
 } from '@elizaos/core';
-import { takeItPrivate } from '../utils'
-import { EMAIL_TYPE } from '../constants'
+import { takeItPrivate, HasEntityIdFromMessage, getDataFromMessage, getAccountFromMessage } from '../utils'
+import CONSTANTS from '../constants'
 
+// probably should be a provider
 export const checkRegistration: Action = {
   name: 'CHECK_REGISTRATION',
   similes: [
@@ -16,9 +17,13 @@ export const checkRegistration: Action = {
   // can only enter this if we don't have an email
   validate: async (runtime: IAgentRuntime, message: Memory) => {
     //console.log('CHECK_REGISTRATION validate')
+    if (!await HasEntityIdFromMessage(runtime, message)) {
+      console.log('CHECK_REGISTRATION validate - author not found')
+      return false
+    }
     return true
   },
-  description: 'Replies with if a user is registered or not',
+  description: 'Replies with if a user is registered or not. Does not check codes for completing registrations.' + CONSTANTS.DESCONLYCALLME,
   handler: async (
     runtime: IAgentRuntime,
     message: Memory,
@@ -29,27 +34,29 @@ export const checkRegistration: Action = {
   ): Promise<boolean> => {
     console.log('CHECK_REGISTRATION handler')
     // using the service to get this/components might be good way
-    //const entityId = createUniqueUuid(runtime, message.metadata.fromId);
-    const entity = await runtime.getEntityById(message.entityId)
-    if (!entity) {
-      logger.warn('CHECK_REGISTRATION client did not set entity')
-      return false;
-    }
-    //console.log('sve:validate entity', entity)
-    const email = entity.components.find(c => c.type === EMAIL_TYPE)
-    console.log('CHECK_REGISTRATION', email, email?.data.verified)
-    responses.length = 0 // just clear them all
-    if (email) {
+
+    //console.log('entity', entity)
+    const componentData = await getDataFromMessage(runtime, message)
+    //console.log('newEmail', componentData)
+
+    //const account = await getAccountFromMessage(runtime, message)
+
+    console.log('CHECK_REGISTRATION verified?', componentData?.verified)
+    //responses.length = 0 // just clear them all
+    let output = false
+    if (componentData) {
+      console.log('componentData', componentData)
       // what stage we in?
-      if (email.data.verified) {
-        takeItPrivate(runtime, message, 'You are signed up under ' + email.data.address, responses)
+      if (componentData.verified) {
+        output = takeItPrivate(runtime, message, 'You are signed up under ' + componentData.address)
       } else {
-        takeItPrivate(runtime, message, 'You are signed up under ' + email.data.address + ', waiting to be verified', responses)
+        output = takeItPrivate(runtime, message, 'You are signed up under ' + componentData.address + ', waiting to be verified')
       }
     } else {
-      takeItPrivate(runtime, message, 'You are not signed up', responses)
+      output = takeItPrivate(runtime, message, 'You are not signed up. Would you like to sign up, just provide me an email address?')
     }
-    console.log('CHECK_REGISTRATION outResponses', responses)
+    callback(output)
+    //console.log('CHECK_REGISTRATION outResponses', responses)
   },
   examples: [
     [

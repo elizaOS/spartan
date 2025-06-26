@@ -30,6 +30,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { UUID } from 'crypto';
 import { getWalletKey } from '../keypairUtils';
 import { SOLANA_SERVICE_NAME } from '../constants';
+import { takeItPrivate, messageReply, getAccountFromMessage } from '../utils'
 
 /**
  * Interface representing the content of a transfer with a specific address.
@@ -168,8 +169,16 @@ export default {
         'MULTIWALLET_PAY_TOKENS',
         'MULTIWALLET_PAY',
     ],
-    validate: async (_runtime: IAgentRuntime, message: Memory) => {
+    validate: async (runtime: IAgentRuntime, message: Memory) => {
         //logger.log('MULTIWALLET_TRANSFER Validating transfer from entity:', message.entityId);
+
+        if (!message?.metadata?.fromId) {
+          console.log('MULTIWALLET_TRANSFER validate - author not found')
+          return false
+        }
+
+        const account = await getAccountFromMessage(runtime, message)
+        if (!account) return false;
 
         // extract a list of base58 address (of what length?) from message.context.text
         // ensure there's 2
@@ -210,6 +219,7 @@ export default {
         //const entityId = createUniqueUuid(runtime, message.metadata.fromId);
         //console.log('MULTIWALLET_TRANSFER entityId', entityId)
 
+        /*
         const asking = 'solana';
         const serviceType = 'AUTONOMOUS_TRADER_INTERFACE_WALLETS';
         let interfaceWalletService = runtime.getService(serviceType) as any;
@@ -222,9 +232,11 @@ export default {
             console.log(asking, 'Acquired', serviceType, 'service...');
           }
         }
+        */
+        const account = await getAccountFromMessage(runtime, message)
 
-        const metawallets = await interfaceWalletService.getWalletByUserEntityIds([message.entityId])
-        const userMetawallets = metawallets[message.entityId]
+        //const metawallets = await interfaceWalletService.getWalletByEmailEntityIds([message.entityId])
+        const userMetawallets = account.metawallets
         //console.log('MULTIWALLET_TRANSFER wallets', userMetawallets)
 
         // confirm wallet is in this list
@@ -270,7 +282,7 @@ export default {
             const decimals = t.account.data.parsed.info.tokenAmount.decimals;
             const balance = Number(amountRaw) / (10 ** decimals);
             const symbol = await solanaService.getTokenSymbol(mintKey)
-            console.log('MULTIWALLET_TRANSFER symbol', symbol)
+            //console.log('MULTIWALLET_TRANSFER symbol', symbol)
             contextStr += '  ' + t.pubkey.toString() + ' ($' + symbol + ') balance: ' + balance + "\n"
           }
           contextStr += '\n'
@@ -283,12 +295,22 @@ export default {
             template: transferAddressTemplate,
         });
 
+        /*
         const result = await runtime.useModel(ModelType.TEXT_LARGE, {
             prompt: transferPrompt.replace('{{possibleWallets}}', contextStr),
         });
 
         const content = parseJSONObjectFromText(result);
+        */
+
+        const content = await askLlmObject(runtime, { prompt: transferPrompt.replace('{{possibleWallets}}', contextStr) },
+          ['tokenAddress', 'senderWalletAddress', 'recipientWalletAddress', 'amount'])
+
         console.log('MULTIWALLET_TRANSFER content', content)
+        if (!content) {
+          console.log('couldnt figure it out')
+          return false
+        }
 
         // Override the recipient from the model with the one from options
         /*
@@ -303,6 +325,9 @@ export default {
         //console.log('MULTIWALLET_TRANSFER sourceKp', sourceKp)
         if (!sourceKp) {
           // FIXME
+          // can be the model failing to match something
+          console.warn('unknown address', content.senderWalletAddress, 'in', found)
+          return false
         }
         const secretKey = bs58.decode(sourceKp.privateKey);
         const senderKeypair = Keypair.fromSecretKey(secretKey);
@@ -513,7 +538,7 @@ export default {
                     text: 'Sending SOL now...',
                     actions: ['MULTIWALLET_TRANSFER'],
                     options: {
-                        recipientAddress: '9jW8FPr6BSSsemWPV22UUCzSqkVdTp6HTyPqeqyuBbCa',
+                        recipientAddress: '3nMBmufBUBVnk28sTp3NsrSJsdVGTyLZYmsqpMFaUT9J',
                     },
                 },
             },
@@ -522,7 +547,7 @@ export default {
             {
                 name: '{{name1}}',
                 content: {
-                    text: 'Send 69 $DEGENAI BieefG47jAHCGZBxi2q87RDuHyGZyYC3vAzxpyu8pump',
+                    text: 'Send 69 $DEGENAI 3nMBmufBUBVnk28sTp3NsrSJsdVGTyLZYmsqpMFaUT9J',
                 },
             },
             {
@@ -531,7 +556,7 @@ export default {
                     text: 'Sending the tokens now...',
                     actions: ['MULTIWALLET_TRANSFER'],
                     options: {
-                        recipientAddress: '9jW8FPr6BSSsemWPV22UUCzSqkVdTp6HTyPqeqyuBbCa',
+                        recipientAddress: '3nMBmufBUBVnk28sTp3NsrSJsdVGTyLZYmsqpMFaUT9J',
                     },
                 },
             },

@@ -11,6 +11,7 @@ import {
     logger,
     createUniqueUuid,
     parseJSONObjectFromText,
+    type UUID,
 } from '@elizaos/core';
 import {
     createAssociatedTokenAccountInstruction,
@@ -27,9 +28,8 @@ import {
 } from '@solana/web3.js';
 import bs58 from 'bs58';
 import { v4 as uuidv4 } from 'uuid';
-import { UUID } from 'crypto';
 import { SOLANA_SERVICE_NAME } from '../constants';
-import type { SolanaService } from '../service';
+import { HasEntityIdFromMessage, getDataFromMessage, getAccountFromMessage } from '../utils';
 
 /**
  * Interface representing the content of a sweep operation.
@@ -46,13 +46,15 @@ function isSweepWalletContent(content: SweepWalletContent): boolean {
     logger.log('Content for sweep', content);
 
     if (!content.senderWalletAddress || typeof content.senderWalletAddress !== 'string') {
+        console.warn('bad senderWalletAddress')
         return false;
     }
 
     if (!content.recipientWalletAddress || typeof content.recipientWalletAddress !== 'string') {
+        console.warn('bad recipientWalletAddress')
         return false;
     }
-
+    console.log('contents good')
     return true;
 }
 
@@ -113,7 +115,17 @@ export default {
         'MULTIWALLET_SWEEP_BALANCES',
         'MULTIWALLET_SWEEP_FUNDS',
     ],
-    validate: async (_runtime: IAgentRuntime, _message: Memory) => {
+    validate: async (runtime: IAgentRuntime, message: Memory) => {
+        // they have to be registered
+        if (!await HasEntityIdFromMessage(runtime, message)) {
+            console.log('MULTIWALLET_SWEEP validate - author not found')
+            return false
+        }
+        const reg = await getDataFromMessage(runtime, message)
+        if (!reg) {
+            return false;
+        }
+
         return true;
     },
     description: 'Sweep all assets (SOL and SPL tokens) from one wallet to another.',
@@ -142,7 +154,7 @@ export default {
         }
 
         // find this user's wallet
-        const entityId = createUniqueUuid(runtime, message.metadata?.fromId);
+        //const entityId = createUniqueUuid(runtime, message.metadata?.sourceId || '');
 
         const asking = 'solana';
         const serviceType = 'AUTONOMOUS_TRADER_INTERFACE_WALLETS';
@@ -157,25 +169,33 @@ export default {
             }
         }
 
-        const metawallets = await interfaceWalletService.getWalletByUserEntityIds([entityId]);
-        const userMetawallets = metawallets[entityId];
+        const accountComponentData = await getAccountFromMessage(runtime, message)
 
+        const metawallets = accountComponentData.metawallets
+        console.log('metawallets', metawallets)
+
+        const userMetawallet = metawallets.find(mw => mw.keypairs?.solana?.publicKey === sourceResult.sourceWalletAddress);
+        console.log('userMetawallet', userMetawallet)
+        let found = [userMetawallet.keypairs.solana] // map kp
+
+        /*
         // confirm wallet is in this list
-        let found = [];
-        for (const mw of userMetawallets) {
-            const kp = mw.keypairs.solana;
+        let found: any[] = [];
+        //for (const mw of userMetawallets) {
+            const kp = userMetawallet.keypairs.solana;
             if (kp) {
                 console.log('kp', kp);
                 if (kp.publicKey.toString() === sourceResult.sourceWalletAddress) {
                     found.push(kp);
                 }
             }
-        }
+        //}
 
         if (!found.length) {
             console.log('MULTIWALLET_SWEEP did not find any local wallet with this source address', sourceResult);
             return false;
         }
+        */
         console.log('MULTIWALLET_SWEEP found', found);
 
         // gather possibilities
@@ -217,6 +237,12 @@ export default {
         });
 
         const content = parseJSONObjectFromText(result) as SweepWalletContent;
+
+        if (content === null) {
+            console.log('no usable llm response')
+            return false
+        }
+
         console.log('MULTIWALLET_SWEEP content', content);
 
         if (!isSweepWalletContent(content)) {
@@ -225,8 +251,10 @@ export default {
         }
 
         // find source keypair
-        const sourceKp = found.find(kp => kp.publicKey === content.senderWalletAddress);
+        console.log('found', found)
+        const sourceKp = found.find(kp => kp.publicKey === sourceResult.sourceWalletAddress);
         if (!sourceKp) {
+            console.warn('MULTIWALLET_SWEEP Could not find the specified wallet')
             callback?.({ text: 'Could not find the specified wallet' });
             return false;
         }
@@ -239,6 +267,7 @@ export default {
             const connection = new Connection(
                 runtime.getSetting('SOLANA_RPC_URL') || 'https://api.mainnet-beta.solana.com'
             );
+            console.log('1')
 
             // Get all token accounts and SOL balance
             const [solBalance, tokenAccounts] = await Promise.all([
@@ -248,7 +277,7 @@ export default {
                 }),
             ]);
 
-            const instructions = [];
+            const instructions: any[] = [];
 
             // Handle SOL transfer (leave some for fees)
             if (solBalance > 5000) { // Leave 5000 lamports for fees
@@ -300,6 +329,8 @@ export default {
                 return false;
             }
 
+            console.log('2')
+
             // Create and send transaction
             const messageV0 = new TransactionMessage({
                 payerKey: senderKeypair.publicKey,
@@ -310,11 +341,25 @@ export default {
             const transaction = new VersionedTransaction(messageV0);
             transaction.sign([senderKeypair]);
 
+            const latestBlockhash = await connection.getLatestBlockhash();
             const signature = await connection.sendTransaction(transaction, {
                 skipPreflight: false,
                 maxRetries: 3,
                 preflightCommitment: 'confirmed',
             });
+
+            const confirmation = await connection.confirmTransaction(
+                {
+                    signature: signature,
+                    blockhash: latestBlockhash.blockhash,
+                    lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+                },
+                'confirmed'
+            );
+
+            if (confirmation.value.err) {
+                throw new Error(`Transaction failed: ${confirmation.value.err}`);
+            }
 
             const responseText = `Sweep completed successfully! Transaction ID: ${signature}`;
             responses.length = 0;
@@ -364,4 +409,4 @@ export default {
             },
         ],
     ] as ActionExample[][],
-} as Action; 
+} as Action;

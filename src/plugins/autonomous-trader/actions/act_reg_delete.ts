@@ -2,8 +2,8 @@ import {
   createUniqueUuid,
   logger,
 } from '@elizaos/core';
-import { takeItPrivate } from '../utils'
-import { EMAIL_TYPE } from '../constants'
+import { takeItPrivate, HasEntityIdFromMessage, getDataFromMessage } from '../utils'
+import CONSTANTS from '../constants'
 
 export const deleteRegistration: Action = {
   name: 'DELETE_REGISTRATION',
@@ -11,23 +11,20 @@ export const deleteRegistration: Action = {
   ],
   // can only enter this if we don't have an email
   validate: async (runtime: IAgentRuntime, message: Memory) => {
-    console.log('DELETE_REGISTRATION validate')
+    //console.log('DELETE_REGISTRATION validate')
 
-    // if not a discord/telegram message, we can ignore it
-    if (!message.metadata.fromId) return false
-
-    // using the service to get this/components might be good way
-    // why generate this, instead of using message.entityId?
-    //const entityId = createUniqueUuid(runtime, message.metadata.fromId);
-    const entity = await runtime.getEntityById(message.entityId)
-    if (!entity) {
-      logger.warn('DELETE_REGISTRATION client did not set entity', message.entityId)
-      return false;
+    if (!await HasEntityIdFromMessage(runtime, message)) {
+      console.warn('DELETE_REGISTRATION validate - author not found')
+      return false
     }
-    const email = entity.components.find(c => c.type === EMAIL_TYPE)
-    return email // can only clear what's set
+    //console.log('entity', entity)
+
+    const reg = await getDataFromMessage(runtime, message)
+    // is it verified?
+    if (!reg) return false; // can only clear what's set
+    return true
   },
-  description: 'Replies, allowing a user to delete their account with Spartan services',
+  description: 'Replies, allowing a user to delete their account with Spartan services.' + CONSTANTS.DESCONLYCALLME,
   handler: async (
     runtime: IAgentRuntime,
     message: Memory,
@@ -39,35 +36,22 @@ export const deleteRegistration: Action = {
     console.log('DELETE_REGISTRATION handler')
     //console.log('message', message)
 
-    const roomDetails = await runtime.getRoom(message.roomId);
+    //const roomDetails = await runtime.getRoom(message.roomId);
     // author entity for this runtime
     //const entityId = createUniqueUuid(runtime, message.metadata.fromId);
 
-    const entity = await runtime.getEntityById(message.entityId)
-    if (!entity) {
-      logger.warn('client did not set entity')
-      return false;
-    }
-    console.log('entity', entity)
-    const existingComponent = entity.components.find(c => c.type === EMAIL_TYPE)
-    /*
-    const existingComponent = await runtime.getComponent(
-      entityId,
-      EMAIL_TYPE,
-      roomDetails.worldId,
-      message.entityId
-    );
-    console.log('existingComponent', existingComponent)
-    */
+    const componentData = await getDataFromMessage(runtime, message)
+    //console.log('newEmail', componentData)
 
-    responses.length = 0 // just clear them all
-    if (existingComponent) {
-      console.log('deleting', existingComponent)
-      takeItPrivate(runtime, message, 'Just cleared your registration: ' + existingComponent.data.address, responses)
-      runtime.deleteComponent(existingComponent.id)
+    let output = false
+    if (componentData) {
+      console.log('deleting', componentData)
+      output = takeItPrivate(runtime, message, 'Just cleared your registration: ' + componentData.address)
+      runtime.deleteComponent(componentData.componentId)
     } else {
-      takeItPrivate(runtime, message, 'Cant find your registration', responses)
+      output = takeItPrivate(runtime, message, 'Cant find your registration')
     }
+    callback(output)
   },
   examples: [
     [

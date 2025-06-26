@@ -4,7 +4,7 @@ import {
 } from '@elizaos/core';
 import { v4 as uuidv4 } from 'uuid';
 import { takeItPrivate } from '../utils'
-import { EMAIL_TYPE, SPARTAN_SERVICE_TYPE } from '../constants'
+import { SPARTAN_SERVICE_TYPE } from '../constants'
 
 // hack for data to fix data issues
 export const devFix: Action = {
@@ -12,7 +12,7 @@ export const devFix: Action = {
   similes: [
   ],
   validate: async (runtime: IAgentRuntime, message: Memory) => {
-    return true
+    return false
   },
   description: 'Allows developer to fix their shit',
   handler: async (
@@ -74,11 +74,6 @@ export const devFix: Action = {
         agentId: runtime.agentId,
       });
     }
-    */
-    /*
-    console.log('entity', entity)
-    const email = entity.components.find(c => c.type === EMAIL_TYPE)
-    console.log('email', email)
     */
     //console.log('DEVFIX would update users list', spartanData)
     console.log('DEVFIX would have responded', responses)
