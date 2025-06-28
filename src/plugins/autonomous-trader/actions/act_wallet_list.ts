@@ -3,8 +3,7 @@ import {
   logger,
 } from '@elizaos/core';
 import { v4 as uuidv4 } from 'uuid';
-import { takeItPrivate, messageReply } from '../utils'
-import { EMAIL_TYPE } from '../constants'
+import { takeItPrivate, messageReply, getAccountFromMessage } from '../utils'
 
 // handle starting new form and collecting first field
 export const userMetawalletList: Action = {
@@ -18,12 +17,8 @@ export const userMetawalletList: Action = {
       return false
     }
 
-    const entityId = createUniqueUuid(runtime, message.metadata.fromId);
-    if (entityId === null) return false;
-    const entity = await runtime.getEntityById(entityId)
-    //console.log('entity', entity)
-    const reg = !!entity.components.find(c => c.type === EMAIL_TYPE)
-    if (!reg) return false;
+    const account = await getAccountFromMessage(runtime, message)
+    if (!account) return false;
 
     const traderChainService = runtime.getService('TRADER_CHAIN') as any;
     if (!traderChainService) return false
@@ -42,72 +37,46 @@ export const userMetawalletList: Action = {
   ): Promise<boolean> => {
     console.log('USER_METAWALLET_LIST handler')
 
-    // using the service to get this/components might be good way
-    const entityId = createUniqueUuid(runtime, message.metadata.fromId);
-    const entity = await runtime.getEntityById(entityId)
-    //console.log('entity', entity)
-    const email = entity.components.find(c => c.type === EMAIL_TYPE)
-    //console.log('email', email)
-
-    // should never hit it
-    if (!email) {
-      runtime.logger.log('Not registered')
-      return
-    }
-    const roomDetails = await runtime.getRoom(message.roomId);
-
-    const traderStrategyService = runtime.getService('TRADER_STRATEGY') as any;
-    const stratgiesList = await traderStrategyService.listActiveStrategies()
-    // maybe we use an LLM call to get their exact meaning
-    const containsStrats = stratgiesList.filter(word => message.content.text.includes(word))
-    console.log('containsStrats', containsStrats)
-    //takeItPrivate(runtime, message, 'Hrm you\'ve selected a strategy, time to make a wallet')
-
     // should we check to see if we already a wallet with this strategy? no
     // they can have multiple
+    const account = await getAccountFromMessage(runtime, message)
+    console.log('account', account)
 
-
-    // create meta wallet container on this registration
-
-    // which chains
-    /*
-    const traderChainService = runtime.getService('TRADER_CHAIN') as any;
-    const chains = await traderChainService.listActiveChains()
-    console.log('chains', chains)
-    */
-    if (!email.data.metawallets) {
-      responses.length = 0 // just clear them all
-      takeItPrivate(runtime, message, 'You don\'t have any wallets, do you want to make one?', responses)
+    if (!account.metawallets) {
+      const output = takeItPrivate(runtime, message, 'You don\'t have any wallets, do you want to make one?')
+      callback(output)
       return
     }
-
-    /*
-    [{"keypairs":{"Solana":{"publicKey":"CPNHuuGHpskEp4Fmr8cg9x6ZyEMokYvJTaBST5gywqA2","privateKey":"4vcbDoRNsRjmLSJEQjYFBi2ooG5EAY61t8K39vkNBoHaFSvcRmXB9imHx3azhMLxcPcPw67SCdEZYhKiAQDa1Y9Y"}},"strategy":"LLM trading strategy"}]
-    */
 
     // metawallet
     //   strategy
     //   keypairs
     let wStr = '\n\n'
-    for(const mw of email.data.metawallets) {
+    if (!Object.values(account.metawallets).length) {
+      // no keypairs?
+      wStr += '  None'
+    }
+    for(const mw of account.metawallets) {
       //console.log('mw', mw)
       wStr += 'Wallet:\n'
       wStr += '  Strategy: ' + mw.strategy + '\n'
       // mw.keypairs [{ chain, keypair {publicKey, privateKey} }]
-      // ' + JSON.stringify(mw.keypairs) +
       wStr += '  Keypairs: \n'
-      // no keypairs?
       for(const c in mw.keypairs) {
         const kp = mw.keypairs[c]
         //console.log('c', c, 'kp', kp)
         wStr += '    Chain: ' + c + "\n"
         wStr += '    Address: ' + kp.publicKey + "\n"
       }
+      if (!Object.values(mw.keypairs).length) {
+        // no keypairs?
+        wStr += '    None'
+      }
       wStr += '\n\n'
     }
 
-    responses.length = 0 // just clear them all
-    takeItPrivate(runtime, message, 'List wallets: ' + wStr, responses)
+    const output = takeItPrivate(runtime, message, 'List wallets: ' + wStr)
+    callback(output)
   },
   examples: [
     [

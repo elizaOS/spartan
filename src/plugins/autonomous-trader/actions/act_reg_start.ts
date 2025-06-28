@@ -4,8 +4,8 @@ import {
 } from '@elizaos/core';
 import { v4 as uuidv4 } from 'uuid';
 import nodemailer from 'nodemailer';
-import { takeItPrivate } from '../utils'
-import { EMAIL_TYPE, SPARTAN_SERVICE_TYPE } from '../constants'
+import { takeItPrivate, HasEntityIdFromMessage, getEntityIdFromMessage, getDataFromMessage } from '../utils'
+import CONSTANTS from '../constants'
 
 // Create an SMTP transporter
 const transporter = nodemailer.createTransport({
@@ -53,13 +53,14 @@ async function sendVerifyEmail(address, regCode) {
   }
 }
 
-// handle no EMAIL_TYPE to EMAIL_TYPE transition
+// handle no COMPONENT_USER_TYPE to COMPONENT_USER_TYPE component transition
 export const userRegistration: Action = {
   name: 'USER_REGISTRATION',
   similes: [
   ],
+  description: 'Replies with starting a user registration.' + CONSTANTS.DESCONLYCALLME,
   validate: async (runtime: IAgentRuntime, message: Memory) => {
-    console.log('USER_REGISTRATION validate') // , message.metadata
+    //console.log('USER_REGISTRATION validate') // , message.metadata
 /*
 sve:validate message {
   id: "1e574bcc-7d3d-04de-bb2e-a58ec153832f",
@@ -85,33 +86,16 @@ sve:validate message {
 */
     //console.log('sve:validate message', message)
 
-    // if not a discord/telegram message, we can ignore it
-    if (!message.metadata.fromId) return false
+    if (!await HasEntityIdFromMessage(runtime, message)) {
+      console.warn('USER_REGISTRATION validate - author not found')
+      return false
+    }
 
-    // using the service to get this/components might be good way
-    const entityId = createUniqueUuid(runtime, message.metadata.fromId);
-    const entity = await runtime.getEntityById(entityId)
-    // all clients should handle this
-    if (!entity) {
-      logger.warn('client did not set entity')
-      return false;
-    }
-    /*
-    if (!entity) {
-      entity = await runtime.createEntity({
-        id: entityId,
-        names: [message.metadata.entityName, message.metadata.entityUserName],
-        metadata: {},
-        agentId: existingAgent.id,
-      });
-    }
-    */
-    //console.log('reg:validate entity', entity)
-    const email = entity.components.find(c => c.type === EMAIL_TYPE)
+    const reg = await getDataFromMessage(runtime, message)
+    if (reg) return false; // require no regisration
     //console.log('reg_start:validate - are signed up?', !!email)
-    return !email
+    return true
   },
-  description: 'Replies with starting a user registration',
   handler: async (
     runtime: IAgentRuntime,
     message: Memory,
@@ -128,123 +112,81 @@ sve:validate message {
     // get room and it's components?
     const roomDetails = await runtime.getRoom(message.roomId);
     // doesn't have components
-    console.log('roomDetails', roomDetails)
-    const roomEntity = await runtime.getEntityById(message.roomId)
-    console.log('roomEntity', roomEntity)
+    //console.log('roomDetails', roomDetails)
 
-    const agentEntityId = createUniqueUuid(runtime, runtime.agentId);
-    const agentEntity = await runtime.getEntityById(agentEntityId);
-    console.log('agentEntity', agentEntity)
-    let spartanData = agentEntity.components.find(c => c.type === SPARTAN_SERVICE_TYPE)
-    let spartanDataNew = false
-    let spartanDataDelta = false
-    if (!spartanData) {
-      // initialize
-      spartanDataNew = true
-      spartanData.data = {
-        users: [],
-      }
-    }
-
-
-    // using the service to get this/components might be good way
-    const entityId = createUniqueUuid(runtime, message.metadata.fromId);
-    const entity = await runtime.getEntityById(entityId)
-    console.log('entity', entity)
-    const email = entity.components.find(c => c.type === EMAIL_TYPE)
-    console.log('email', email)
+    const componentData = await getDataFromMessage(runtime, message)
+    console.log('user component', componentData)
 
     const emails = extractEmails(message.content.text)
-
-    console.log('would have responded', responses)
     console.log('emails in message', emails.length)
+
+    //console.log('would have responded', responses)
     if (emails.length > 1) {
-      if (email) {
+      // provided multiple email addresses
+      if (componentData) {
         // any overlap?
         console.log('Write overlap')
       } else {
-        takeItPrivate(runtime, message, 'What email address would you like to use for registration', responses)
+        const content = takeItPrivate(runtime, message, 'What email address would you like to use for registration')
+        callback(content)
         //responses.length = 0 // just clear them all
       }
     } else
     if (emails.length === 1) {
-      console.log('spartanData', spartanData)
-      const isLinking = spartanData.data.users.includes(emails[0])
+      //console.log('spartanData', spartanData)
+      // are emails[0] signup component
+      // but searching ids in spartan...
+      // email list or entityid of link entity
+      const emailAddr = emails[0]
+      //const emailEntityId = createUniqueUuid(runtime, emailAddr);
 
-      if (isLinking) {
-        console.log('this email is already used else where', isLinking)
-      } else {
-        const regCode = generateRandomString(16)
-        console.log('sending', regCode, 'to email', emails[0])
-        // set this entities email
-        await runtime.createComponent({
-          id: uuidv4() as UUID,
-          agentId: runtime.agentId,
-          worldId: roomDetails.worldId,
-          roomId: message.roomId,
-          sourceEntityId: message.entityId,
-          entityId: entityId,
-          type: EMAIL_TYPE,
-          data: {
-            address: emails[0],
-            code: regCode,
-            verified: false,
-          },
-        });
-        spartanDataDelta = true
-        spartanData.data.users.push(entityId)
-        await sendVerifyEmail(emails[0], regCode)
-        takeItPrivate(runtime, message, 'I just sent you an email (might need to check your spam folder) to confirm ' + emails[0], responses)
-        //responses.length = 0 // just clear them all
-      }
-      // update spartanData
-      async function updateSpartanData(agentEntityId, spartanData) {
-        if (spartanDataNew) {
-          await runtime.createComponent({
-            id: uuidv4() as UUID,
-            agentId: runtime.agentId,
-            worldId: roomDetails.worldId,
-            roomId: message.roomId,
-            sourceEntityId: entityId,
-            entityId: agentEntityId,
-            type: SPARTAN_SERVICE_TYPE,
-            data: spartanData.data,
-          });
-        } else {
-          await runtime.updateComponent({
-            id: spartanData.id,
-            // do we need all these fields?
-            //agentId: runtime.agentId,
-            //worldId: roomDetails.worldId,
-            //roomId: message.roomId,
-            //sourceEntityId: entityId,
-            //entityId: entityId,
-            //type: SPARTAN_SERVICE_TYPE,
-            data: spartanData.data,
-          });
-        }
-      }
-      // if we need to update it
-      if (spartanDataDelta) {
-        updateSpartanData(agentEntityId, spartanData)
-      }
+      // always prove they really do have access to this email
+      //const isLinking = spartanData.data.users.includes(emailEntityId)
+      const regCode = generateRandomString(CONSTANTS.useCodeLength)
+      console.log('sending', regCode, 'to email', emailAddr)
+
+      const entityId = await getEntityIdFromMessage(runtime, message)
+      console.log('entityId', entityId)
+      // set this entities email
+      await runtime.createComponent({
+        id: uuidv4() as UUID,
+        agentId: runtime.agentId,
+        worldId: roomDetails.worldId,
+        roomId: message.roomId,
+        sourceEntityId: message.entityId,
+        entityId,
+        type: CONSTANTS.COMPONENT_USER_TYPE,
+        data: {
+          address: emailAddr,
+          code: regCode,
+          verified: false,
+        },
+      });
+
+      await sendVerifyEmail(emailAddr, regCode)
+      //responses.length = 0 // just clear them all
+      const content = takeItPrivate(runtime, message, 'I just sent you an email (might need to check your spam folder) to confirm ' + emailAddr)
+      callback(content)
+      //}
     } else {
       // no email provided
 
       // we can make a component for the state of this form
 
       // do we have an email component already
-      if (email) {
+      if (componentData) {
         // if so we should confirm
 
         // set wizard state
         // set form state
         // yes/no
-        takeItPrivate(runtime, message, 'Do you want to use ' + email + ' for registration?', responses)
+        const content = takeItPrivate(runtime, message, 'Do you want to use ' + componentData.address + ' for registration?')
+        // FIXME: won't take a yes/no as a response
+        callback(content)
         //responses.length = 0 // just clear them all
       } else {
         // set form state
-/*
+        /*
         await runtime.adapter.updateEntity({
           id: entityId,
           names: [...new Set([...(entity.names || []), ...names])].filter(Boolean),
@@ -258,8 +200,24 @@ sve:validate message {
           },
           agentId: this.agentId,
         });
-*/
-        takeItPrivate(runtime, message, 'What email address would you like to use for registration', responses)
+        */
+        const content = takeItPrivate(runtime, message, 'What email address would you like to use for registration')
+        callback(content)
+        // callback()
+
+        const isDM = roomDetails.type?.toUpperCase() === 'DM'
+        //console.log('isDM', isDM, roomDetails.type, roomDetails)
+        if (!isDM) {
+          const responseContent = {
+            text: 'I\'ll DM you',
+            // for the web UI
+            //actions: ['REPLY'],
+            attachments: [],
+            inReplyTo: createUniqueUuid(runtime, message.id)
+          };
+          callback(responseContent)
+        }
+
         //responses.length = 0 // just clear them all
       }
     }
@@ -309,21 +267,22 @@ sve:validate message {
           actions: ['USER_REGISTRATION'],
         },
       },
-    ],
-    [
+    ],    [
       {
         name: '{{name1}}',
         content: {
-          text: 'I\'m thinking about signing up with openai',
+          text: 'cool can I sign up?',
         },
       },
       {
         name: '{{name2}}',
         content: {
-          actions: ['IGNORE'],
+          text: "based. what email u want me to use",
+          actions: ['USER_REGISTRATION'],
         },
       },
-    ], [
+    ],
+    [
       {
         name: '{{name1}}',
         content: {
@@ -334,6 +293,42 @@ sve:validate message {
         name: '{{name2}}',
         content: {
           text: "I'll help verify your email",
+          actions: ['USER_REGISTRATION'],
+          options: {
+              email: 'email@email.com',
+          },
+        },
+      },
+    ],
+    [
+      {
+        name: '{{name1}}',
+        content: {
+          text: 'can I sign up with email@email.com',
+        },
+      },
+      {
+        name: '{{name2}}',
+        content: {
+          text: "I'll help verify your email",
+          actions: ['USER_REGISTRATION'],
+          options: {
+              email: 'email@email.com',
+          },
+        },
+      },
+    ],
+    [
+      {
+        name: '{{name1}}',
+        content: {
+          text: 'account',
+        },
+      },
+      {
+        name: '{{name2}}',
+        content: {
+          text: "What email u wanna use",
           actions: ['USER_REGISTRATION'],
         },
       },
