@@ -37,7 +37,7 @@ export const checkRegistration: Action = {
 
     //console.log('entity', entity)
     const componentData = await getDataFromMessage(runtime, message)
-    //console.log('newEmail', componentData)
+    console.log('user component', componentData)
 
     //const account = await getAccountFromMessage(runtime, message)
 
@@ -45,7 +45,7 @@ export const checkRegistration: Action = {
     //responses.length = 0 // just clear them all
     let output = false
     if (componentData) {
-      console.log('componentData', componentData)
+      //console.log('componentData', componentData)
       // what stage we in?
       if (componentData.verified) {
         output = takeItPrivate(runtime, message, 'You are signed up under ' + componentData.address)
