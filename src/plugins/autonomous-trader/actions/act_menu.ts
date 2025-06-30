@@ -15,7 +15,7 @@ export const servicesMenu: Action = {
     //console.log('SERVICES_MENU validate')
     return true
   },
-  description: 'Explains/sells Spartan services. ' + CONSTANTS.DESCONLYCALLME,
+  description: 'Explains Spartan services. ' + CONSTANTS.DESCONLYCALLME,
   handler: async (
     runtime: IAgentRuntime,
     message: Memory,
