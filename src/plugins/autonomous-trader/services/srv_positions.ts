@@ -2,7 +2,7 @@ import { IAgentRuntime, getSalt, encryptStringValue, Service, logger } from '@el
 import { acquireService } from '../utils';
 
 import { listPositions, createPosition, updatePosition } from '../interfaces/int_positions';
-import { getUserIdsByPubkeys } from '../interfaces/int_users'
+import { getAccountIdsByPubkeys } from '../interfaces/int_accounts'
 
 export class InterfacePositionsService extends Service {
   private isRunning = false;
@@ -22,27 +22,27 @@ export class InterfacePositionsService extends Service {
     //console.log('srv_pos:open - pos', pos)
     const pubkey = pos.publicKey
     // find which user owns this wallet
-    const userids = await getUserIdsByPubkeys(this.runtime, [pubkey])
+    const accountIds = await getAccountIdsByPubkeys(this.runtime, [pubkey])
     //console.log('srv_pos:open - userids', userids, 'pubkey', pubkey)
-    const userId = userids[pubkey]
-    if (!userId) {
-      console.log('srv_pos:open - opened a position for user we dont have', pubkey, 'userids', userids)
+    const accountId = accountIds[pubkey]
+    if (!accountId) {
+      console.log('srv_pos:open - opened a position for account we dont have', pubkey, 'userids', accountsIds)
       return false
     }
     // returns t/f
-    return createPosition(this.runtime, userId, pos)
+    return createPosition(this.runtime, accountId, pos)
   }
 
   //const close = await this.positionIntService.close(publicKey, posHndl, closeInfo)
   async close(publicKey, posHndl, closeInfo) {
-    const userids = await getUserIdsByPubkeys(this.runtime, [publicKey])
-    //console.log('srv_pos:open - userids', userids, 'pubkey', publicKey)
-    const userId = userids[publicKey]
-    if (!userId) {
-      console.log('srv_pos:open - opened a position for user we dont have', pubkey, 'userids', userids)
+    const accountIds = await getAccountIdsByPubkeys(this.runtime, [pubkey])
+    //console.log('srv_pos:open - userids', userids, 'pubkey', pubkey)
+    const accountId = accountIds[pubkey]
+    if (!accountId) {
+      console.log('srv_pos:closed - closed a position for account we dont have', pubkey, 'userids', accountsIds)
       return false
     }
-    return updatePosition(this.runtime, userId, posHndl, { close: closeInfo })
+    return updatePosition(this.runtime, accountId, posHndl, { close: closeInfo })
   }
 
   async list(options = {}) {
