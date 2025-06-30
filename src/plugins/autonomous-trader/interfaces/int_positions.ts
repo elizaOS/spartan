@@ -71,10 +71,10 @@ export async function listPositions(runtime, options = {}) {
   //const emails = await interface_users_ByIds(runtime, users)
   console.log('listPositions - options', options)
   const metaWallets = await getMetaWallets(runtime)
-  console.log('listPositions - metaWallets', metaWallets)
+  //console.log('listPositions - metaWallets', metaWallets)
   const positions = []
   for(const mw of metaWallets) {
-    console.log('mw', mw)
+    //console.log('mw', mw)
     if (mw.keypairs.solana.positions?.length) {
       console.log('solana positions', mw.keypairs.solana.positions)
       // filter open positions?
@@ -92,8 +92,8 @@ export async function createPosition(runtime, accountId, pos) {
   //console.log('createPosition - userId', userId, 'pos', pos)
   //console.log('createPosition - chain', pos.chain, pos.publicKey)
 
-  const accounts = await interface_accounts_ByIds([accountid])
-  const account = accounts[accountid]
+  const accounts = await interface_accounts_ByIds(runtime, [accountId])
+  const account = accounts[accountId]
 
   // because we need to save, it's missing the
   //const mws = await getWalletsByPubkey(runtime, [pos.publicKey])
@@ -121,8 +121,9 @@ export async function createPosition(runtime, accountId, pos) {
 
   const hasPos = wallet.positions.find(p => p.chain === pos.chain && p.token === pos.token)
   if (hasPos) {
-    console.log(pos, userId, 'already has - write me!')
-    return false
+    // we bought more of this coin...
+    //console.log(pos, accountId, 'already has - write me!')
+    //return false
   }
   wallet.positions.push(pos)
   await interface_account_update(runtime, account)
