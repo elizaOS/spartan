@@ -5,7 +5,6 @@ import {
 import { v4 as uuidv4 } from 'uuid';
 import nodemailer from 'nodemailer';
 import { takeItPrivate, HasEntityIdFromMessage, getEntityIdFromMessage, getDataFromMessage } from '../utils'
-import { COMPONENT_USER_TYPE, SPARTAN_SERVICE_TYPE, useCodeLength } from '../constants'
 import CONSTANTS from '../constants'
 
 // Create an SMTP transporter
@@ -105,7 +104,7 @@ sve:validate message {
     callback?: HandlerCallback,
     responses: any[]
   ): Promise<boolean> => {
-    console.log('USER_REGISTRATION handler', message)
+    console.log('USER_REGISTRATION handler')
     //console.log('message', message)
 
     // ok we need to change a state on this author
@@ -116,7 +115,7 @@ sve:validate message {
     //console.log('roomDetails', roomDetails)
 
     const componentData = await getDataFromMessage(runtime, message)
-    console.log('newEmail', componentData)
+    console.log('user component', componentData)
 
     const emails = extractEmails(message.content.text)
     console.log('emails in message', emails.length)
@@ -143,10 +142,11 @@ sve:validate message {
 
       // always prove they really do have access to this email
       //const isLinking = spartanData.data.users.includes(emailEntityId)
-      const regCode = generateRandomString(useCodeLength)
+      const regCode = generateRandomString(CONSTANTS.useCodeLength)
       console.log('sending', regCode, 'to email', emailAddr)
 
       const entityId = await getEntityIdFromMessage(runtime, message)
+      console.log('entityId', entityId)
       // set this entities email
       await runtime.createComponent({
         id: uuidv4() as UUID,
@@ -154,8 +154,8 @@ sve:validate message {
         worldId: roomDetails.worldId,
         roomId: message.roomId,
         sourceEntityId: message.entityId,
-        entityId: message.entityId,
-        type: COMPONENT_USER_TYPE,
+        entityId,
+        type: CONSTANTS.COMPONENT_USER_TYPE,
         data: {
           address: emailAddr,
           code: regCode,
