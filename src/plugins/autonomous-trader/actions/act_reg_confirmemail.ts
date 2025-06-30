@@ -8,6 +8,7 @@ import {
 } from '@elizaos/core';
 import { takeItPrivate, getDataFromMessage, getAccountFromMessage, HasEntityIdFromMessage, getEntityIdFromMessage } from '../utils'
 import CONSTANTS from '../constants'
+import { interface_user_update } from '../interfaces/int_users'
 import { interface_account_update } from '../interfaces/int_accounts'
 import { v4 as uuidv4 } from 'uuid';
 
@@ -62,7 +63,7 @@ export const checkRegistrationCode: Action = {
     callback?: HandlerCallback,
     responses: any[]
   ): Promise<boolean> => {
-    console.log('VERIFY_REGISTRATION_CODE handler', message)
+    console.log('VERIFY_REGISTRATION_CODE handler')
 
     // get room and it's components?
     const roomDetails = await runtime.getRoom(message.roomId);
@@ -75,6 +76,7 @@ export const checkRegistrationCode: Action = {
       return
     }
     const componentData = await getDataFromMessage(runtime, message)
+    console.log('user component', componentData)
     if (!componentData) {
       console.log('shouldnt be here')
       return
@@ -126,10 +128,12 @@ export const checkRegistrationCode: Action = {
       const emailAddr = componentData.address
       const emailEntityId = createUniqueUuid(runtime, emailAddr);
       const userEntityId = await getEntityIdFromMessage(runtime, message)
+      console.log('user', userEntityId, 'account', emailEntityId)
       const accountEntity = await runtime.getEntityById(emailEntityId);
       //const isLinking = spartanData.data.users.includes(emailEntityId)
       if (accountEntity) {
         output = takeItPrivate(runtime, message, 'Looks good, I see your already registered before, linking to existing account')
+
       } else {
         output = takeItPrivate(runtime, message, 'Looks good, you are now registered and have access to my services')
 
@@ -171,7 +175,8 @@ export const checkRegistrationCode: Action = {
 
     // is verified saving?
     console.log('saving', componentData)
-    await interface_account_update(runtime, componentData)
+    // seems to delete the component
+    await interface_user_update(runtime, componentData)
 
     /*
     const id = componentData.componentId
