@@ -15,7 +15,7 @@ export const setStrategy: Action = {
   validate: async (runtime: IAgentRuntime, message: Memory) => {
     //console.log('WALLET_SETSTRAT validate', message?.metadata?.fromId)
     if (!await HasEntityIdFromMessage(runtime, message)) {
-      console.log('WALLET_SETSTRAT validate - author not found')
+      console.warn('WALLET_SETSTRAT validate - author not found')
       return false
     }
 
@@ -26,13 +26,19 @@ export const setStrategy: Action = {
     }
 
     const traderChainService = runtime.getService('TRADER_CHAIN') as any;
-    if (!traderChainService) return false
+    if (!traderChainService) {
+      //console.warn('WALLET_SETSTRAT validate - TRADER_CHAIN not found')
+      return false
+    }
     const traderStrategyService = runtime.getService('TRADER_STRATEGY') as any;
-    if (!traderStrategyService) return false
+    if (!traderStrategyService) {
+      //console.warn('WALLET_SETSTRAT validate - TRADER_STRATEGY not found')
+      return false
+    }
 
     const stratgiesList = await traderStrategyService.listActiveStrategies()
     const bestOption = matchOption(message.content.text, stratgiesList)
-    //console.log('WALLET_SETSTRAT bestOption', bestOption)
+    console.log('WALLET_SETSTRAT bestOption', bestOption)
     return bestOption !== null
   },
   handler: async (
