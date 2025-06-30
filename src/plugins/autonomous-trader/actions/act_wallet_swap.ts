@@ -46,13 +46,15 @@ interface SwapWalletContent extends Content {
 function isSwapWalletContent(content: SwapWalletContent): boolean {
     logger.log('Content for swap', content);
 
+    /*
     if (!content.sourceWalletAddress || typeof content.sourceWalletAddress !== 'string') {
         console.warn('bad sourceWalletAddress')
         return false;
     }
+    */
 
     if (!content.amount || (typeof content.amount !== 'string' && typeof content.amount !== 'number')) {
-        console.warn('bad amount')
+        console.warn('bad amount', typeof(content.amount), content.amount)
         return false;
     }
     console.log('contents good')
