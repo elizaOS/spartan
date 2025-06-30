@@ -52,6 +52,10 @@ export const userMetawalletList: Action = {
     //   strategy
     //   keypairs
     let wStr = '\n\n'
+    if (!Object.values(account.metawallets).length) {
+      // no keypairs?
+      wStr += '  None'
+    }
     for(const mw of account.metawallets) {
       //console.log('mw', mw)
       wStr += 'Wallet:\n'
