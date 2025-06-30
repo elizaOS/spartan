@@ -261,6 +261,7 @@ export default {
 
         const secretKey = bs58.decode(sourceKp.privateKey);
         const senderKeypair = Keypair.fromSecretKey(secretKey);
+
         const recipientPubkey = new PublicKey(content.recipientWalletAddress);
 
         try {
@@ -280,6 +281,7 @@ export default {
             const instructions: any[] = [];
 
             // Handle SOL transfer (leave some for fees)
+            // 1m per ATA
             if (solBalance > 5000) { // Leave 5000 lamports for fees
                 instructions.push(
                     SystemProgram.transfer({
@@ -342,6 +344,7 @@ export default {
             transaction.sign([senderKeypair]);
 
             const latestBlockhash = await connection.getLatestBlockhash();
+            // probably needs to be raw
             const signature = await connection.sendTransaction(transaction, {
                 skipPreflight: false,
                 maxRetries: 3,
