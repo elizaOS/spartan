@@ -1,4 +1,5 @@
 import { Service, logger } from '@elizaos/core';
+//import { listPositions } from '../interfaces/int_positions'
 
 export class TradeDataProviderService extends Service {
   private isRunning = false;
@@ -12,6 +13,55 @@ export class TradeDataProviderService extends Service {
     super(runtime); // sets this.runtime
     this.registry = {};
     console.log('TRADER_DATAPROVIDER cstr');
+
+    // bad smell
+    // AUTONOMOUS_TRADER_INTERFACE_POSITIONS should register with me...
+    const asking = 'Trader information Service'
+    const serviceType = 'AUTONOMOUS_TRADER_INTERFACE_POSITIONS'
+    this.positionIntService = this.runtime.getService(serviceType) as any;
+    new Promise(async resolve => {
+      while (!this.positionIntService) {
+        console.log(asking, 'waiting for', serviceType, 'service...');
+        this.positionIntService = this.runtime.getService(serviceType) as any;
+        if (!this.positionIntService) {
+          await new Promise((waitResolve) => setTimeout(waitResolve, 1000));
+        } else {
+          console.log(asking, 'Acquired', serviceType, 'service...');
+        }
+      }
+    })
+
+    const serviceType2 = 'AUTONOMOUS_TRADER_INTERFACE_WALLETS'
+    this.walletIntService = this.runtime.getService(serviceType2) as any;
+    new Promise(async resolve => {
+      while (!this.walletIntService) {
+        console.log(asking, 'waiting for', serviceType2, 'service...');
+        this.walletIntService = this.runtime.getService(serviceType2) as any;
+        if (!this.walletIntService) {
+          await new Promise((waitResolve) => setTimeout(waitResolve, 1000));
+        } else {
+          console.log(asking, 'Acquired', serviceType2, 'service...');
+        }
+      }
+    })
+
+    // should be available by now, since it's in the same plugin
+    // but it's not?
+    const serviceType3 = 'TRADER_STRATEGY'
+    this.strategyService = this.runtime.getService(serviceType3) as any;
+    new Promise(async resolve => {
+      while (!this.strategyService) {
+        console.log(asking, 'waiting for', serviceType3, 'service...');
+        this.strategyService = this.runtime.getService(serviceType3) as any;
+        if (!this.strategyService) {
+          await new Promise((waitResolve) => setTimeout(waitResolve, 1000));
+        } else {
+          console.log(asking, 'Acquired', serviceType3, 'service...');
+        }
+      }
+    })
+
+
     this.events = new Map();
   }
 
@@ -38,6 +88,127 @@ export class TradeDataProviderService extends Service {
   async checkPositions() {
     console.log('checking positions');
     // get a list of positions (chains -> wallets -> positions)
+
+    // need to get autotrader service
+
+    const positions = await this.positionIntService.list()
+    //console.log('positions', positions)
+    // filter thru, what token do we need to get information on?
+    const tokens = []
+    const ca2Positions = []
+    for(const p of positions) {
+      const ca = p.position.token
+      //console.log('p', p, 'ca', ca)
+      if (!tokens.includes(ca)) {
+        tokens.push(ca)
+      }
+      if (ca2Positions[ca] === undefined) ca2Positions[ca] = []
+      ca2Positions[ca].push(p)
+      // is this wallet still holding this?
+      //
+    }
+    console.log('watching', tokens.length, 'CAs')
+    // take list of CA and get token information
+    const services = this.forEachReg('lookupService')
+    const results = await Promise.all(services.map(service => service.getTokensMarketData(tokens)))
+    // an array of list of tokens (keyed by token)
+    console.log('results', results)
+
+    // could build a list of
+    const closePosition = async (ud) => {
+      const p = ud.position
+      // verify amount?
+      // execute sell
+      // blockchain?
+      if (p.chain !== 'solana') {
+        console.Warn('unsupported chain on position', p)
+        return false
+      }
+      const solanaService = this.runtime.getService('chain_solana') as any;
+      // sell back to base
+      const signal = {
+        sourceTokenCA: p.token,
+        targetTokenCA: 'So11111111111111111111111111111111111111112',
+        //targetTokenCA: 'Gu3LDkn7Vx3bmCzLafYNKcDxv2mH7YN44NJZFXnypump',
+      }
+
+      /*
+      const wallets = await this.walletIntService.getWalletsByPubkey(p.publicKey)
+      const mw = wallets[p.publicKey]
+      if (!mw) {
+        console.log('cant find position wallet for', p.publicKey)
+        return false
+      }
+      */
+      const mw = ud.mw
+      const kp = mw.keypairs[p.chain]
+      const strat = mw.strategy
+      console.log('closePosition - ud', ud)
+
+      const hndl = this.strategyService.getHndlByStratName(mw.strategy)
+      if (!hndl) {
+        console.error('Cant find hndl for strategy', mw.streatgy)
+        return false
+      }
+
+      // amount?
+      const wallet = {
+        amount: p.tokenAmount || (p.entryPrice * p.amount),
+        // there's other junk in there, so lets just clean it up
+        keypair: {
+          publicKey: kp.publicKey,
+          privateKey: kp.privateKey,
+        }
+      }
+      console.log('closePosition - wallet', wallet)
+      console.log('closePosition - signal', signal)
+      const res = await solanaService.executeSwap([wallet], signal)
+      // close position
+      if (res[0].success) {
+        // going to be hard to get a strategy handle...
+        // get strategy hndl and close position
+        // which position...
+        await this.strategyService.close_position(hndl, kp.publicKey, p.id, {
+          outAmount: res[0].outAmount,
+          signature: res[0].signature,
+          fees: res[0].fees,
+        });
+      }
+    }
+
+    // this type of monitoring should be refactored out
+    for(const r of results) {
+      //console.log('r', r)
+      for(const ca of tokens) {
+        //console.log('ca', ca)
+        const td = r[ca]
+        if (!td) {
+          console.log('no results for', ca)
+          continue
+        }
+        console.log(ca, 'current price', td.priceUsd, ca2Positions[ca]?.length, 'positions')
+        for(const ud of ca2Positions[ca]) {
+          //console.log('ud', ud)
+          const p = ud.position
+
+          // sentiment? 24h volume?
+          // liquidity, priceChange24h, priceUsd
+
+          //console.log('ud.position', p)
+          console.log('p low', p.exitConditions.priceDrop, 'high', p.exitConditions.targetPrice, 'current', td.priceUsd)
+          if (td.priceUsd < p.exitConditions.priceDrop) {
+            // sad exit
+            console.log('I has a sad')
+            closePosition(ud)
+          }
+          if (td.priceUsd > p.exitConditions.targetPrice) {
+            // win
+            console.log('KICK ASS')
+            closePosition(ud)
+          }
+        }
+      }
+    }
   }
 
   forEachReg(key) {
@@ -154,8 +325,9 @@ export class TradeDataProviderService extends Service {
     console.log('TRADER_DATAPROVIDER starting');
 
     // maybe we don't need to do this under the first registers
-    this.timer = setTimeout(
+    this.timer = setInterval(
       () => {
+        console.log('TRADER_DATAPROVIDER Updating Trending')
         this.updateTrending();
       },
       10 * 60 * 1000

@@ -3,6 +3,7 @@
   "compilerOptions": {
     "rootDir": "./src",
     "outDir": "./dist",
+    "strict": true,
     "sourceMap": true,
     "inlineSources": true,
     "declaration": true,

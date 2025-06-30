@@ -11,6 +11,23 @@ export class TradeStrategyService extends Service {
   constructor(public runtime: IAgentRuntime) {
     super(runtime); // sets this.runtime
     this.strategyRegistry = {};
+
+    // bad smell
+    // AUTONOMOUS_TRADER_INTERFACE_POSITIONS should register with me...
+    const asking = 'Trader Strategy Service'
+    const serviceType = 'AUTONOMOUS_TRADER_INTERFACE_POSITIONS'
+    this.positionIntService = this.runtime.getService(serviceType) as any;
+    new Promise(async resolve => {
+      while (!this.positionIntService) {
+        console.log(asking, 'waiting for', serviceType, 'service...');
+        this.positionIntService = this.runtime.getService(serviceType) as any;
+        if (!this.positionIntService) {
+          await new Promise((waitResolve) => setTimeout(waitResolve, 1000));
+        } else {
+          console.log(asking, 'Acquired', serviceType, 'service...');
+        }
+      }
+    })
   }
 
   /*
@@ -27,6 +44,16 @@ export class TradeStrategyService extends Service {
     return id;
   }
 
+  getHndlByStratName(strat) {
+    for(const hndl in this.strategyRegistry) {
+      const strategy = this.strategyRegistry[hndl]
+      if (strategy.name === strat) {
+        return hndl
+      }
+    }
+    return false
+  }
+
   async listActiveStrategies() {
     return Object.values(this.strategyRegistry).map(s => s.name)
   }
@@ -39,11 +66,26 @@ export class TradeStrategyService extends Service {
   }
   */
 
-  async open_position(stratHndl, pos) {}
+  // strategy, we manage listeners on data provider events
+  async open_position(hndl, pos) {
+    // the position is per wallet in a metawallet in a user
+    // don't need stratHndl just which wallet opened this I think
+    // need to communicate with service in autotrader?
+    //console.log('intel::srv_strat:open_position -', pos)
+    // it'll find and figure out where to store it
+    const created = await this.positionIntService.open(pos)
+    // should start a bunch of watchers on a token...
+
+    // open a token monitor, trigger this strategy event handler
+    // but like should I know what event handler strategy has? no
+    // hndl will help bind events to events
+  }
 
   async update_position(stratHndl, posHndl, pos) {}
 
-  async close_position(stratHndl, posHndl, closeInfo) {}
+  async close_position(stratHndl, publicKey, posHndl, closeInfo) {
+    const close = await this.positionIntService.close(publicKey, posHndl, closeInfo)
+  }
 
   /**
    * Start the scenario service with the given runtime.

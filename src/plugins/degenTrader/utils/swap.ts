@@ -39,8 +39,8 @@ export async function executeSwap(
 }
 
 export async function createSwapInstruction(
-  _connection: SolanaRpc
-  Connection,
+  _connection: SolanaRpc,
+  _Connection,
   walletPubkey: PublicKey,
   params: SwapParams
 ): Promise<TransactionInstruction> {

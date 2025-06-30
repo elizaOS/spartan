@@ -5,6 +5,77 @@ import {
   parseJSONObjectFromText,
   createUniqueUuid,
 } from '@elizaos/core';
+import { interface_users_ByIds } from './interfaces/int_users'
+import { interface_accounts_ByIds } from './interfaces/int_accounts'
+
+// we used to use message.entityId
+export async function getEntityIdFromMessage(runtime, message) {
+  //return createUniqueUuid(runtime, message.metadata.fromId);
+  //console.log('getEntityIdFromMessage message', message)
+
+  // ensureEntity because I don't think the clients are going to build it
+  if (message?.metadata?.sourceId) {
+    const entityId = message.metadata.sourceId
+    const entity = await runtime.getEntityById(entityId);
+    if (!entity) {
+      const success = await runtime.createEntity({
+        id: entityId,
+        //names: [message.names],
+        //metadata: entityMetadata,
+        agentId: runtime.agentId,
+      });
+    }
+  }
+  return message?.metadata?.sourceId
+}
+
+export async function HasEntityIdFromMessage(runtime, message) {
+  /*
+  if (!message?.metadata?.fromId) {
+    console.log('WALLET_IMPORT validate - author not found')
+    return false
+  }
+  */
+  //console.log('HasEntityIdFromMessage message', message)
+  return !!await getEntityIdFromMessage(runtime, message)
+}
+
+// they've started the registered process by providing an email
+export async function getDataFromMessage(runtime, message) {
+  //return createUniqueUuid(runtime, message.metadata.fromId);
+  const entityId = await getEntityIdFromMessage(runtime, message)
+  //console.debug('autotrade::getDataFromMessage - entityId', entityId)
+  if (!entityId) {
+    console.error('autotrade::getDataFromMessage - no entityId found')
+    return false // avoid database look up
+  }
+  const components = await interface_users_ByIds(runtime, [entityId])
+  //console.debug('autotrade::getDataFromMessage - user components', components)
+  // .componentId
+  return components[entityId]
+}
+
+// they have a verified email
+// returns componentData
+export async function getAccountFromMessage(runtime, message) {
+  const componentData = await getDataFromMessage(runtime, message)
+  if (componentData?.verified) {
+    const emailAddr = componentData.address
+    const emailEntityId = createUniqueUuid(runtime, emailAddr);
+    const accounts = await interface_accounts_ByIds(runtime, [emailEntityId])
+    if (accounts[emailEntityId]) {
+      // accounts[emailEntityId] is componentData
+      // .componentId
+      return {...accounts[emailEntityId], accountEntityId: emailEntityId }
+    } else {
+      // verified just no component yet
+      // should we just ensure it here?
+      return { accountEntityId: emailEntityId }
+    }
+  }
+  // not verified
+  return false
+}
 
 export async function acquireService(
   runtime: IAgentRuntime,
@@ -36,10 +107,15 @@ export async function askLlmObject(
   let retries = 0;
 
   function checkRequired(resp) {
-    if (!resp) return false;
+    if (!resp) {
+      console.log('No response')
+      return false;
+    }
     let hasAll = true;
     for (const f of requiredFields) {
-      if (!resp[f]) {
+      // allow nulls
+      if (resp[f] === undefined) {
+        console.log('resp is missing', f, resp[f], resp)
         hasAll = false;
         break;
       }
@@ -56,7 +132,7 @@ export async function askLlmObject(
       object: true,
     });
 
-    console.log('trader::utils:askLlmObject - response', response);
+    //console.log('trader::utils:askLlmObject - response', response);
     responseContent = parseJSONObjectFromText(response) as any;
 
     retries++;
@@ -75,100 +151,29 @@ export async function askLlmObject(
   return responseContent;
 }
 
-export async function messageReply(runtime, message, reply, responses) {
-  const roomDetails = await runtime.getRoom(message.roomId);
-  //if (message.content.source === 'discord') {
-  /*
-  // ServiceType.DISCORD
-  const discordService = runtime.getService('discord')
-  if (!discordService) {
-    logger.warn('no discord Service')
-    return
-  }
-  */
-  // clear all current messages
-  responses.length = 0
-  const entityId = createUniqueUuid(runtime, message.metadata.authorId);
-  const isDM = roomDetails.type === 'dm'
-  if (isDM) {
-    //discordService.sendDM(message.metadata.authorId, reply)
-    // add response
-    responses.push({
-      entityId,
-      agentId: runtime.agentId,
-      roomId: message.roomId,
-      content: {
-        text: reply,
-        attachments: [],
-        target: 'DM',
-        //channelType: 'DM',
-        inReplyTo: createUniqueUuid(runtime, message.id)
-      },
-      // embedding
-      // metadata: entityName, type, authorId
-    })
-  } else {
-    responses.push({
-      entityId,
-      agentId: runtime.agentId,
-      roomId: message.roomId,
-      content: {
-        text: reply,
-        attachments: [],
-        source: message.source,
-        channelType: message.channelType,
-        inReplyTo: createUniqueUuid(runtime, message.id)
-      },
-      // embedding
-      // metadata: entityName, type, authorId
-    })
-  }
-  return true
-  //}
-  //logger.warn('unknown platform', message.content.source)
-  //return false
+export async function messageReply(runtime, message, reply) {
+  const responseContent = {
+    text: reply,
+    attachments: [],
+    source: message.source,
+    // keep channelType the same
+    channelType: message.channelType,
+    inReplyTo: createUniqueUuid(runtime, message.id)
+    // for the web UI
+    //actions: ['REPLY'],
+  };
+  // embedding
+  // metadata: entityName, type, authorId
+  return responseContent
 }
 
-export function takeItPrivate(runtime, message, reply, responses) {
-  if (responses === undefined) {
-    console.trace()
-    console.log('==')
-    console.log('== takeItPrivate got old style')
-    console.log('==')
-  }
-  //if (message.content.source === 'discord') {
-  /*
-  // ServiceType.DISCORD
-  const discordService = runtime.getService('discord')
-  if (!discordService) {
-    logger.warn('no discord Service')
-    return
-  }
-  discordService.sendDM(message.metadata.authorId, reply)
-  */
-  //console.log('message', message)
-  //console.log('responses', responses)
-  const entityId = createUniqueUuid(runtime, message.metadata.fromId);
-  // clear all current messages
-  responses.length = 0
-  // add response
-  responses.push({
-    entityId,
-    agentId: runtime.agentId,
-    roomId: message.roomId,
-    content: {
-      text: reply,
-      attachments: [],
-      target: 'DM',
-      inReplyTo: createUniqueUuid(runtime, message.id)
-    },
-    // embedding
-    // metadata: entityName, type, authorId
-  })
-
-
-  return true
-  //}
-  //logger.warn('unknown platform', message.content.source)
-  //return false
+export function takeItPrivate(runtime, message, reply) {
+  const responseContent = {
+    text: reply,
+    channelType: 'DM',
+    inReplyTo: createUniqueUuid(runtime, message.id)
+    // for the web UI
+    //actions: ['REPLY'],
+  };
+  return responseContent
 }

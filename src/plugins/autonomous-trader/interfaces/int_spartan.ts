@@ -22,12 +22,12 @@ export async function interface_spartan_get(runtime) {
     spartanData = {
       data: {
         users: [],
+        accounts: [],
       }
     }
   }
   return spartanData
 }
-
 
 // list/search N/A
 

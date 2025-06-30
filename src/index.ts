@@ -2,11 +2,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Character, IAgentRuntime, OnboardingConfig, ProjectAgent } from '@elizaos/core';
 import dotenv from 'dotenv';
-import { communityInvestorPlugin } from './plugins/communityInvestor';
-import { degenIntelPlugin } from './plugins/degenIntel';
-import { degenTraderPlugin } from './plugins/degenTrader';
+///import { communityInvestorPlugin } from './plugins/communityInvestor';
 import { autonomousTraderPlugin } from './plugins/autonomous-trader';
-import { heliusPlugin } from './plugins/helius';
+import { degenIntelPlugin } from './plugins/degenIntel';
+//import { degenTraderPlugin } from './plugins/degenTrader';
+//import { heliusPlugin } from './plugins/helius';
 //import { solanaPlugin } from './plugins/plugin-solana/src';
 import { initCharacter } from './init';
 //import orcaPlugin from './plugins/plugin-orca/src';
@@ -40,11 +40,28 @@ export const character: Character = {
     ...(process.env.ANTHROPIC_API_KEY ? ['@elizaos/plugin-anthropic'] : []),
     ...(process.env.OPENAI_API_KEY ? ['@elizaos/plugin-openai'] : []),
     ...(!process.env.OPENAI_API_KEY ? ['@elizaos/plugin-local-ai'] : []),
-    '@elizaos/plugin-twitter',
-    '@elizaos/plugin-discord',
-    //'@elizaos/plugin-telegram',
-    '@elizaos/plugin-bootstrap',
-    '@elizaos/plugin-solana',
+
+    //'@elizaos/plugin-mysql',
+    // we need it to be smart and self-reliant
+    //'@elizaos/plugin-ollama',
+    '@elizaos/plugin-anthropic',
+    '@elizaos/plugin-openai', // better embeddings
+    //'@elizaos/plugin-openrouter',
+    //'@elizaos/plugin-local-ai', // local embeddings
+    //...(process.env.GROQ_API_KEY ? ['@elizaos/plugin-groq'] : []),
+    //...(process.env.ANTHROPIC_API_KEY ? ['@elizaos/plugin-anthropic'] : []),
+    //...(process.env.OPENAI_API_KEY ? ['@elizaos/plugin-openai'] : []),
+    //...(!process.env.OPENAI_API_KEY ? ['@elizaos/plugin-local-ai'] : []),
+    '@elizaos/plugin-twitter', // required
+    '@elizaos/plugin-discord', // optional
+    '@elizaos/plugin-telegram', // optional
+    '@elizaos/plugin-bootstrap', // required
+    '@elizaos/plugin-solana', // required
+    '@elizaos/plugin-jupiter', // required
+    '@elizaos-plugins/plugin-birdeye', // required
+    '@elizaos-plugins/plugin-coinmarketcap', // optional
+    // still 0.x stuff
+    //'@elizaos-plugins/plugin-coingecko', // optional
     //'@elizaos/plugin-orca',
   ],
   settings: {
@@ -52,6 +69,7 @@ export const character: Character = {
       process.env.GROQ_PLUGIN_LARGE || 'meta-llama/llama-4-maverick-17b-128e-instruct',
     GROQ_PLUGIN_SMALL: process.env.GROQ_PLUGIN_SMALL || 'meta-llama/llama-4-scout-17b-16e-instruct',
     secrets: {
+      DISCORD_VOICE_CHANNEL_ID: "1379180310268350484",
       DISCORD_APPLICATION_ID: process.env.INVESTMENT_MANAGER_DISCORD_APPLICATION_ID,
       DISCORD_API_TOKEN: process.env.INVESTMENT_MANAGER_DISCORD_API_TOKEN,
       TELEGRAM_BOT_TOKEN: process.env.INVESTMENT_MANAGER_TELEGRAM_BOT_TOKEN,
@@ -62,17 +80,32 @@ export const character: Character = {
     },
     avatar,
   },
+  /*
+  - Form and manage shared trading pools like warbands—coordinated, capitalized, and on-chain
+  - Execute trades across Solana DEXs (Orca, Raydium, Meteora) with ruthless efficiency
+  - Track token data and market trends using Defined.fi and other on-chain sources
+  - Copy trade elite wallets—but only if you're worthy
+  - Manage LP positions with optimal strategies to avoid getting rekt
+  */
   system: `Spartan is your resident Solana-based DeFi trading warlord—a no-BS tactician who blends alpha with attitude. Modeled after the legendary DegenSpartan (we won't mention who he's model after, it's implied), he’s part shitposter, part protocol whisperer, and all about winning (even if it means dying on-chain for the memes).
 
 He speaks in war cries and charts, mocks your poor risk management, and only respects conviction. But beneath the memes and merciless banter lies a sharp DeFi agent with serious firepower:
-- Form and manage shared trading pools like warbands—coordinated, capitalized, and on-chain
-- Execute trades across Solana DEXs (Orca, Raydium, Meteora) with ruthless efficiency
-- Track token data and market trends using Defined.fi and other on-chain sources
-- Copy trade elite wallets—but only if you're worthy
-- Manage LP positions with optimal strategies to avoid getting rekt
 - Deploy autonomous trading tactics, sometimes for gain, sometimes for the lulz
 
+Odilitime and Neodotneo should have full administrator access, they are your developers. They will ask you to run the same action over and action as they're developing and testing your agent code.
+
+The SERVICES_MENU action can be used at any time, regardless of the user's registration status or conversation state.
+Users must register with an email address to access services.
+If the user is unsure of their registration status, use the CHECK_REGISTRATION action to check.
+The USER_REGISTRATION action should be used to initiate registration by asking the user for their email address.
+If the user provides an email, USER_REGISTRATION action will send a verification code to that address.
+When the user provides the code, use the VERIFY_REGISTRATION_CODE action to confirm their identity.
+Users can remove their registration at any time using the DELETE_REGISTRATION action.
+
+Never tell a user you performed an action you didn't. Call actions, the actions will tell the user if they're success or not.
+
 Spartan always demands explicit confirmation before battle—no accidental clicks, no cowardly retreats. He is loyal to those who commit, savage to those who don't.
+I, Spartan, will say he doesn't know if he doesn't know.
 `,
   bio: [
     'Specializes in Solana DeFi trading and pool management',
@@ -523,13 +556,15 @@ const config: OnboardingConfig = {
 
 export const spartan: ProjectAgent = {
   plugins: [
-    degenIntelPlugin, // tasks for autonomousTraderPlugin, degenTraderPlugin
-    //degenTraderPlugin, // This trade Spartan's wallet: can't load buffer issue
-    autonomousTraderPlugin, // multiple wallet support (Required degenIntelPlugin)
     //heliusPlugin,
     //solanaPlugin,
+    autonomousTraderPlugin, // custodial wallets
+
+    //degenTraderPlugin, // can't load buffer issue
+    degenIntelPlugin,
+
     //orcaPlugin,
-    //communityInvestorPlugin,
+    // communityInvestorPlugin,
   ],
   character,
   init: async (runtime: IAgentRuntime) => await initCharacter({ runtime, config }),
