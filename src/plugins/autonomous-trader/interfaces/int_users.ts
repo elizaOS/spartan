@@ -14,12 +14,13 @@ import { interface_spartan_get } from './int_spartan'
 export async function interface_users_ByIds(runtime, ids) {
   //console.log('interface_users_ByIds', ids)
   const entities = await runtime.getEntityByIds(ids)
-  //console.log('entities', entities)
+  //console.log('interface_users_ByIds - entities', entities, 'asked for', ids)
 
   // we should key this, each user can and should have only one COMPONENT_USER_TYPE component
   const components = {}
   for(const i in entities) {
     const entity = entities[i]
+    //console.log('interface_users_ByIds - entity', entity)
     const entityId = entity.id // ids[i]
     components[entityId] = false // key has to be set for the result, so we can iterate
     if (entity) {
@@ -128,3 +129,32 @@ export async function interface_users_list(runtime, options = {}) {
 }
 
 // add/update/delete
+
+export async function interface_user_update(runtime, componentData) {
+  const id = componentData.componentId
+  if (!id) {
+    console.warn('interface_user_update - no componentId in componentData', componentData)
+    return false
+  }
+  const entityId = componentData.accountEntityId
+  // need to strip somethings...: componentId, names
+  delete componentData.componentId
+  delete componentData.names
+  delete componentData.entityId
+  delete componentData.accountEntityId // utils injects this
+  console.log('interface_user_update - componentData', componentData)
+
+  const res = await runtime.updateComponent({
+    id,
+    //worldId: roomDetails.worldId,
+    //roomId: message.roomId,
+    //sourceEntityId: message.entityId,
+    //entityId,
+    type: CONSTANTS.COMPONENT_USER_TYPE,
+    data: componentData,
+    agentId: runtime.agentId,
+  });
+  // seems to be undefined
+  //console.log('interface_user_update - updateComponent result', res)
+  return true
+}
