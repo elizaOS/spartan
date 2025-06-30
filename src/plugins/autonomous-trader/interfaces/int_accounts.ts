@@ -6,6 +6,7 @@ import {
   createUniqueUuid,
 } from '@elizaos/core';
 import { v4 as uuidv4 } from 'uuid';
+import { interface_spartan_get } from './int_spartan'
 import CONSTANTS from '../constants'
 
 // look up by Ids
@@ -101,9 +102,11 @@ export async function getAccountIdsByPubkeys(runtime, pubkeys) {
 // add/update/delete
 
 export async function interface_account_upsert(runtime, message, account) {
-  if (account.id) {
+  if (account.componentId) {
+    //console.debug('interface_account_upsert - updating', account.componentId)
     interface_account_update(runtime, account)
   } else {
+    //console.debug('interface_account_upsert - creating', account)
     interface_account_create(runtime, message, account)
   }
 }
@@ -111,7 +114,7 @@ export async function interface_account_upsert(runtime, message, account) {
 export async function interface_account_create(runtime, message, account) {
   const roomDetails = await runtime.getRoom(message.roomId);
   const entityId = account.accountEntityId
-  console.log('entityId', entityId)
+  //console.log('entityId', entityId)
   // create the EMAILTYPE component
   await runtime.createComponent({
     id: uuidv4() as UUID,
@@ -137,8 +140,9 @@ export async function interface_account_update(runtime, account) {
   delete account.names
   delete account.entityId
   delete account.accountEntityId // utils injects this
+  //console.log('interface_account_update - componentData', account)
 
-  await runtime.updateComponent({
+  const res = await runtime.updateComponent({
     id,
     //worldId: roomDetails.worldId,
     //roomId: message.roomId,
@@ -148,5 +152,6 @@ export async function interface_account_update(runtime, account) {
     data: account,
     agentId: runtime.agentId,
   });
+  //console.log('interface_account_update - updateComponent result', res)
   return true
 }
