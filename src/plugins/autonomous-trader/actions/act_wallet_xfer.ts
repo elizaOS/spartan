@@ -172,8 +172,8 @@ export default {
     validate: async (runtime: IAgentRuntime, message: Memory) => {
         //logger.log('MULTIWALLET_TRANSFER Validating transfer from entity:', message.entityId);
 
-        if (!message?.metadata?.fromId) {
-          console.log('MULTIWALLET_TRANSFER validate - author not found')
+        if (!await HasEntityIdFromMessage(runtime, message)) {
+          console.warn('MULTIWALLET_TRANSFER validate - author not found')
           return false
         }
 
