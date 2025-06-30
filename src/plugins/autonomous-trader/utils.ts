@@ -44,10 +44,13 @@ export async function HasEntityIdFromMessage(runtime, message) {
 export async function getDataFromMessage(runtime, message) {
   //return createUniqueUuid(runtime, message.metadata.fromId);
   const entityId = await getEntityIdFromMessage(runtime, message)
+  //console.debug('autotrade::getDataFromMessage - entityId', entityId)
   if (!entityId) {
+    console.error('autotrade::getDataFromMessage - no entityId found')
     return false // avoid database look up
   }
   const components = await interface_users_ByIds(runtime, [entityId])
+  //console.debug('autotrade::getDataFromMessage - user components', components)
   // .componentId
   return components[entityId]
 }
