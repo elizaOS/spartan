@@ -6,6 +6,10 @@ import { v4 as uuidv4 } from 'uuid';
 import { takeItPrivate, messageReply } from '../utils'
 import { COMPONENT_USER_TYPE } from '../constants'
 
+//
+// WRITE ME
+//
+
 // handle starting new form and collecting first field
 export const userMetawalletList: Action = {
   name: 'USER_METAWALLET_LIST',
