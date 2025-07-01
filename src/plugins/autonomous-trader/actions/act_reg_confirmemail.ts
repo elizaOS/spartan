@@ -1,10 +1,12 @@
 import {
+  type Action,
   type IAgentRuntime,
   type Memory,
   type State,
+  type HandlerCallback,
   type ActionExample,
+  type UUID,
   createUniqueUuid,
-  logger,
 } from '@elizaos/core';
 import { takeItPrivate, getDataFromMessage, getAccountFromMessage, HasEntityIdFromMessage, getEntityIdFromMessage } from '../utils'
 import CONSTANTS from '../constants'
@@ -60,7 +62,7 @@ export const checkRegistrationCode: Action = {
     message: Memory,
     state: State,
     _options: { [key: string]: unknown },
-    callback?: HandlerCallback,
+    callback: HandlerCallback,
     responses: any[]
   ): Promise<boolean> => {
     console.log('VERIFY_REGISTRATION_CODE handler')
@@ -330,6 +332,20 @@ export const checkRegistrationCode: Action = {
         },
       },
     ],
-
+    [
+      {
+        name: '{{name1}}',
+        content: {
+          text: 'CODE',
+        },
+      },
+      {
+        name: '{{name2}}',
+        content: {
+          text: "I'll check it to see if it's correct",
+          actions: ['VERIFY_REGISTRATION_CODE'],
+        },
+      },
+    ],
   ] as ActionExample[][],
 }
