@@ -1,6 +1,12 @@
 import {
-  createUniqueUuid,
-  logger,
+  type Action,
+  type IAgentRuntime,
+  type Memory,
+  type State,
+  type HandlerCallback,
+  type ActionExample,
+  type UUID,
+  type Content,
 } from '@elizaos/core';
 import { takeItPrivate, HasEntityIdFromMessage, getDataFromMessage } from '../utils'
 import CONSTANTS from '../constants'
@@ -30,7 +36,7 @@ export const deleteRegistration: Action = {
     message: Memory,
     state: State,
     _options: { [key: string]: unknown },
-    callback?: HandlerCallback,
+    callback: HandlerCallback,
     responses: any[]
   ): Promise<boolean> => {
     console.log('DELETE_REGISTRATION handler')
@@ -43,7 +49,7 @@ export const deleteRegistration: Action = {
     const componentData = await getDataFromMessage(runtime, message)
     //console.log('newEmail', componentData)
 
-    let output = false
+    let output: Content | null = null
     if (componentData) {
       console.log('deleting', componentData)
       output = takeItPrivate(runtime, message, 'Just cleared your registration: ' + componentData.address)
@@ -52,6 +58,7 @@ export const deleteRegistration: Action = {
       output = takeItPrivate(runtime, message, 'Cant find your registration')
     }
     callback(output)
+    return true
   },
   examples: [
     [
