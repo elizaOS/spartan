@@ -1,6 +1,10 @@
 import {
-  createUniqueUuid,
-  logger,
+  type Action,
+  type IAgentRuntime,
+  type Memory,
+  type State,
+  type HandlerCallback,
+  type ActionExample,
 } from '@elizaos/core';
 import { v4 as uuidv4 } from 'uuid';
 import { getDataFromMessage, getAccountFromMessage, messageReply } from '../utils'
@@ -21,7 +25,7 @@ export const servicesMenu: Action = {
     message: Memory,
     state: State,
     _options: { [key: string]: unknown },
-    callback?: HandlerCallback,
+    callback: HandlerCallback,
     responses: any[]
   ): Promise<boolean> => {
     console.log('SERVICES_MENU handler')
