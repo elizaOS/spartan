@@ -1,6 +1,12 @@
 import {
+  type Action,
+  type IAgentRuntime,
+  type Memory,
+  type State,
+  type HandlerCallback,
+  type ActionExample,
+  type UUID,
   createUniqueUuid,
-  logger,
 } from '@elizaos/core';
 import { v4 as uuidv4 } from 'uuid';
 import nodemailer from 'nodemailer';
@@ -101,7 +107,7 @@ sve:validate message {
     message: Memory,
     state: State,
     _options: { [key: string]: unknown },
-    callback?: HandlerCallback,
+    callback: HandlerCallback,
     responses: any[]
   ): Promise<boolean> => {
     console.log('USER_REGISTRATION handler')
