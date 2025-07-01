@@ -1,5 +1,5 @@
 import type { Plugin } from '@elizaos/core';
-import { createUniqueUuid } from '@elizaos/core';
+import { type UUID, createUniqueUuid } from '@elizaos/core';
 
 import { interface_users_ByIds, interface_users_list } from '../interfaces/int_users'
 import { interface_accounts_ByIds } from '../interfaces/int_accounts'
@@ -103,8 +103,8 @@ export async function getWalletByUserEntityIds_engine(runtime, userEntityIds: UU
       //console.log('verified email.address', email.address, '=>', emailEntityId)
       accountIds[entityId] = emailEntityId
       //userWallets[entityId] = email.metawallets
-    } else {
-      console.log('getWalletByUserEntityIds_engine - waiting on verification', entityId, email)
+    //} else {
+      //console.log('getWalletByUserEntityIds_engine - waiting on verification', entityId, email)
     }
   }
   const accountWallets = await getMetaWalletsByEmailEntityIds(runtime, Object.values(accountIds))
