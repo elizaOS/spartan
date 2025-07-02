@@ -3,14 +3,18 @@ import {
   logger,
 } from '@elizaos/core';
 import { v4 as uuidv4 } from 'uuid';
-import { takeItPrivate, messageReply, HasEntityIdFromMessage, getDataFromMessage } from '../utils'
-import { COMPONENT_USER_TYPE } from '../constants'
+import { getAccountFromMessage, takeItPrivate, messageReply, HasEntityIdFromMessage, getDataFromMessage } from '../utils'
+import { interface_account_update } from '../interfaces/int_accounts'
+import CONSTANTS from '../constants'
+const { Keypair } = require('@solana/web3.js');
+import bs58 from 'bs58'
 
 // handle starting new form and collecting first field
 export const walletImportAction: Action = {
   name: 'WALLET_IMPORT',
   similes: [
   ],
+  description: 'Allows a user to import a wallet without a strategy',
   validate: async (runtime: IAgentRuntime, message: Memory) => {
     //console.log('WALLET_IMPORT validate')
 
@@ -23,11 +27,16 @@ export const walletImportAction: Action = {
       console.log('WALLET_IMPORT validate - author not found')
       return false
     }
-    const reg = await getDataFromMessage(runtime, message)
-    if (!reg) return false; // require validation
+
+    const solanaService = runtime.getService('chain_solana') as any;
+    const keys = solanaService.detectPrivateKeysFromString(message.content.text)
+    if (!keys.length) return false;
+
+    const account = await getAccountFromMessage(runtime, message)
+    if (!account) return false; // require account
+
     return true
   },
-  description: 'Allows a user to import a wallet without a strategy',
   handler: async (
     runtime: IAgentRuntime,
     message: Memory,
@@ -39,14 +48,13 @@ export const walletImportAction: Action = {
     console.log('WALLET_IMPORT handler')
 
     // using the service to get this/components might be good way
-    const email = await getDataFromMessage(runtime, message)
-    //console.log('email', email)
-
-    // should never hit it
-    if (!email) {
+    //const email = await getDataFromMessage(runtime, message)
+    const account = await getAccountFromMessage(runtime, message)
+    if (!account) {
       runtime.runtimeLogger.log('Not registered')
       return
     }
+
     const roomDetails = await runtime.getRoom(message.roomId);
 
     const traderStrategyService = runtime.getService('TRADER_STRATEGY') as any;
@@ -67,45 +75,67 @@ export const walletImportAction: Action = {
     const chains = await traderChainService.listActiveChains()
     console.log('chains', chains)
 
-    //console.log('email', email)
-    const newData = email.data
-    //console.log('newData', newData)
+    const solanaService = runtime.getService('chain_solana') as any;
+    const keys = solanaService.detectPrivateKeysFromString(message.content.text)
+    console.log('keys', keys)
+    const keypair = Keypair.fromSecretKey(keys[0].bytes);
+    console.log('privateKeyB58', keypair)
+    // keys[{ format, match, bytes }]
 
-    if (newData.metawallets === undefined) newData.metawallets = []
+    console.log('account', account)
+    //callback(takeItPrivate(runtime, message, 'Thinking about making a meta-wallet'))
+
+    if (account.metawallets === undefined) account.metawallets = []
     const newWallet = {
-      strategy: containsStrats[0],
+      strategy: containsStrats?.[0] || 'LLM trading strategy',
       keypairs: {
         solana: {
-          privateKey: '',
-          publicKey: '',
+          privateKey: bs58.encode(keypair.secretKey),
+          publicKey: keypair.publicKey.toBase58(),
         }
       }
     }
     console.log('newWallet', newWallet)
-    responses.length = 0 // just clear them all
-    takeItPrivate(runtime, message, 'Made a meta-wallet ' + JSON.stringify(newWallet) + ' please fund it to start trading', responses)
+    callback(takeItPrivate(runtime, message, 'Made a meta-wallet ' + JSON.stringify(newWallet) + ' please fund it to start trading'))
 
-    newData.metawallets.push(newWallet)
+    account.metawallets.push(newWallet)
     // dev mode
     //newData.metawallets = [newWallet]
-
+    await interface_account_update(runtime, account)
+    /*
     await runtime.updateComponent({
-      id: email.id,
+      id: account.componentId,
       worldId: roomDetails.worldId,
       roomId: message.roomId,
       sourceEntityId: message.entityId,
-      entityId: entityId,
-      type: COMPONENT_USER_TYPE,
+      entityId: account.entityId,
+      type: CONSTANTS.COMPONENT_ACCOUNT_TYPE,
       data: newData,
       agentId: runtime.agentId,
     });
+    */
   },
   examples: [
     [
       {
         name: '{{name1}}',
         content: {
-          text: 'I want to import a wallet with this (base58 encoded) private key HZoGUehwBuXkFhTkkov7VkKDo2uhUKqdoijVb9vByE9B',
+          text: 'I want to import a wallet with this (base58 encoded) private key 4Vw7qoDQYMkicLcp1NSsyTjev8k7CvKBVWEUsRJgXMqsHB3iAVcQ11yiRiKXnLAXynHzNQQUrhC788fE9rcN1Ar4',
+        },
+      },
+      {
+        name: '{{name2}}',
+        content: {
+          text: "I'll import that now",
+          actions: ['WALLET_IMPORT'],
+        },
+      },
+    ],
+    [
+      {
+        name: '{{name1}}',
+        content: {
+          text: 'Import wallet from 4Vw7qoDQYMkicLcp1NSsyTjev8k7CvKBVWEUsRJgXMqsHB3iAVcQ11yiRiKXnLAXynHzNQQUrhC788fE9rcN1Ar4',
         },
       },
       {
