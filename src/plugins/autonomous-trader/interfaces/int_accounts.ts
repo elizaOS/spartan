@@ -72,9 +72,9 @@ export async function interface_accounts_list(runtime, options = {}) {
 // list of IDs vs list of users?
 export async function getAccountIdsByPubkeys(runtime, pubkeys) {
   const accountIds = await interface_accounts_list(runtime)
-  console.log('getAccountIdsByPubkeys - accountIds', accountIds)
+  //console.log('getAccountIdsByPubkeys - accountIds', accountIds)
   const accounts = await interface_accounts_ByIds(runtime, accountIds)
-  console.log('getAccountIdsByPubkeys - accounts', accounts)
+  //console.log('getAccountIdsByPubkeys - accounts', accounts)
   const mws = []
   for(const entityId in accounts) {
     const account = accounts[entityId]
@@ -84,7 +84,7 @@ export async function getAccountIdsByPubkeys(runtime, pubkeys) {
       continue
     }
     //console.log('getMetaWallets - ', entityId, 'wallets', email.metawallets)
-    console.log('getAccountIdsByPubkeys - account', account)
+    //console.log('getAccountIdsByPubkeys - account', account)
     if (account.metawallets) {
       for(const mw of account.metawallets) {
         mws.push({...mw, entityId, names: account.names })
@@ -101,11 +101,11 @@ export async function getAccountIdsByPubkeys(runtime, pubkeys) {
   for(const mw of metaWallets) {
     for(const chain in mw.keypairs) {
       const kp = mw.keypairs[chain]
-      console.log('kp', kp)
+      //console.log('kp', kp)
       if (pubkeys.includes(kp.publicKey)) {
         list[kp.publicKey] = mw.entityId
       } else {
-        console.log('target', pubkeys, 'pubkey', kp.publicKey)
+        //console.log('target', pubkeys, 'pubkey', kp.publicKey)
       }
     }
   }
@@ -141,28 +141,39 @@ export async function interface_account_create(runtime, message, account) {
   });
 }
 
-export async function interface_account_update(runtime, account) {
-  const id = account.componentId
+// we're not update the account, we're really updating the account one & only component
+export async function interface_account_update(runtime, component) {
+  const id = component.id
   if (!id) {
-    console.warn('no componentId in account', account)
+    console.warn('no componentId in account', component)
     return false
   }
-  const entityId = account.accountEntityId
+  //const entityId = component.entityId
+  //console.log('interface_account_update - entityId', entityId, 'componentId', id)
   // need to strip somethings...: componentId, names
-  delete account.componentId
-  delete account.names
-  delete account.entityId
-  delete account.accountEntityId // utils injects this
-  //console.log('interface_account_update - componentData', account)
+  // doesn't look like we're injecting any crap into component.data
+  /*
+  delete component.componentId
+  delete component.id
+  delete component.names
+  delete component.entityId
+  delete component.agentId
+  delete component.roomId
+  delete component.worldId
+  delete component.sourceEntityId
+  delete component.type
+  delete component.accountEntityId // utils injects this
+  */
+  console.log('interface_account_update - accountId', component.entityId, 'component', component.id, 'componentData', component.data)
 
   const res = await runtime.updateComponent({
-    id,
+    id: component.id,
     //worldId: roomDetails.worldId,
     //roomId: message.roomId,
     //sourceEntityId: message.entityId,
     //entityId,
     type: CONSTANTS.COMPONENT_ACCOUNT_TYPE,
-    data: account,
+    data: component.data,
     agentId: runtime.agentId,
   });
   //console.log('interface_account_update - updateComponent result', res)
