@@ -3,10 +3,12 @@ import {
   ModelType,
   logger,
   parseJSONObjectFromText,
+  type UUID,
   createUniqueUuid,
 } from '@elizaos/core';
 import { v4 as uuidv4 } from 'uuid';
 import { interface_spartan_get } from './int_spartan'
+import { interface_users_ByIds } from './int_users'
 import CONSTANTS from '../constants'
 
 // look up by Ids
@@ -26,6 +28,12 @@ export async function interface_accounts_ByIds(runtime, ids) {
       if (email) {
         //components.push({...email.data, entityId: entity.id, names: entity.names })
         //entityId: entity.id,
+        // entityId is what was passed in (emailEntityId)
+        // componentId is off that entity
+        // accountEntityId is what getAccountFromMessage
+        // so it should match entityId
+
+        // maybe instead of entityId, make it accountEntityId or emailEntityId
         components[entityId] = {...email.data, entityId, componentId: email.id }
       } else {
         // normal if they didn't sign up
@@ -42,8 +50,8 @@ export async function interface_accounts_ByUserIds(runtime, userIds) {
   //console.log('interface_accounts_ByIds', ids)
   const users = await interface_users_ByIds(runtime, userIds)
   const accountIds = {}
-  for(const entityId in emails) {
-    const email = emails[entityId]
+  for(const entityId in users) {
+    const email = users[entityId]
     console.log(entityId, 'wallets', email.metawallets)
     if (email.verified && email.address) {
       const emailEntityId = createUniqueUuid(runtime, email.address);
@@ -64,7 +72,9 @@ export async function interface_accounts_list(runtime, options = {}) {
 // list of IDs vs list of users?
 export async function getAccountIdsByPubkeys(runtime, pubkeys) {
   const accountIds = await interface_accounts_list(runtime)
+  console.log('getAccountIdsByPubkeys - accountIds', accountIds)
   const accounts = await interface_accounts_ByIds(runtime, accountIds)
+  console.log('getAccountIdsByPubkeys - accounts', accounts)
   const mws = []
   for(const entityId in accounts) {
     const account = accounts[entityId]
@@ -74,25 +84,28 @@ export async function getAccountIdsByPubkeys(runtime, pubkeys) {
       continue
     }
     //console.log('getMetaWallets - ', entityId, 'wallets', email.metawallets)
+    console.log('getAccountIdsByPubkeys - account', account)
     if (account.metawallets) {
       for(const mw of account.metawallets) {
         mws.push({...mw, entityId, names: account.names })
       }
     } else {
-      console.warn('getUserIdsByPubkeys - user', entityId, 'no metawallets in registration component', email)
+      console.warn('getUserIdsByPubkeys - user', entityId, 'no metawallets in registration component', account)
     }
   }
   //const metaWallets = await getMetaWallets(runtime)
+  console.log('getAccountIdsByPubkeys - all metaWallets count', mws.length)
   const metaWallets = mws
   //console.log('getUserIdsByPubkeys - metaWallets', metaWallets)
   const list = {}
   for(const mw of metaWallets) {
     for(const chain in mw.keypairs) {
       const kp = mw.keypairs[chain]
+      console.log('kp', kp)
       if (pubkeys.includes(kp.publicKey)) {
         list[kp.publicKey] = mw.entityId
-      //} else {
-        //console.log('target', pubkeys, 'pubkey', kp.publicKey)
+      } else {
+        console.log('target', pubkeys, 'pubkey', kp.publicKey)
       }
     }
   }
