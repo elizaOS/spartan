@@ -98,6 +98,10 @@ export class TradeDataProviderService extends Service {
     const ca2Positions = []
     for(const p of positions) {
       const ca = p.position.token
+
+      // don't need to care about closed positions atm
+      if (p.position.close) continue
+
       //console.log('p', p, 'ca', ca)
       if (!tokens.includes(ca)) {
         tokens.push(ca)
@@ -143,7 +147,7 @@ export class TradeDataProviderService extends Service {
       const mw = ud.mw
       const kp = mw.keypairs[p.chain]
       const strat = mw.strategy
-      console.log('closePosition - ud', ud)
+      //console.log('closePosition - ud', ud)
 
       const hndl = this.strategyService.getHndlByStratName(mw.strategy)
       if (!hndl) {
@@ -162,12 +166,14 @@ export class TradeDataProviderService extends Service {
       }
       console.log('closePosition - wallet', wallet)
       console.log('closePosition - signal', signal)
+      //console.log('closePosition - hndl', hndl, 'pubkey', kp.publicKey, 'p.id', p.id)
       const res = await solanaService.executeSwap([wallet], signal)
       // close position
       if (res[0].success) {
         // going to be hard to get a strategy handle...
         // get strategy hndl and close position
         // which position...
+        //console.log('strategyService.close_position hndl', hndl, 'pubkey', kp.publicKey, 'p.id', p.id)
         await this.strategyService.close_position(hndl, kp.publicKey, p.id, {
           outAmount: res[0].outAmount,
           signature: res[0].signature,
