@@ -110,14 +110,14 @@ export async function interface_positions_ByAccountIdPosIds(runtime, accountId, 
 export async function listPositions(runtime, options = {}) {
   //const userIds = awiat interface_users_list(runtime)
   //const emails = await interface_users_ByIds(runtime, users)
-  console.log('listPositions - options', options)
+  //console.log('listPositions - options', options)
   const metaWallets = await getMetaWallets(runtime)
   //console.log('listPositions - metaWallets', metaWallets)
   const positions = []
   for(const mw of metaWallets) {
     //console.log('mw', mw)
     if (mw.keypairs.solana.positions?.length) {
-      console.log('solana positions', mw.keypairs.solana.positions)
+      //console.log('solana positions', mw.keypairs.solana.positions)
       // filter open positions?
       for(const p of mw.keypairs.solana.positions) {
         positions.push({ position: p, entityId: mw.entityId, mw })
@@ -200,7 +200,7 @@ export async function updatePosition(runtime, accountId, posId, delta) {
     return false
   }
   //const account = res.account
-  const componentData = res.component
+  const component = res.component
   const posRes = res.list[posId]
   const mw = posRes.mw
   const pos = posRes.pos
@@ -213,12 +213,13 @@ export async function updatePosition(runtime, accountId, posId, delta) {
     return false
   }
   // integrate changed data
-  wallet.positions[idx] = {...wallet.positions[idx], delta }
+  wallet.positions[idx] = {...wallet.positions[idx], ...delta }
 
-  // is this right?
-  console.log('mw', mw)
-  console.log('componentData', componentData)
-  await interface_account_update(runtime, componentData)
+  //console.log('updatePosition - mw', mw)
+  console.log('updatePosition - component', component)
+  // expects componentId to be in componentData.id
+  // component needs component.data
+  await interface_account_update(runtime, component)
   /*
   await runtime.updateComponent({
     id: email.componentId,
@@ -231,6 +232,6 @@ export async function updatePosition(runtime, accountId, posId, delta) {
     agentId: runtime.agentId,
   });
   */
-  console.log('closed position', componentData)
+  //console.log('updatePosition - closed position', componentData)
   return true
 }
