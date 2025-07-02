@@ -26,6 +26,8 @@ Trending Solana tokens:
 
 {{trending_tokens}}
 
+It is ok to say nothing is worth buying, only move if you see an opportunity
+
 Only return the following JSON and nothing else (even if no sentiment or trending):
 {
   recommend_buy_chain: "which chain the token is on",
@@ -208,6 +210,10 @@ async function generateBuySignal(runtime, strategyService, hndl) {
       // this can return NaN?
       console.log('bal', bal) //uiAmount
       if (bal === -1) continue
+      if (bal < 0.003) {
+        console.log('not enough SOL balance in', w.publicKey)
+        continue
+      }
       const amt = await scaleAmount(w, bal, response)
       console.log('amt', amt) //uiAmount
       // FIXME: what amt is too miniscule for this coin buy (not worth the tx fees?)
@@ -235,8 +241,9 @@ async function generateBuySignal(runtime, strategyService, hndl) {
           chain: response.recommend_buy_chain.toLowerCase(),
           token: response.recommend_buy_address,
           publicKey: kp.publicKey,
+          // is this total or per token? this must be total I guess
           solAmount: amt,
-          tokenAmount: res[0].outAmount,
+          tokenAmount: res[0].outAmount, // count of token recv
           swapFee: res[0].fees.lamports,
           // is this right? yes but we don't need to store, since we can calculate
           //entryPrice: res[0].outAmount / amt,
