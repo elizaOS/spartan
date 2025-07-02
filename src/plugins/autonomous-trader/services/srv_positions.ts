@@ -23,10 +23,10 @@ export class InterfacePositionsService extends Service {
     const pubkey = pos.publicKey
     // find which user owns this wallet
     const accountIds = await getAccountIdsByPubkeys(this.runtime, [pubkey])
-    //console.log('srv_pos:open - userids', userids, 'pubkey', pubkey)
+    console.log('srv_pos:open - accountIds', accountIds, 'pubkey', pubkey)
     const accountId = accountIds[pubkey]
     if (!accountId) {
-      console.log('srv_pos:open - opened a position for account we dont have', pubkey, 'userids', accountsIds)
+      console.log('srv_pos:open - opened a position for account we dont have', pubkey, 'userids', accountIds)
       return false
     }
     // returns t/f
@@ -35,11 +35,12 @@ export class InterfacePositionsService extends Service {
 
   //const close = await this.positionIntService.close(publicKey, posHndl, closeInfo)
   async close(publicKey, posHndl, closeInfo) {
+    const pubkey = publicKey
     const accountIds = await getAccountIdsByPubkeys(this.runtime, [pubkey])
-    //console.log('srv_pos:open - userids', userids, 'pubkey', pubkey)
+    console.log('srv_pos:close - accountIds', accountIds, 'pubkey', pubkey)
     const accountId = accountIds[pubkey]
     if (!accountId) {
-      console.log('srv_pos:closed - closed a position for account we dont have', pubkey, 'userids', accountsIds)
+      console.log('srv_pos:close - closed a position for account we dont have', pubkey, 'userids', accountIds)
       return false
     }
     return updatePosition(this.runtime, accountId, posHndl, { close: closeInfo })
