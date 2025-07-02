@@ -39,6 +39,11 @@ export const servicesMenu: Action = {
 
     //await messageReply(runtime, message, 'You can ask me to create a (non-custodial) wallet', responses)
     //await messageReply(runtime, message, 'You can ask me to create a wallet for autonomous trading', responses)
+    /*
+    explain all available MULTIWALLET functions
+    maybe dynamic with primary example?
+    */
+
     const responseContent = {
       text: account ? 'You can ask me to create a wallet (non-custodial) wallet for autonomous trading'
       : 'After you sign up, you can ask me to create a wallet (non-custodial) wallet for autonomous trading',
@@ -69,6 +74,21 @@ export const servicesMenu: Action = {
         name: '{{name1}}',
         content: {
           text: 'What can I do?',
+        },
+      },
+      {
+        name: '{{name2}}',
+        content: {
+          text: menutext,
+          actions: ['SERVICES_MENU'],
+        },
+      },
+    ],
+    [
+      {
+        name: '{{name1}}',
+        content: {
+          text: 'What is this app?',
         },
       },
       {
