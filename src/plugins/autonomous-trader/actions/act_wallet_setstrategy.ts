@@ -190,5 +190,21 @@ export const setStrategy: Action = {
         },
       },
     ],
+    [
+      {
+        name: '{{name1}}',
+        content: {
+          text: 'create X trading strategy',
+        },
+      },
+      {
+        name: '{{name2}}',
+        content: {
+          text: "I'll help generate one",
+          actions: ['WALLET_SETSTRAT'],
+        },
+      },
+    ],
+
   ] as ActionExample[][],
 }
