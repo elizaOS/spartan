@@ -5,6 +5,8 @@ import { interface_accounts_ByIds, interface_account_update } from './int_accoun
 import { getMetaWallets } from './int_wallets'
 
 // look up by Ids
+
+// not used
 export async function interface_positions_ByUserIdPosIds(runtime, userId, positionIds) {
 
   // one db read
@@ -17,7 +19,7 @@ export async function interface_positions_ByUserIdPosIds(runtime, userId, positi
   // find pos
   let list = {}
   for(const mw of email.metawallets) {
-    for(const kp of tmw.keypairs) {
+    for(const kp of mw.keypairs) {
       if (kp.positions) {
         for(const posId in positionIds) {
           const pos = kp.positions.find(p => p.id === posId)
@@ -31,9 +33,47 @@ export async function interface_positions_ByUserIdPosIds(runtime, userId, positi
   return { email, list }
 }
 
+export async function interface_positions_ByAccountId(runtime, accountId) {
+  // one db read
+  const account = await runtime.getEntityById(accountId)
+  //const accounts = await interface_accounts_ByIds(runtime, [accountId])
+  //const account = accounts[accountId]
+  if (!account) {
+    return false
+  }
+  //console.log('interface_positions_ByAccountIdPosIds account', account)
+  const component = account.components.find(c => c.type === COMPONENT_ACCOUNT_TYPE)
+
+  // find pos in metaWallets (no more db calls)
+  let list = {}
+  for(const mw of component.data.metawallets) {
+    for(const chain in mw.keypairs) {
+      const kp = mw.keypairs[chain]
+      if (kp.positions) {
+        for(const pos of kp.positions) {
+          list[pos.id] = { mw, pos, }
+        }
+      }
+    }
+  }
+  return { account, component, list }
+}
+
 // used by updatePosition
 export async function interface_positions_ByAccountIdPosIds(runtime, accountId, positionIds) {
+  // one db read
+  const res = await interface_positions_ByAccountId(runtime, accountId)
+  if (!res) return { account: false, component: false, list: [] }
+  //console.log('interface_positions_ByAccountIdPosIds - res', res)
+  const account = res.account
+  const component = res.component
+  // res.list is keyed by pos.id
+  const list = {} // list is keyed by position id
+  for(const posId of positionIds) {
+    list[posId] = res.list[posId]
+  }
 
+  /*
   // one db read
   const account = await runtime.getEntityById(accountId)
   //const accounts = await interface_accounts_ByIds(runtime, [accountId])
@@ -59,6 +99,7 @@ export async function interface_positions_ByAccountIdPosIds(runtime, accountId, 
       }
     }
   }
+  */
   return { account, component, list }
 }
 
@@ -153,7 +194,8 @@ export async function updatePosition(runtime, accountId, posId, delta) {
     console.warn('updatePosition - cant find account', accountId)
     return false
   }
-  if (!res.list.length) {
+  //if (!Object.values(res.list).length) {
+  if (!res.list[posId]) {
     console.warn('updatePosition - cant find position', posId)
     return false
   }
@@ -189,6 +231,6 @@ export async function updatePosition(runtime, accountId, posId, delta) {
     agentId: runtime.agentId,
   });
   */
-  console.log('closed position', account)
+  console.log('closed position', componentData)
   return true
 }
