@@ -1,5 +1,6 @@
 import {
   type IAgentRuntime,
+  type Content,
   ModelType,
   logger,
   parseJSONObjectFromText,
@@ -9,6 +10,7 @@ import { interface_users_ByIds } from './interfaces/int_users'
 import { interface_accounts_ByIds } from './interfaces/int_accounts'
 
 // we used to use message.entityId
+// this is the user entity id
 export async function getEntityIdFromMessage(runtime, message) {
   //return createUniqueUuid(runtime, message.metadata.fromId);
   //console.log('getEntityIdFromMessage message', message)
@@ -66,6 +68,13 @@ export async function getAccountFromMessage(runtime, message) {
     if (accounts[emailEntityId]) {
       // accounts[emailEntityId] is componentData
       // .componentId
+      // not really a concern
+      /*
+      if (emailEntityId !== accounts[emailEntityId].entityId) {
+        console.warn('entityId mismatch', emailEntityId, accounts[emailEntityId])
+      }
+      */
+      // probably don't need to include accountEntityId because it will contain entityId
       return {...accounts[emailEntityId], accountEntityId: emailEntityId }
     } else {
       // verified just no component yet
@@ -75,6 +84,54 @@ export async function getAccountFromMessage(runtime, message) {
   }
   // not verified
   return false
+}
+
+        /*
+const sourceAddressTemplate = `Respond with a JSON markdown block containing only the extracted values. Use null for any values that cannot be determined.
+
+Recent Messages:
+{{recentMessages}}
+
+Extract the following information about the requested swap:
+- Source wallet address to use for the swap
+
+Example response:
+\`\`\`json
+{
+    "sourceWalletAddress": "FcfoYfudjC6hnAWRrGw1zEkb87jSSky79A82hddzBFd1"
+}
+\`\`\`
+
+Do NOT include any thinking, reasoning, or <think> sections in your response.
+Go directly to the JSON response format without any preamble or explanation.
+
+IMPORTANT: Your response must ONLY contain the json block above. Do not include any text, thinking, or reasoning before or after this JSON block. Start your response immediately with { and end with }.`;
+
+        const sourcePrompt = composePromptFromState({
+            state: state,
+            template: sourceAddressTemplate,
+        });
+        const sourceResult = await runtime.useModel(ModelType.OBJECT_LARGE, {
+            prompt: sourcePrompt,
+        });
+        console.log('MULTIWALLET_SWAP sourceResult', sourceResult);
+        */
+
+/// wallet vs pubkey address?
+// is a wallet required? , required = 0
+// max wallets? 1, 2 for transfer
+// we return an array of what?
+export async function getWalletsFromText(runtime, message) {
+  // what about partial?
+  // only works in the source context...
+  const solanaService = runtime.getService('chain_solana') as any;
+  if (!solanaService) {
+    console.error('getWalletsFromText - CANT FIND chain_solana service')
+    return []
+  }
+  const sources = solanaService.detectPubkeysFromString(message.content.text)
+  // get by wallet name
+  return sources
 }
 
 export async function acquireService(
@@ -132,8 +189,10 @@ export async function askLlmObject(
       object: true,
     });
 
-    //console.log('trader::utils:askLlmObject - response', response);
-    responseContent = parseJSONObjectFromText(response) as any;
+    console.log('trader::utils:askLlmObject - response', response);
+    // we do not need the backtic stuff .replace('```json', '').replace('```', '')
+    let cleanResponse = response.replace(/<think>[\s\S]*?<\/think>/g, '')
+    responseContent = parseJSONObjectFromText(cleanResponse) as any;
 
     retries++;
     good = checkRequired(responseContent);
@@ -167,7 +226,7 @@ export async function messageReply(runtime, message, reply) {
   return responseContent
 }
 
-export function takeItPrivate(runtime, message, reply) {
+export function takeItPrivate(runtime, message, reply): Content {
   const responseContent = {
     text: reply,
     channelType: 'DM',
