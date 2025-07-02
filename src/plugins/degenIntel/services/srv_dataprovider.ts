@@ -183,12 +183,13 @@ export class TradeDataProviderService extends Service {
     }
 
     // this type of monitoring should be refactored out
-    for(const r of results) {
+    for(const r of results) { // for each look up service (rn just BE)
       //console.log('r', r)
       for(const ca of tokens) {
         //console.log('ca', ca)
         const td = r[ca]
         if (!td) {
+          // this data provider didn't have any info on this token
           console.log('no results for', ca)
           continue
         }
@@ -196,6 +197,8 @@ export class TradeDataProviderService extends Service {
         for(const ud of ca2Positions[ca]) {
           //console.log('ud', ud)
           const p = ud.position
+
+          // FIXME: double check actual amount we hold now...
 
           // sentiment? 24h volume?
           // liquidity, priceChange24h, priceUsd
@@ -205,16 +208,19 @@ export class TradeDataProviderService extends Service {
           if (td.priceUsd < p.exitConditions.priceDrop) {
             // sad exit
             console.log('I has a sad')
-            closePosition(ud)
+            await closePosition(ud)
+            await new Promise((waitResolve) => setTimeout(waitResolve, 1000));
           }
           if (td.priceUsd > p.exitConditions.targetPrice) {
             // win
             console.log('KICK ASS')
-            closePosition(ud)
+            await closePosition(ud)
+            await new Promise((waitResolve) => setTimeout(waitResolve, 1000));
           }
         }
       }
     }
+    console.log('done checking open positions')
   }
 
   forEachReg(key) {
