@@ -30,7 +30,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { UUID } from 'crypto';
 import { getWalletKey } from '../keypairUtils';
 import { SOLANA_SERVICE_NAME } from '../constants';
-import { takeItPrivate, messageReply, getAccountFromMessage } from '../utils'
+import { HasEntityIdFromMessage, takeItPrivate, messageReply, getAccountFromMessage } from '../utils'
 
 /**
  * Interface representing the content of a transfer with a specific address.
