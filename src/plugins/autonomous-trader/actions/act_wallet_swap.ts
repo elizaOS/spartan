@@ -26,7 +26,7 @@ import { getWalletKey } from '../keypairUtils';
 import { SOLANA_SERVICE_NAME } from '../constants';
 import type { SolanaService } from '../service';
 import type { Item } from '../types';
-import { HasEntityIdFromMessage, getDataFromMessage } from '../utils'
+import { askLlmObject, takeItPrivate, getAccountFromMessage, getWalletsFromText, HasEntityIdFromMessage, getDataFromMessage } from '../utils'
 
 /**
  * Interface representing the content of a swap with a specific wallet.
@@ -171,6 +171,7 @@ async function swapToken(
 /**
  * Template for determining the source wallet address.
  */
+/*
 const sourceAddressTemplate = `Respond with a JSON markdown block containing only the extracted values. Use null for any values that cannot be determined.
 
 Recent Messages:
@@ -190,6 +191,7 @@ Do NOT include any thinking, reasoning, or <think> sections in your response.
 Go directly to the JSON response format without any preamble or explanation.
 
 IMPORTANT: Your response must ONLY contain the json block above. Do not include any text, thinking, or reasoning before or after this JSON block. Start your response immediately with { and end with }.`;
+*/
 
 /**
  * Template for determining the swap details.
@@ -238,8 +240,8 @@ export default {
         console.log('MULTIWALLET_SWAP validate - author not found')
         return false
       }
-      const reg = await getDataFromMessage(runtime, message)
-      if (!reg) {
+      const account = await getAccountFromMessage(runtime, message)
+      if (!account) {
         //console.log('WALLET_CREATION validate - registration not found')
         return false;
       }
@@ -255,7 +257,27 @@ export default {
         responses: any[] = []
     ): Promise<boolean> => {
         logger.log('MULTIWALLET_SWAP Starting handler...');
+        const account = await getAccountFromMessage(runtime, message)
+        if (!account) return false; // shouldn't hit here
+        console.log('account', account)
 
+        // local agent wallet?
+        const validSources = account.metawallets.map(mw => mw.keypairs.solana.publicKey)
+        console.log('validSources', validSources)
+
+        // the source might not just be in the last message
+        // might be in the context...
+
+        const sources = await getWalletsFromText(runtime, message)
+        console.log('sources', sources)
+        if (sources.length !== 1) {
+          callback(takeItPrivate(runtime, message, "Can't determine source wallet"))
+          return
+        }
+        const sourceResult = {
+          sourceWalletAddress: sources[0]
+        }
+        /*
         const sourcePrompt = composePromptFromState({
             state: state,
             template: sourceAddressTemplate,
@@ -264,6 +286,7 @@ export default {
             prompt: sourcePrompt,
         });
         console.log('MULTIWALLET_SWAP sourceResult', sourceResult);
+        */
 
         if (!sourceResult.sourceWalletAddress) {
             console.log('MULTIWALLET_SWAP cant determine source wallet address');
@@ -271,9 +294,9 @@ export default {
         }
 
         // find this user's wallet
-        const entityId = createUniqueUuid(runtime, message.metadata.fromId);
+        //const entityId = createUniqueUuid(runtime, message.metadata.fromId);
 
-        const asking = 'solana';
+        const asking = 'wallet swap';
         const serviceType = 'AUTONOMOUS_TRADER_INTERFACE_WALLETS';
         let interfaceWalletService = runtime.getService(serviceType) as any;
         while (!interfaceWalletService) {
@@ -286,8 +309,8 @@ export default {
             }
         }
 
-        const metawallets = await interfaceWalletService.getWalletByUserEntityIds([entityId]);
-        const userMetawallets = metawallets[entityId];
+        //const metawallets = await interfaceWalletService.getWalletByUserEntityIds([entityId]);
+        const userMetawallets = account.metawallets;
 
         // confirm wallet is in this list
         let found = [];
@@ -342,15 +365,29 @@ export default {
             template: swapTemplate.replace('{{possibleWallets}}', contextStr),
         });
 
+        /*
         const result = await runtime.useModel(ModelType.TEXT_LARGE, {
             prompt: swapPrompt,
         });
 
         const content = parseJSONObjectFromText(result) as SwapWalletContent;
+    "inputTokenSymbol": "SOL",
+    "outputTokenSymbol": "USDC",
+    "inputTokenCA": "So11111111111111111111111111111111111111112",
+    "outputTokenCA": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+    "amount": 1.5
+        */
+
+        // user might not give the tokenCA
+        // they might not give the symbol (and give the CA instead)
+        const content = await askLlmObject(runtime, { prompt: swapPrompt }, [
+          'amount'
+        ])
 
         if (content === null) {
           //return this.handler(runtime, message, state, _options, callback, responses)
           console.log('no usable llm response')
+          callback({ text: 'Could not figure out the request' });
           return false
         }
 
@@ -360,9 +397,9 @@ export default {
         console.log('found', found)
         const sourceKp = found.find(kp => kp.publicKey === sourceResult.sourceWalletAddress);
         if (!sourceKp) {
-            console.warn('MULTIWALLET_SWAP Could not find the specified wallet')
-            callback?.({ text: 'Could not find the specified wallet' });
-            return false;
+          console.warn('MULTIWALLET_SWAP Could not find the specified wallet')
+          callback({ text: 'Could not find the specified wallet' });
+          return false;
         }
 
         // clean up symbols
@@ -380,7 +417,7 @@ export default {
         // attempt to check base58 encoding on each CA
         // if fails, look it up from symbol
         if (!solanaService.isValidSolanaAddress(content.inputTokenCA) || !solanaService.validateAddress(content.inputTokenCA)) {
-          // find it
+          // find it via symbol
           const pubKeyObj = new PublicKey(sourceResult.sourceWalletAddress);
           const heldTokens = await solanaService.getTokenAccountsByKeypair(pubKeyObj)
           for (const t of heldTokens) {
@@ -400,10 +437,14 @@ export default {
           // outputTokenCA
         }
 
+        // do best to ensure input
+        // do best to ensure output
+
         console.log('MULTIWALLET_SWAP content after fix', content);
 
+        // check for input & output
         if (!isSwapWalletContent(content)) {
-            callback?.({ text: 'Invalid swap parameters provided' });
+            callback({ text: 'Invalid swap parameters provided' });
             return false;
         }
 
@@ -454,7 +495,9 @@ export default {
                 throw new Error(`Transaction failed: ${confirmation.value.err}`);
             }
 
+            // from ?
             const responseText = `Swap completed successfully! Transaction ID: ${txid}`;
+            /*
             responses.length = 0;
             const memory: Memory = {
                 entityId: uuidv4() as UUID,
@@ -471,9 +514,12 @@ export default {
                 }
             };
             responses.push(memory);
+            */
+            callback(takeItPrivate(runtime, message, responseText))
             return true;
         } catch (error) {
             logger.error('Error during token swap:', error);
+            /*
             responses.length = 0;
             const memory: Memory = {
                 entityId: uuidv4() as UUID,
@@ -484,6 +530,8 @@ export default {
                 }
             };
             responses.push(memory);
+            */
+            callback(takeItPrivate(runtime, message, `Swap failed: ${error instanceof Error ? error.message : 'Unknown error'}`))
             return false;
         }
     },
