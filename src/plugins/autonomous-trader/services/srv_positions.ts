@@ -37,12 +37,13 @@ export class InterfacePositionsService extends Service {
   async close(publicKey, posHndl, closeInfo) {
     const pubkey = publicKey
     const accountIds = await getAccountIdsByPubkeys(this.runtime, [pubkey])
-    console.log('srv_pos:close - accountIds', accountIds, 'pubkey', pubkey)
+    //console.log('srv_pos:close - accountIds', accountIds, 'pubkey', pubkey)
     const accountId = accountIds[pubkey]
     if (!accountId) {
       console.log('srv_pos:close - closed a position for account we dont have', pubkey, 'userids', accountIds)
       return false
     }
+    //console.log('updating account', accountId, 'posHndl', posHndl)
     return updatePosition(this.runtime, accountId, posHndl, { close: closeInfo })
   }
 
