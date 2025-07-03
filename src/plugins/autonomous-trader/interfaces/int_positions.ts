@@ -167,7 +167,16 @@ export async function createPosition(runtime, accountId, pos) {
     //return false
   }
   wallet.positions.push(pos)
-  await interface_account_update(runtime, account)
+  //console.log('saving', account)
+  const id = account.componentId
+  const entityId = account.entityId
+  delete account.componentId
+  delete account.entityId
+
+  await interface_account_update(runtime, {
+    id,
+    data: account
+  })
   /*
   await runtime.updateComponent({
     id: email.componentId,
@@ -180,7 +189,7 @@ export async function createPosition(runtime, accountId, pos) {
     agentId: runtime.agentId,
   });
   */
-  console.log('created position', account)
+  console.log('created position', pos.id)
   return true
 }
 
@@ -216,7 +225,7 @@ export async function updatePosition(runtime, accountId, posId, delta) {
   wallet.positions[idx] = {...wallet.positions[idx], ...delta }
 
   //console.log('updatePosition - mw', mw)
-  console.log('updatePosition - component', component)
+  //console.log('updatePosition - component', component)
   // expects componentId to be in componentData.id
   // component needs component.data
   await interface_account_update(runtime, component)
