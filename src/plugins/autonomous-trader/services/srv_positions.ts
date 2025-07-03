@@ -23,7 +23,7 @@ export class InterfacePositionsService extends Service {
     const pubkey = pos.publicKey
     // find which user owns this wallet
     const accountIds = await getAccountIdsByPubkeys(this.runtime, [pubkey])
-    console.log('srv_pos:open - accountIds', accountIds, 'pubkey', pubkey)
+    //console.log('srv_pos:open - accountIds', accountIds, 'pubkey', pubkey)
     const accountId = accountIds[pubkey]
     if (!accountId) {
       console.log('srv_pos:open - opened a position for account we dont have', pubkey, 'userids', accountIds)
