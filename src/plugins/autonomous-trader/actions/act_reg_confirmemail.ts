@@ -27,13 +27,15 @@ export const checkRegistrationCode: Action = {
   description: 'Replies, allows a user set their email address' + CONSTANTS.DESCONLYCALLME,
   // can only enter this if we don't have an email
   validate: async (runtime: IAgentRuntime, message: Memory) => {
+
+
     // list checks in least cost to most cost
     const containsGeneratedCode = findGeneratedCode(message.content.text, CONSTANTS.useCodeLength)
     if (containsGeneratedCode !== null) {
       runtime.logger.log('VERIFY_REGISTRATION_CODE containsGeneratedCode', typeof(containsGeneratedCode), containsGeneratedCode)
     } else {
       // kinda normal
-      console.log('VERIFY_REGISTRATION_CODE validate - code not found', message.content.text, CONSTANTS.useCodeLength)
+      //console.log('VERIFY_REGISTRATION_CODE validate - code not found', message.content.text, CONSTANTS.useCodeLength)
       return false
     }
 
@@ -51,7 +53,7 @@ export const checkRegistrationCode: Action = {
 
     const account = await getAccountFromMessage(runtime, message)
     if (account) {
-      console.warn('VERIFY_REGISTRATION_CODE validate - account not found')
+      //console.warn('VERIFY_REGISTRATION_CODE validate - has account')
       return false // if already confirmed, bail
     }
 
