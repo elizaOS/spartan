@@ -189,7 +189,9 @@ export async function askLlmObject(
       object: true,
     });
 
-    console.log('trader::utils:askLlmObject - response', response);
+    // too coarse
+    //console.log('trader::utils:askLlmObject - response', response);
+
     // we do not need the backtic stuff .replace('```json', '').replace('```', '')
     let cleanResponse = response.replace(/<think>[\s\S]*?<\/think>/g, '')
     responseContent = parseJSONObjectFromText(cleanResponse) as any;
@@ -235,4 +237,99 @@ export function takeItPrivate(runtime, message, reply): Content {
     //actions: ['REPLY'],
   };
   return responseContent
+}
+
+function splitTextBySentence(text, maxLength = 4096) {
+  if (!text) return [];
+
+  const sentenceRegex = /[^.!?]+[.!?]+[\])'"`’”]*|[^.!?]+$/g;
+  const sentences = text.match(sentenceRegex) || [];
+
+  const chunks = [];
+  let currentChunk = '';
+
+  for (const sentence of sentences) {
+    if ((currentChunk + sentence).length <= maxLength) {
+      currentChunk += sentence;
+    } else {
+      if (currentChunk.trim()) chunks.push(currentChunk.trim());
+      if (sentence.length > maxLength) {
+        // Split long sentence if it alone exceeds the limit
+        for (let i = 0; i < sentence.length; i += maxLength) {
+          chunks.push(sentence.slice(i, i + maxLength).trim());
+        }
+        currentChunk = '';
+      } else {
+        currentChunk = sentence;
+      }
+    }
+  }
+
+  if (currentChunk.trim()) chunks.push(currentChunk.trim());
+
+  return chunks;
+}
+
+export function takeItPrivate2(runtime, message, reply, callback): Content {
+  console.log('takeItPrivate2 input', reply.length)
+  //console.log('source', message)
+  if (message.content.source === 'discord') {
+    // content[BASE_TYPE_MAX_LENGTH]: Must be 2000 or fewer in length
+    //console.log('discord input', reply.length)
+    const chunks = splitTextBySentence(reply, 2000)
+    for(const c of chunks) {
+      console.log('discord split chunk', c.length)
+      if (c) {
+        const responseContent = {
+          text: c,
+          channelType: 'DM',
+          inReplyTo: createUniqueUuid(runtime, message.id)
+          // for the web UI
+          //actions: ['REPLY'],
+        };
+        callback(responseContent)
+      }
+    }
+  } else if (message.content.source === 'telegram') {
+    // what's telegram limit? 4k
+    const chunks = splitTextBySentence(reply, 4096)
+    for(const c of chunks) {
+      console.log('telegram split chunk', c.length)
+      const responseContent = {
+        text: c,
+        channelType: 'DM',
+        inReplyTo: createUniqueUuid(runtime, message.id)
+        // for the web UI
+        //actions: ['REPLY'],
+      };
+      callback(responseContent)
+    }
+  } else {
+    const responseContent = {
+      text: reply,
+      channelType: 'DM',
+      inReplyTo: createUniqueUuid(runtime, message.id)
+      // for the web UI
+      //actions: ['REPLY'],
+    };
+    callback(responseContent)
+  }
+}
+
+export async function parseTokenAccounts(heldTokens) {
+  const out = {}
+  for (const t of heldTokens) {
+    const ca = t.account.data.parsed.info.mint
+    const mintKey = new PublicKey(ca);
+    const symbol = await solanaService.getTokenSymbol(mintKey)
+    const amountRaw = t.account.data.parsed.info.tokenAmount.amount;
+    const decimals = t.account.data.parsed.info.tokenAmount.decimals;
+    const balance = Number(amountRaw) / (10 ** decimals);
+    out[ca] = {
+      symbol,
+      decimals,
+      balanceUi: balance, // how many tokens we have
+    }
+  }
+  return out
 }
