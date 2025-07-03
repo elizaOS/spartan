@@ -12,13 +12,11 @@ import {
     createUniqueUuid,
     parseJSONObjectFromText,
 } from '@elizaos/core';
-import {
-    PublicKey,
-} from '@solana/web3.js';
+import { PublicKey } from '@solana/web3.js';
 import { v4 as uuidv4 } from 'uuid';
 import { UUID } from 'crypto';
 import { SOLANA_SERVICE_NAME } from '../constants';
-import { getAccountFromMessage } from '../utils'
+import { getWalletsFromText, takeItPrivate2, takeItPrivate, getAccountFromMessage } from '../utils'
 
 /**
  * Interface representing the content of a balance check request.
@@ -100,20 +98,42 @@ export default {
     ): Promise<boolean> => {
         logger.log('WALLET_BALANCE Starting balance check handler...');
 
+        // should be an utility
+        // wallet names?
+        //const solanaService = runtime.getService('chain_solana') as any;
+        //const sources = solanaService.detectPubkeysFromString(message.content.text)
+        const sources = getWalletsFromText(runtime, message)
+        if (sources.length > 1) {
+          if (sources.length) {
+            // too many
+          }
+          return false
+        }
+        let content = { }
+        if (sources.length) {
+          content = {
+            walletAddress: sources[0],
+          }
+        }
+
+        /*
         const sourcePrompt = composePromptFromState({
             state: state,
             template: sourceAddressTemplate,
         });
-        const sourceResult = await runtime.useModel(ModelType.OBJECT_LARGE, {
-            prompt: sourcePrompt,
-        });
-        console.log('WALLET_BALANCE sourceResult', sourceResult)
+//         const sourceResult = await runtime.useModel(ModelType.OBJECT_LARGE, {
+//             prompt: sourcePrompt,
+//         });
+//         console.log('WALLET_BALANCE sourceResult', sourceResult)
+//         const content = parseJSONObjectFromText(sourceResult) as BalanceCheckContent;
+//         if (!content) {
+//             console.log('WALLET_BALANCE failed to parse response')
+//             return false
+//         }
 
-        const content = parseJSONObjectFromText(sourceResult) as BalanceCheckContent;
-        if (!content) {
-            console.log('WALLET_BALANCE failed to parse response')
-            return false
-        }
+        const content = await askLlmObject(runtime, { prompt: sourcePrompt },
+          ['walletAddress'])
+        */
 
         const account = await getAccountFromMessage(runtime, message)
         const userMetawallets = account.metawallets
@@ -176,7 +196,8 @@ export default {
 
             balanceStr += '  Token Address (Symbol)\n'
             balanceStr += '  So11111111111111111111111111111111111111111 ($sol) balance: ' + (solBal ?? 'unknown') + '\n'
-            console.log('solBal', solBal, 'heldTokens', heldTokens)
+            console.log('solBal', solBal)
+            // heldTokens
 
             // loop on remaining tokens and output
             for (const t of heldTokens) {
@@ -192,7 +213,10 @@ export default {
         }
         console.log('balanceStr', balanceStr)
 
+        // FIXME: can't send more than 2k characters over discord
+
         // Create response
+        /*
         responses.length = 0
         const memory: Memory = {
             entityId: uuidv4() as UUID,
@@ -206,6 +230,9 @@ export default {
             }
         }
         responses.push(memory)
+        */
+        //callback(takeItPrivate(runtime, message, `Wallet Balance:\n${balanceStr}`))
+        takeItPrivate2(runtime, message, `Wallet Balance:\n${balanceStr}`, callback)
 
         return true;
     },
@@ -271,5 +298,20 @@ export default {
                 },
             },
         ],
+        [
+            {
+                name: '{{name1}}',
+                content: {
+                    text: 'list balances',
+                },
+            },
+            {
+                name: '{{name2}}',
+                content: {
+                    text: 'I\'ll check the balance of that specific wallet.',
+                    actions: ['WALLET_BALANCE'],
+                },
+            },
+        ],
     ] as ActionExample[][],
-} as Action; 
+} as Action;
