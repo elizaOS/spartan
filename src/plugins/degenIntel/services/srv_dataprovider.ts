@@ -1,4 +1,5 @@
 import { Service, logger } from '@elizaos/core';
+import { PublicKey } from '@solana/web3.js';
 //import { listPositions } from '../interfaces/int_positions'
 
 export class TradeDataProviderService extends Service {
@@ -85,6 +86,7 @@ export class TradeDataProviderService extends Service {
   }
 
   // should be a task and not here
+  // so many failure codes, we should be more specific
   async checkPositions() {
     console.log('checking positions');
     // get a list of positions (chains -> wallets -> positions)
@@ -107,6 +109,8 @@ export class TradeDataProviderService extends Service {
         tokens.push(ca)
       }
       if (ca2Positions[ca] === undefined) ca2Positions[ca] = []
+      // how do we get pubkey? p.mw and p.position.publicKey
+      //console.log('p', p)
       ca2Positions[ca].push(p)
       // is this wallet still holding this?
       //
@@ -119,16 +123,76 @@ export class TradeDataProviderService extends Service {
     console.log('results', results)
 
     // could build a list of
-    const closePosition = async (ud) => {
+    const closePosition = async (ud, type) => {
       const p = ud.position
-      // verify amount?
-      // execute sell
-      // blockchain?
+      const publicKey = p.publicKey
+
       if (p.chain !== 'solana') {
         console.Warn('unsupported chain on position', p)
         return false
       }
       const solanaService = this.runtime.getService('chain_solana') as any;
+
+      // make sure we have enough gas
+      // check solana balance
+
+      // moved this into swap for now
+      /*
+      const bal = await solanaService.getBalanceByAddr(publicKey)
+      //console.log('bal', bal)
+      if (bal < 0.003) {
+        console.warn('broke ass wallet', publicKey, 'only has', bal)
+        // pretty serious, we can't sell if we don't have enough
+        return false
+      }
+      */
+
+      // set up somethings so we can close positions
+      const mw = ud.mw
+      const kp = mw.keypairs[p.chain]
+      const strat = mw.strategy
+      const hndl = this.strategyService.getHndlByStratName(mw.strategy)
+      if (!hndl) {
+        console.error('Cant find hndl for strategy', mw.streatgy)
+        return false
+      }
+
+      // verify amount?
+
+      // need to know decimals
+      //console.log('publicKey', publicKey)
+      const pubKeyObj = new PublicKey(publicKey)
+      const walletTokens = await solanaService.getTokenAccountsByKeypair(pubKeyObj)
+      //console.log('looking for', p.token)
+      //console.log('walletTokens', walletTokens.map(t => t.pubkey.toString()))
+      const tokenSolanaInfo = walletTokens.find(wt => wt.account.data.parsed.info.mint === p.token)
+      if (!tokenSolanaInfo) {
+        //console.log('looking for', p.token)
+        //console.log('walletTokens', walletTokens.map(t => t.account.data.parsed.info.mint))
+        console.log('We no longer hold', p.token, 'at all')
+        await this.strategyService.close_position(hndl, kp.publicKey, p.id, {
+          type: 'unknwon',
+        });
+        return false
+      }
+      //console.log('tokenSolanaInfo', tokenSolanaInfo)
+      const decimals = tokenSolanaInfo.account.data.parsed.info.tokenAmount.decimals;
+      const amountRaw = tokenSolanaInfo.account.data.parsed.info.tokenAmount.amount;
+      const tokenToUi = 1 / (10 ** decimals);
+      const tokenBalanceUi = Number(amountRaw) * tokenToUi;
+      const positionTokenAmountUi = p.tokenAmount * tokenToUi
+      console.log('position', positionTokenAmountUi, 'balance', tokenBalanceUi)
+
+      let sellAmount = p.tokenAmount || (p.entryPrice * p.amount)
+
+      if (positionTokenAmountUi > tokenBalanceUi) {
+        console.log('We no longer hold', positionTokenAmountUi, 'of', p.token, 'adjusting to', tokenBalanceUi)
+        sellAmount = amountRaw
+        // close position as is?
+        //return false
+        // let's adjust for current amount, and close as it
+      }
+
       // sell back to base
       const signal = {
         sourceTokenCA: p.token,
@@ -144,42 +208,39 @@ export class TradeDataProviderService extends Service {
         return false
       }
       */
-      const mw = ud.mw
-      const kp = mw.keypairs[p.chain]
-      const strat = mw.strategy
       //console.log('closePosition - ud', ud)
-
-      const hndl = this.strategyService.getHndlByStratName(mw.strategy)
-      if (!hndl) {
-        console.error('Cant find hndl for strategy', mw.streatgy)
-        return false
-      }
 
       // amount?
       const wallet = {
-        amount: p.tokenAmount || (p.entryPrice * p.amount),
+        amount: sellAmount, // in raw
         // there's other junk in there, so lets just clean it up
         keypair: {
           publicKey: kp.publicKey,
           privateKey: kp.privateKey,
         }
       }
-      console.log('closePosition - wallet', wallet)
-      console.log('closePosition - signal', signal)
+      console.log('closePosition - Selling', p.token, 'wallet', wallet)
       //console.log('closePosition - hndl', hndl, 'pubkey', kp.publicKey, 'p.id', p.id)
+
+      // execute sell
       const res = await solanaService.executeSwap([wallet], signal)
       // close position
       if (res[0].success) {
+        console.log('sold', p.id, p.token, 'in', p.publicKey, 'signature', res[0].signature)
         // going to be hard to get a strategy handle...
         // get strategy hndl and close position
         // which position...
         //console.log('strategyService.close_position hndl', hndl, 'pubkey', kp.publicKey, 'p.id', p.id)
         await this.strategyService.close_position(hndl, kp.publicKey, p.id, {
+          type,
+          sellRequest: sellAmount,
+          //sellRequestUi: sellAmount * tokenBalanceUi,
           outAmount: res[0].outAmount,
           signature: res[0].signature,
           fees: res[0].fees,
         });
       }
+      console.log('done trying to close position', p.id, p.token, 'in', p.publicKey)
     }
 
     // this type of monitoring should be refactored out
@@ -204,17 +265,17 @@ export class TradeDataProviderService extends Service {
           // liquidity, priceChange24h, priceUsd
 
           //console.log('ud.position', p)
-          console.log('p low', p.exitConditions.priceDrop, 'high', p.exitConditions.targetPrice, 'current', td.priceUsd)
+          console.log('p low', p.exitConditions.priceDrop, 'high', p.exitConditions.targetPrice, 'current', td.priceUsd, 'wallet', p.publicKey)
           if (td.priceUsd < p.exitConditions.priceDrop) {
             // sad exit
             console.log('I has a sad')
-            await closePosition(ud)
+            await closePosition(ud, 'loss')
             await new Promise((waitResolve) => setTimeout(waitResolve, 1000));
           }
           if (td.priceUsd > p.exitConditions.targetPrice) {
             // win
             console.log('KICK ASS')
-            await closePosition(ud)
+            await closePosition(ud, 'win')
             await new Promise((waitResolve) => setTimeout(waitResolve, 1000));
           }
         }
