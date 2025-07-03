@@ -29,7 +29,7 @@ import {
 import bs58 from 'bs58';
 import { v4 as uuidv4 } from 'uuid';
 import { SOLANA_SERVICE_NAME } from '../constants';
-import { HasEntityIdFromMessage, getDataFromMessage, getAccountFromMessage } from '../utils';
+import { HasEntityIdFromMessage, getWalletsFromText, getAccountFromMessage, askLlmObject } from '../utils';
 
 /**
  * Interface representing the content of a sweep operation.
@@ -121,11 +121,11 @@ export default {
             console.log('MULTIWALLET_SWEEP validate - author not found')
             return false
         }
-        const reg = await getDataFromMessage(runtime, message)
-        if (!reg) {
+        const account = await getAccountFromMessage(runtime, message)
+        if (!account) {
+            //console.log('MULTIWALLET_SWEEP validate - registration not found')
             return false;
         }
-
         return true;
     },
     description: 'Sweep all assets (SOL and SPL tokens) from one wallet to another.',
@@ -139,13 +139,27 @@ export default {
     ): Promise<boolean> => {
         logger.log('MULTIWALLET_SWEEP Starting handler...');
 
+        const account = await getAccountFromMessage(runtime, message)
+        if (!account) return false; // shouldn't hit here
+
+        //const validSources = account.metawallets.map(mw => mw.keypairs.solana.publicKey)
+        //console.log('validSources', validSources)
+        const sources = await getWalletsFromText(runtime, message)
+        console.log('sources', sources)
+
         const sourcePrompt = composePromptFromState({
             state: state,
             template: sourceAddressTemplate,
         });
+        console.log('prompt', sourcePrompt)
+
+        /*
         const sourceResult = await runtime.useModel(ModelType.OBJECT_LARGE, {
             prompt: sourcePrompt,
         });
+        */
+        const sourceResult = await askLlmObject(runtime, { prompt: sourcePrompt },
+            ['sourceWalletAddress'])
         console.log('MULTIWALLET_SWEEP sourceResult', sourceResult);
 
         if (!sourceResult.sourceWalletAddress) {
@@ -176,7 +190,11 @@ export default {
 
         const userMetawallet = metawallets.find(mw => mw.keypairs?.solana?.publicKey === sourceResult.sourceWalletAddress);
         console.log('userMetawallet', userMetawallet)
-        let found = [userMetawallet.keypairs.solana] // map kp
+        if (!userMetawallet) {
+            callback?.({ text: 'The requested wallet is not registered in your account.' });
+            return false;
+        }
+        let found = [userMetawallet.keypairs.solana];
 
         /*
         // confirm wallet is in this list
@@ -258,6 +276,7 @@ export default {
             callback?.({ text: 'Could not find the specified wallet' });
             return false;
         }
+        console.log('sourceKp', sourceKp)
 
         const secretKey = bs58.decode(sourceKp.privateKey);
         const senderKeypair = Keypair.fromSecretKey(secretKey);
@@ -268,7 +287,6 @@ export default {
             const connection = new Connection(
                 runtime.getSetting('SOLANA_RPC_URL') || 'https://api.mainnet-beta.solana.com'
             );
-            console.log('1')
 
             // Get all token accounts and SOL balance
             const [solBalance, tokenAccounts] = await Promise.all([
@@ -279,6 +297,8 @@ export default {
             ]);
 
             const instructions: any[] = [];
+
+            console.log('solBalance', solBalance, 'lamports')
 
             // Handle SOL transfer (leave some for fees)
             // 1m per ATA
@@ -331,9 +351,8 @@ export default {
                 return false;
             }
 
-            console.log('2')
-
             // Create and send transaction
+            console.log('sending from', senderKeypair.publicKey.toBase58())
             const messageV0 = new TransactionMessage({
                 payerKey: senderKeypair.publicKey,
                 recentBlockhash: (await connection.getLatestBlockhash()).blockhash,
@@ -350,6 +369,7 @@ export default {
                 maxRetries: 3,
                 preflightCommitment: 'confirmed',
             });
+            console.log('signature', signature)
 
             const confirmation = await connection.confirmTransaction(
                 {
