@@ -262,7 +262,7 @@ export class TradeDataProviderService extends Service {
           // FIXME: double check actual amount we hold now...
 
           // sentiment? 24h volume?
-          // liquidity, priceChange24h, priceUsd
+          // we have: liquidity, priceChange24h, priceUsd
 
           //console.log('ud.position', p)
           console.log('p low', p.exitConditions.priceDrop, 'high', p.exitConditions.targetPrice, 'current', td.priceUsd, 'wallet', p.publicKey)
