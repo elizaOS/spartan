@@ -333,3 +333,16 @@ export async function parseTokenAccounts(heldTokens) {
   }
   return out
 }
+
+export function accountMockComponent(account) {
+  const id = account.componentId
+  const entityId = account.entityId
+  delete account.componentId
+  delete account.entityId
+
+  return {
+    id,
+    entityId, // has to be set for upsert/create (there is no default)
+    data: account
+  }
+}
