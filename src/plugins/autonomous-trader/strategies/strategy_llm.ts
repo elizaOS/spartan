@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { acquireService, askLlmObject } from '../utils';
 //import { getTokenBalance } from '../wallet';
 import { getSpartanWallets } from '../interfaces/int_wallets'
+import { PublicKey } from '@solana/web3.js';
 
 // agentic personal application? separate strategy
 
@@ -34,7 +35,7 @@ Only return the following JSON and nothing else (even if no sentiment or trendin
   recommend_buy_address: "the address of the token to purchase, for example: Gu3LDkn7Vx3bmCzLafYNKcDxv2mH7YN44NJZFXnypump",
   reason: "the reason why you think this is a good buy, and why you chose the specific amount",
   opportunity_score: "number, for example 50",
-  buy_amount: "number between 1 and 100 (meaning to be a percentage of available funds), for example: 23",
+  buy_amount: "number between 1 and 15 (meaning to be a percentage of available funds), for example: 7",
   exit_conditions: "what conditions in which you'd change your position on this token",
   exit_sentiment_drop_threshold: "if sentiment dropped to this number, you'd change your position on this token",
   exit_24hvolume_threshold: "if 24h volume dropped to this number, you'd change your position on this token",
@@ -129,6 +130,7 @@ async function generateBuySignal(runtime, strategyService, hndl) {
     .replace('{{trending_tokens}}', tokens);
 
   const requiredFields = ['recommend_buy_chain', 'reason', 'recommend_buy_address'];
+  //console.log('llm_start prompt', prompt)
   const response = await askLlmObject(
     runtime,
     { prompt, system: 'You are a buy signal analyzer.' },
@@ -141,10 +143,15 @@ async function generateBuySignal(runtime, strategyService, hndl) {
   }
 
   // normalize amount
-  response.buy_amount = (response.buy_amount + '').replaceAll('%', '')
+  response.buy_amount = parseInt((response.buy_amount + '').replaceAll('%', ''))
 
   if (!response.buy_amount) {
-    console.log('llm_strat Bad buy amount', response);
+    console.log('llm_strat Bad buy amount');
+    // FIXME: retry?
+    return;
+  }
+  if (response.buy_amount > 15) {
+    console.log('llm_strat - Bad buy amount, too high');
     // FIXME: retry?
     return;
   }
@@ -161,13 +168,14 @@ async function generateBuySignal(runtime, strategyService, hndl) {
   //console.log('infoService', infoService)
 
   // ask data provider for data
+  // seems only to get price information
   const token = await infoService.getTokenInfo(
     response.recommend_buy_chain,
     response.recommend_buy_address
   );
   console.log(response.recommend_buy_chain, response.recommend_buy_address, 'got token info', token)
   if (!token) {
-    console.log('no token data for', response, 'guessing bad generation')
+    console.log('no token data, guessing bad generation')
     return;
   }
 
@@ -178,7 +186,10 @@ async function generateBuySignal(runtime, strategyService, hndl) {
     return;
   }
   const highPrice = parseFloat(response.exit_target_price)
-
+  if (highPrice < token.priceUsd) {
+    console.log('invalid highPrice', highPrice, 'current', token.priceUsd)
+    return
+  }
 
   const solanaService = await acquireService(runtime, 'chain_solana', 'llm trading strategy');
   if (!solanaService.validateAddress(response.recommend_buy_address)) {
@@ -197,7 +208,7 @@ async function generateBuySignal(runtime, strategyService, hndl) {
   // assess response, figure what wallet are buying based on balance
   // list of wallets WITH this strategy ODI
   const wallets = await getSpartanWallets(runtime, { strategy: STRATEGY_NAME })
-  console.log('llm_strat - wallets', wallets)
+  //console.log('llm_strat - wallets', wallets)
   // for each pubkey get balances
   for(const w of wallets) {
     //console.log('w', w)
@@ -207,15 +218,15 @@ async function generateBuySignal(runtime, strategyService, hndl) {
     }
     if (w.chain === 'solana') {
       const bal = await solanaService.getBalanceByAddr(w.publicKey)
+      //console.log('bal', bal) //uiAmount
       // this can return NaN?
-      console.log('bal', bal) //uiAmount
       if (bal === -1) continue
       if (bal < 0.003) {
         console.log('not enough SOL balance in', w.publicKey)
         continue
       }
-      const amt = await scaleAmount(w, bal, response)
-      console.log('amt', amt) //uiAmount
+      const amt = await scaleAmount(w, bal, response) // uiAmount
+      console.log(w.publicKey, 'bal', bal, 'amt (ui)', amt, 'SOL spend. Has', (bal * 1e9), 'lamports')
       // FIXME: what amt is too miniscule for this coin buy (not worth the tx fees?)
 
       const kp = {
@@ -224,17 +235,31 @@ async function generateBuySignal(runtime, strategyService, hndl) {
       }
       response.sourceTokenCA = 'So11111111111111111111111111111111111111112'
       response.targetTokenCA = response.recommend_buy_address
+
+      /*
+      const caPKObj = new PublicKey(response.recommend_buy_address);
+      const tokenInfo = await solanaService.getDecimal(caPKObj)
+      //console.log('tokenInfo', tokenInfo)
+      const uiToRaw = (10 ** tokenInfo.decimals)
+      const rawToUi = 1/uiToRaw
+      */
+
       const res = await solanaService.executeSwap([{
-        amount: amt * 1e9,
+        // is this right? not all tokens have the same decimal
+        // 1e9 is correct, this is amount of solana to swap
+        // we get a quote based on the sol amount
+        amount: amt * 1e9, // if amt is in sol to spend then it's 1e9 not " * uiToRaw"
         keypair: kp
       }], response)
-      console.log('buy res', res)
+      await new Promise((waitResolve) => setTimeout(waitResolve, 1000));
+      //console.log('buy res', res)
 
       if (!res?.length) {
         console.warn('Bad response', res)
         continue
       }
       if (res[0].success) {
+        console.log('buy successful', res[0].signature)
         // Create position record
         const position = {
           id: uuidv4() as UUID,
@@ -242,8 +267,9 @@ async function generateBuySignal(runtime, strategyService, hndl) {
           token: response.recommend_buy_address,
           publicKey: kp.publicKey,
           // is this total or per token? this must be total I guess
-          solAmount: amt,
-          tokenAmount: res[0].outAmount, // count of token recv
+          solAmount: amt, // in uiAmount
+          // should this be uiAmount too?
+          tokenAmount: res[0].outAmount, // count of token recv in raw?
           swapFee: res[0].fees.lamports,
           // is this right? yes but we don't need to store, since we can calculate
           //entryPrice: res[0].outAmount / amt,
