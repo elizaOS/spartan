@@ -3,7 +3,7 @@ import { COMPONENT_ACCOUNT_TYPE } from '../constants'
 import { interface_users_ByIds  } from './int_users'
 import { interface_accounts_ByIds, interface_account_update } from './int_accounts'
 import { getMetaWallets } from './int_wallets'
-
+import { accountMockComponent } from '../utils'
 // look up by Ids
 
 // not used
@@ -168,6 +168,10 @@ export async function createPosition(runtime, accountId, pos) {
   }
   wallet.positions.push(pos)
   //console.log('saving', account)
+
+  const componentData = accountMockComponent(account)
+  await interface_account_update(runtime, componentData)
+  /*
   const id = account.componentId
   const entityId = account.entityId
   delete account.componentId
@@ -177,6 +181,7 @@ export async function createPosition(runtime, accountId, pos) {
     id,
     data: account
   })
+  */
   /*
   await runtime.updateComponent({
     id: email.componentId,
