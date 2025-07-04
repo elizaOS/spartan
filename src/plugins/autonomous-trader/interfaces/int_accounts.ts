@@ -115,7 +115,7 @@ export async function getAccountIdsByPubkeys(runtime, pubkeys) {
 // add/update/delete
 
 export async function interface_account_upsert(runtime, message, account) {
-  if (account.componentId) {
+  if (account.id) {
     //console.debug('interface_account_upsert - updating', account.componentId)
     interface_account_update(runtime, account)
   } else {
