@@ -16,7 +16,7 @@ import { PublicKey } from '@solana/web3.js';
 import { v4 as uuidv4 } from 'uuid';
 import { UUID } from 'crypto';
 import { SOLANA_SERVICE_NAME } from '../constants';
-import { getWalletsFromText, takeItPrivate2, takeItPrivate, getAccountFromMessage } from '../utils'
+import { HasEntityIdFromMessage, getWalletsFromText, takeItPrivate2, takeItPrivate, getAccountFromMessage } from '../utils'
 
 /**
  * Interface representing the content of a balance check request.
@@ -77,9 +77,9 @@ export default {
         'WALLET_BALANCE_SHOW',
     ],
     validate: async (runtime: IAgentRuntime, message: Memory) => {
-        if (!message?.metadata?.sourceId) {
-            console.log('WALLET_BALANCE validate - author not found')
-            return false
+        if (!await HasEntityIdFromMessage(runtime, message)) {
+          console.warn('WALLET_BALANCE_SHOW validate - author not found')
+          return false
         }
 
         const account = await getAccountFromMessage(runtime, message)
@@ -212,28 +212,7 @@ export default {
             balanceStr += '\n'
         }
         console.log('balanceStr', balanceStr)
-
-        // FIXME: can't send more than 2k characters over discord
-
-        // Create response
-        /*
-        responses.length = 0
-        const memory: Memory = {
-            entityId: uuidv4() as UUID,
-            roomId: message.roomId,
-            content: {
-                text: `Wallet Balance:\n${balanceStr}`,
-                success: true,
-                balance: balanceStr,
-                walletAddress: content.walletAddress,
-                walletCount: walletsToCheck.length,
-            }
-        }
-        responses.push(memory)
-        */
-        //callback(takeItPrivate(runtime, message, `Wallet Balance:\n${balanceStr}`))
         takeItPrivate2(runtime, message, `Wallet Balance:\n${balanceStr}`, callback)
-
         return true;
     },
 
