@@ -1,45 +1,39 @@
 import {
-  createUniqueUuid,
-  logger,
+  type IAgentRuntime,
+  type Action,
+  type ActionExample,
+  type Memory,
+  type State,
+  type HandlerCallback,
 } from '@elizaos/core';
-import { v4 as uuidv4 } from 'uuid';
-import { takeItPrivate, messageReply } from '../utils'
-import { COMPONENT_USER_TYPE } from '../constants'
-
-//
-// WRITE ME
-//
+import { HasEntityIdFromMessage, getAccountFromMessage, getWalletsFromText, takeItPrivate, takeItPrivate2, accountMockComponent } from '../utils'
+import CONSTANTS from '../constants'
+import { interface_account_update } from '../interfaces/int_accounts'
 
 // handle starting new form and collecting first field
-export const userMetawalletList: Action = {
-  name: 'USER_METAWALLET_LIST',
+export const userMetawalletDelete: Action = {
+  name: 'USER_METAWALLET_DELETE',
   similes: [
   ],
+  description: 'Allows a user to delete wallet they have',
   validate: async (runtime: IAgentRuntime, message: Memory) => {
-    //console.log('USER_METAWALLET_LIST validate', message?.metadata?.fromId)
-    if (!message?.metadata?.fromId) {
-      console.log('USER_METAWALLET_LIST validate - author not found')
-      return false
-    }
-
-    //const entityId = createUniqueUuid(runtime, message.metadata.fromId);
-    //if (entityId === null) return false;
-    const entity = await runtime.getEntityById(message.entityId)
-    if (!entity) {
-      logger.warn('USER_METAWALLET_LIST client did not set entity')
-      return false;
-    }
-    //console.log('entity', entity)
-    const reg = !!entity.components.find(c => c.type === COMPONENT_USER_TYPE)
-    if (!reg) return false;
+    //console.log('USER_METAWALLET_DELETE validate', message?.metadata?.fromId)
 
     const traderChainService = runtime.getService('TRADER_CHAIN') as any;
     if (!traderChainService) return false
     const traderStrategyService = runtime.getService('TRADER_STRATEGY') as any;
     if (!traderStrategyService) return false
+
+    if (!await HasEntityIdFromMessage(runtime, message)) {
+      console.warn('USER_METAWALLET_DELETE validate - author not found')
+      return false
+    }
+
+    const account = await getAccountFromMessage(runtime, message)
+    if (!account) return false;
+
     return true
   },
-  description: 'Allows a user to list all wallets they have',
   handler: async (
     runtime: IAgentRuntime,
     message: Memory,
@@ -48,85 +42,46 @@ export const userMetawalletList: Action = {
     callback?: HandlerCallback,
     responses: any[]
   ): Promise<boolean> => {
-    console.log('USER_METAWALLET_LIST handler')
+    console.log('USER_METAWALLET_DELETE handler')
 
-    // using the service to get this/components might be good way
-    //const entityId = createUniqueUuid(runtime, message.metadata.fromId);
-    const entity = await runtime.getEntityById(message.entityId)
-    //console.log('entity', entity)
-    const email = entity.components.find(c => c.type === COMPONENT_USER_TYPE)
-    //console.log('email', email)
-
-    // should never hit it
-    if (!email) {
-      runtime.logger.log('Not registered')
+    const sources = await getWalletsFromText(runtime, message)
+    //console.log('sources', sources)
+    if (sources.length !== 1) {
+      callback(takeItPrivate(runtime, message, "Can't determine wallet to delete"))
       return
     }
-    const roomDetails = await runtime.getRoom(message.roomId);
 
-    const traderStrategyService = runtime.getService('TRADER_STRATEGY') as any;
-    const stratgiesList = await traderStrategyService.listActiveStrategies()
-    // maybe we use an LLM call to get their exact meaning
-    const containsStrats = stratgiesList.filter(word => message.content.text.includes(word))
-    console.log('containsStrats', containsStrats)
-    //takeItPrivate(runtime, message, 'Hrm you\'ve selected a strategy, time to make a wallet')
+    const componentData = await getAccountFromMessage(runtime, message)
+    // find this wallet in the list...
+    //console.log('componentData', componentData)
+    const mw = componentData.metawallets.find(mw => mw.keypairs.solana.publicKey === sources[0])
+    const idx = componentData.metawallets.indexOf(mw)
+    if (idx === -1) {
+      takeItPrivate2(runtime, message, "Can't find wallet " + sources[0] + " under your account", callback)
+      return
+    }
+    //console.log('mw for', sources[0], mw, 'idx', idx)
+    // Correctly remove item from array
+    componentData.metawallets.splice(idx, 1);
 
-    // should we check to see if we already a wallet with this strategy? no
-    // they can have multiple
+    console.log('writing componentData', componentData)
 
-
-    // create meta wallet container on this registration
-
-    // which chains
-    const traderChainService = runtime.getService('TRADER_CHAIN') as any;
-    const chains = await traderChainService.listActiveChains()
-    console.log('chains', chains)
-
-    responses.length = 0 // just clear them all
-    takeItPrivate(runtime, message, 'List wallets: ' + JSON.stringify(email), responses)
+    await interface_account_update(runtime, accountMockComponent(componentData))
+    takeItPrivate2(runtime, message, "Wallet " + sources[0] + " deleted", callback)
   },
   examples: [
     [
       {
         name: '{{name1}}',
         content: {
-          text: 'What wallets do I have',
+          text: 'delete wallet 3nMBmufBUBVnk28sTp3NsrSJsdVGTyLZYmsqpMFaUT9J',
         },
       },
       {
         name: '{{name2}}',
         content: {
           text: "Here",
-          actions: ['USER_METAWALLET_LIST'],
-        },
-      },
-    ],
-    [
-      {
-        name: '{{name1}}',
-        content: {
-          text: 'list wallets',
-        },
-      },
-      {
-        name: '{{name2}}',
-        content: {
-          text: "Here",
-          actions: ['USER_METAWALLET_LIST'],
-        },
-      },
-    ],
-    [
-      {
-        name: '{{name1}}',
-        content: {
-          text: 'I want list all my wallets for you',
-        },
-      },
-      {
-        name: '{{name2}}',
-        content: {
-          text: 'What?',
+          actions: ['USER_METAWALLET_DELETE'],
         },
       },
     ],

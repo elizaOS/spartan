@@ -3,8 +3,8 @@ import {
   logger,
 } from '@elizaos/core';
 import { v4 as uuidv4 } from 'uuid';
-import { getAccountFromMessage, takeItPrivate, messageReply, HasEntityIdFromMessage, getDataFromMessage } from '../utils'
-import { interface_account_update } from '../interfaces/int_accounts'
+import { HasEntityIdFromMessage, getAccountFromMessage, takeItPrivate, messageReply, getDataFromMessage, accountMockComponent } from '../utils'
+import { interface_account_upsert, interface_account_update } from '../interfaces/int_accounts'
 import CONSTANTS from '../constants'
 const { Keypair } = require('@solana/web3.js');
 import bs58 from 'bs58'
@@ -79,15 +79,16 @@ export const walletImportAction: Action = {
     const keys = solanaService.detectPrivateKeysFromString(message.content.text)
     console.log('keys', keys)
     const keypair = Keypair.fromSecretKey(keys[0].bytes);
-    console.log('privateKeyB58', keypair)
+    //console.log('privateKeyB58', keypair)
     // keys[{ format, match, bytes }]
 
     console.log('account', account)
     //callback(takeItPrivate(runtime, message, 'Thinking about making a meta-wallet'))
 
     if (account.metawallets === undefined) account.metawallets = []
+    const strat = containsStrats?.[0] || 'LLM trading strategy'
     const newWallet = {
-      strategy: containsStrats?.[0] || 'LLM trading strategy',
+      strategy: strat,
       keypairs: {
         solana: {
           privateKey: bs58.encode(keypair.secretKey),
@@ -96,12 +97,23 @@ export const walletImportAction: Action = {
       }
     }
     console.log('newWallet', newWallet)
-    callback(takeItPrivate(runtime, message, 'Made a meta-wallet ' + JSON.stringify(newWallet) + ' please fund it to start trading'))
+
+    let str = '\n'
+    str += '  Strategy: ' + strat + '\n'
+    str += '  Chain: solana\n'
+    //str += '    Private key: ' + newWallet.keypairs.solana.privateKey + ' (Write this down/save it somewhere safe, we will not show this again. This key allows you to spend the funds)\n'
+    str += '    Public key: ' + newWallet.keypairs.solana.publicKey + ' (This is the wallet address that you can publicly send to people)\n'
+
+    callback(takeItPrivate(runtime, message, 'Made a meta-wallet ' + str + ' please fund it to start trading'))
 
     account.metawallets.push(newWallet)
     // dev mode
     //newData.metawallets = [newWallet]
-    await interface_account_update(runtime, account)
+    //await interface_account_update(runtime, account)
+    console.log('account', account)
+    const component = accountMockComponent(account)
+    console.log('component', component)
+    await interface_account_upsert(runtime, message, component)
     /*
     await runtime.updateComponent({
       id: account.componentId,

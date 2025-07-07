@@ -98,7 +98,12 @@ sve:validate message {
     }
 
     const reg = await getDataFromMessage(runtime, message)
-    if (reg) return false; // require no regisration
+    //console.log('USER_REGISTRATION reg', reg)
+    if (reg) {
+      //console.warn('Already registration, returning false')
+      return false; // require no regisration
+    }
+
     //console.log('reg_start:validate - are signed up?', !!email)
     return true
   },

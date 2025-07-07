@@ -3,7 +3,7 @@ import {
   logger,
 } from '@elizaos/core';
 import { v4 as uuidv4 } from 'uuid';
-import { takeItPrivate, messageReply, HasEntityIdFromMessage, getDataFromMessage, getAccountFromMessage } from '../utils'
+import { takeItPrivate, messageReply, HasEntityIdFromMessage, getDataFromMessage, getAccountFromMessage, accountMockComponent } from '../utils'
 import { matchOption } from '../util_matcher'
 import { interface_account_upsert } from '../interfaces/int_accounts'
 
@@ -19,12 +19,6 @@ export const setStrategy: Action = {
       return false
     }
 
-    const account = await getAccountFromMessage(runtime, message)
-    if (!account) {
-      //console.log('WALLET_SETSTRAT validate - account not found')
-      return false;
-    }
-
     const traderChainService = runtime.getService('TRADER_CHAIN') as any;
     if (!traderChainService) {
       //console.warn('WALLET_SETSTRAT validate - TRADER_CHAIN not found')
@@ -36,9 +30,19 @@ export const setStrategy: Action = {
       return false
     }
 
+    const account = await getAccountFromMessage(runtime, message)
+    if (!account) {
+      //console.log('WALLET_SETSTRAT validate - account not found')
+      return false;
+    }
+
     const stratgiesList = await traderStrategyService.listActiveStrategies()
     const bestOption = matchOption(message.content.text, stratgiesList)
-    console.log('WALLET_SETSTRAT bestOption', bestOption)
+
+    // normal to be null
+    if (bestOption !== null) {
+      console.log('WALLET_SETSTRAT bestOption', bestOption)
+    }
     return bestOption !== null
   },
   handler: async (
@@ -112,7 +116,8 @@ export const setStrategy: Action = {
     //componentData.metawallets = [newWallet]
 
     console.log('writing componentData', componentData)
-    await interface_account_upsert(runtime, message, componentData)
+    const component = accountMockComponent(componentData)
+    await interface_account_upsert(runtime, message, component)
   },
   examples: [
     [

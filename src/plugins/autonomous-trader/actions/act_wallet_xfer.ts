@@ -169,6 +169,7 @@ export default {
         'MULTIWALLET_PAY_TOKENS',
         'MULTIWALLET_PAY',
     ],
+    description: 'Transfer SOL or SPL tokens from a specified wallet to a specified Solana address.',
     validate: async (runtime: IAgentRuntime, message: Memory) => {
         //logger.log('MULTIWALLET_TRANSFER Validating transfer from entity:', message.entityId);
 
@@ -189,7 +190,6 @@ export default {
 
         return true;
     },
-    description: 'Transfer SOL or SPL tokens to a specified Solana address.',
     handler: async (
         runtime: IAgentRuntime,
         message: Memory,
