@@ -11,7 +11,6 @@ import {
 import { takeItPrivate, getDataFromMessage, getAccountFromMessage, HasEntityIdFromMessage, getEntityIdFromMessage } from '../utils'
 import CONSTANTS from '../constants'
 import { interface_user_update } from '../interfaces/int_users'
-import { interface_account_update } from '../interfaces/int_accounts'
 import { v4 as uuidv4 } from 'uuid';
 
 function findGeneratedCode(message, length) {
