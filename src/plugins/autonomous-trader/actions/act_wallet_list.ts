@@ -3,7 +3,7 @@ import {
   logger,
 } from '@elizaos/core';
 import { v4 as uuidv4 } from 'uuid';
-import { takeItPrivate, messageReply, getAccountFromMessage } from '../utils'
+import { HasEntityIdFromMessage, takeItPrivate, messageReply, getAccountFromMessage } from '../utils'
 
 // handle starting new form and collecting first field
 export const userMetawalletList: Action = {
@@ -12,18 +12,19 @@ export const userMetawalletList: Action = {
   ],
   validate: async (runtime: IAgentRuntime, message: Memory) => {
     //console.log('USER_METAWALLET_LIST validate', message?.metadata?.fromId)
-    if (!message?.metadata?.fromId) {
-      console.log('USER_METAWALLET_LIST validate - author not found')
+    if (!await HasEntityIdFromMessage(runtime, message)) {
+      console.warn('MULTIWALLET_TRANSFER validate - author not found')
       return false
     }
-
-    const account = await getAccountFromMessage(runtime, message)
-    if (!account) return false;
 
     const traderChainService = runtime.getService('TRADER_CHAIN') as any;
     if (!traderChainService) return false
     const traderStrategyService = runtime.getService('TRADER_STRATEGY') as any;
     if (!traderStrategyService) return false
+
+    const account = await getAccountFromMessage(runtime, message)
+    if (!account) return false;
+
     return true
   },
   description: 'Allows a user to list all wallets they have',
@@ -35,12 +36,12 @@ export const userMetawalletList: Action = {
     callback?: HandlerCallback,
     responses: any[]
   ): Promise<boolean> => {
-    console.log('USER_METAWALLET_LIST handler')
+    //console.log('USER_METAWALLET_LIST handler')
 
     // should we check to see if we already a wallet with this strategy? no
     // they can have multiple
     const account = await getAccountFromMessage(runtime, message)
-    console.log('account', account)
+    //console.log('account', account)
 
     if (!account.metawallets) {
       const output = takeItPrivate(runtime, message, 'You don\'t have any wallets, do you want to make one?')
