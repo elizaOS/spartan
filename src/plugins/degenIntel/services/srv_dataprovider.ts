@@ -212,7 +212,7 @@ export class TradeDataProviderService extends Service {
 
       // amount?
       const wallet = {
-        amount: sellAmount, // in raw
+        amount: sellAmount, // in raw (atomic units of token)
         // there's other junk in there, so lets just clean it up
         keypair: {
           publicKey: kp.publicKey,
@@ -224,9 +224,10 @@ export class TradeDataProviderService extends Service {
 
       // execute sell
       const res = await solanaService.executeSwap([wallet], signal)
+      const result = res[kp.publicKey]
       // close position
-      if (res[0].success) {
-        console.log('sold', p.id, p.token, 'in', p.publicKey, 'signature', res[0].signature)
+      if (result?.success) {
+        console.log('sold', p.id, p.token, 'in', p.publicKey, 'signature', result.signature)
         // going to be hard to get a strategy handle...
         // get strategy hndl and close position
         // which position...
@@ -235,9 +236,9 @@ export class TradeDataProviderService extends Service {
           type,
           sellRequest: sellAmount,
           //sellRequestUi: sellAmount * tokenBalanceUi,
-          outAmount: res[0].outAmount,
-          signature: res[0].signature,
-          fees: res[0].fees,
+          outAmount: result.outAmount,
+          signature: result.signature,
+          fees: result.fees,
         });
       }
       console.log('done trying to close position', p.id, p.token, 'in', p.publicKey)
@@ -349,7 +350,7 @@ export class TradeDataProviderService extends Service {
 
   async getTokenInfo(chain, address) {
     let token = await this.runtime.getCache<IToken>(`token_${chain}_${address}`);
-    //console.log('token', token);
+    console.log('dataProvider - getTokenInfo for token', token);
     if (!token) {
       // not cache, go fetch realtime
 
