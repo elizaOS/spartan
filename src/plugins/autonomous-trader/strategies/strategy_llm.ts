@@ -11,6 +11,8 @@ import { PublicKey } from '@solana/web3.js';
 // can't be per wallet since we're deciding across multiple wallets
 // fixme: include price history data
 
+// It is ok to say nothing is worth buying, only move if you see an opportunity
+
 const buyTemplate = `
 I want you to give a crypto buy signal based on both the sentiment analysis as well as the trending tokens.
 Only choose a token that occurs in both the Trending Tokens list as well as the Sentiment analysis. This ensures we have the proper symbol, chain and token address.
@@ -39,6 +41,7 @@ Only return the following JSON and nothing else (even if no sentiment or trendin
   exit_conditions: "what conditions in which you'd change your position on this token",
   exit_sentiment_drop_threshold: "if sentiment dropped to this number, you'd change your position on this token",
   exit_24hvolume_threshold: "if 24h volume dropped to this number, you'd change your position on this token",
+  current_price: "What's the current price (in USD)",
   exit_price_drop_threshold: "what absolute price (in USD, not relative, decimal only, no $) in which you'd change your position on this token. Should be less than it's current token price (in USD)",
   exit_target_price: "what absolute target price (in USD, not relative, decimal only, no $) do you think we take profits at. Should be more than it's current token price (in USD)",
 }`;
@@ -80,6 +83,7 @@ export async function llmStrategy(runtime: IAgentRuntime) {
 
     // temp hack
     await generateBuySignal(runtime, service, hndl);
+    console.log('interested_trending - generateBuySignal done')
   });
   // sentiment update
 
@@ -90,9 +94,9 @@ export async function llmStrategy(runtime: IAgentRuntime) {
   //
 }
 
-// maybe should be a class to reuse the service handles
-async function generateBuySignal(runtime, strategyService, hndl) {
+async function generateBuyPrompt(runtime) {
   const sentimentsData = (await runtime.getCache<Sentiment[]>('sentiments')) || [];
+  // FIXME: which chain
   const trendingData = (await runtime.getCache<IToken[]>('tokens_solana')) || [];
 
   let sentiments = '';
@@ -119,7 +123,6 @@ async function generateBuySignal(runtime, strategyService, hndl) {
     tokens += 'address, price (in USD), 24h change %, liquidity (in USD)\n'
     trendingData.length = 25
     for (const token of trendingData) {
-      // FIXME: which chain
       tokens += [token.address, token.price.toFixed(4), token.price24hChangePercent.toFixed(2), token.liquidity.toFixed(2)].join(',') + '\n'
       index++;
     }
@@ -128,39 +131,80 @@ async function generateBuySignal(runtime, strategyService, hndl) {
   const prompt = buyTemplate
     .replace('{{sentiment}}', sentiments)
     .replace('{{trending_tokens}}', tokens);
+  console.log('llm_start prompt', prompt)
+  return prompt
+}
 
+async function pickToken(runtime, prompt, retries = 3) {
+  if (retries !== 3) console.log('pickToken retries left', retries)
   const requiredFields = ['recommend_buy_chain', 'reason', 'recommend_buy_address'];
-  //console.log('llm_start prompt', prompt)
+  // we have additional checks
+
+  // this will retry up to 3 times * 3
   const response = await askLlmObject(
     runtime,
     { prompt, system: 'You are a buy signal analyzer.' },
     requiredFields
   );
-  console.log('llm_strat trending response', response);
-
   if (!response) {
-    return;
+    // 9 llm calls
+    if (retries) {
+      return pickToken(runtime, prompt, retries - 1);
+    }
   }
 
   // normalize amount
   response.buy_amount = parseInt((response.buy_amount + '').replaceAll('%', ''))
 
   if (!response.buy_amount) {
-    console.log('llm_strat Bad buy amount');
-    // FIXME: retry?
-    return;
+    // if buy_amount is 0
+    if (1) {
+      // normal behavior to not to be always buying
+      return false
+    } else {
+      // dev mode
+      console.log('llm_strat Bad buy amount');
+      if (retries) {
+        return pickToken(runtime, prompt, retries - 1);
+      }
+      return false;
+    }
   }
   if (response.buy_amount > 15) {
     console.log('llm_strat - Bad buy amount, too high');
-    // FIXME: retry?
-    return;
+    if (retries) {
+      return pickToken(runtime, prompt, retries - 1);
+    }
+    return false;
   }
 
   // verify address for this chain (plugin-solana)
   if (response.recommend_buy_chain.toLowerCase() !== 'solana') {
     console.log('llm_strat chain not solana', response.recommend_buy_chain);
-    // abort
-    return;
+    if (retries) {
+      return pickToken(runtime, prompt, retries - 1);
+    }
+    return false;
+  }
+
+  return response
+}
+
+const generateBuySignalRetries = 3
+
+// maybe should be a class to reuse the service handles
+async function generateBuySignal(runtime, strategyService, hndl, retries = generateBuySignalRetries) {
+  if (retries !== generateBuySignalRetries) console.log('generateBuySignal retries left', retries)
+  const prompt = await generateBuyPrompt(runtime)
+  const response = await pickToken(runtime, prompt)
+  console.log('llm_strat trending response', response);
+
+  if (!response) {
+    // up to 27 llm calls
+    if (retries) {
+      return generateBuySignal(runtime, strategyService, hndl, retries - 1);
+    }
+    return false
   }
 
   // if looks good, get token(s) info (birdeye?) (infoService)
@@ -180,25 +224,32 @@ async function generateBuySignal(runtime, strategyService, hndl) {
   }
 
   // amount check
+  //   entering the area of infinite LLM calls and prompt regeneration
   const lowPrice = parseFloat(response.exit_price_drop_threshold)
   if (lowPrice < 0 ? ((lowPrice + token.priceUsd) < 0) : (lowPrice > token.priceUsd)) {
     console.log('invalid lowPrice', lowPrice, 'current', token.priceUsd, 'add', lowPrice + token.priceUsd)
-    return;
+    if (retries) {
+      return generateBuySignal(runtime, strategyService, hndl, retries - 1);
+    }
+    return false
   }
   const highPrice = parseFloat(response.exit_target_price)
   if (highPrice < token.priceUsd) {
     console.log('invalid highPrice', highPrice, 'current', token.priceUsd)
-    return
+    if (retries) {
+      return generateBuySignal(runtime, strategyService, hndl, retries - 1);
+    }
+    return false
   }
 
   const solanaService = await acquireService(runtime, 'chain_solana', 'llm trading strategy');
   if (!solanaService.validateAddress(response.recommend_buy_address)) {
     console.log('llm_strat no a valid address', response.recommend_buy_address)
-    // handle failure
-    // maybe just recall itself
-    return;
+    if (retries) {
+      return generateBuySignal(runtime, strategyService, hndl, retries - 1);
+    }
+    return false
   }
-
 
   // validateTokenForTrading (look at liquidity/volume/suspicious atts)
 
@@ -245,21 +296,21 @@ async function generateBuySignal(runtime, strategyService, hndl) {
       */
 
       const res = await solanaService.executeSwap([{
-        // is this right? not all tokens have the same decimal
-        // 1e9 is correct, this is amount of solana to swap
         // we get a quote based on the sol amount
-        amount: amt * 1e9, // if amt is in sol to spend then it's 1e9 not " * uiToRaw"
+        amount: Math.round(amt * 1e9), // amount of input Token in atomic units
         keypair: kp
       }], response)
       await new Promise((waitResolve) => setTimeout(waitResolve, 1000));
       //console.log('buy res', res)
 
-      if (!res?.length) {
+      if (!res) {
         console.warn('Bad response', res)
         continue
       }
-      if (res[0].success) {
-        console.log('buy successful', res[0].signature)
+      const result = res[kp.publicKey]
+      if (result.success) {
+        // better to do it in solana incase it crashes inside
+        //console.log('buy successful', result.signature)
         // Create position record
         const position = {
           id: uuidv4() as UUID,
@@ -269,8 +320,8 @@ async function generateBuySignal(runtime, strategyService, hndl) {
           // is this total or per token? this must be total I guess
           solAmount: amt, // in uiAmount
           // should this be uiAmount too?
-          tokenAmount: res[0].outAmount, // count of token recv in raw?
-          swapFee: res[0].fees.lamports,
+          tokenAmount: result.outAmount, // count of token recv in raw?
+          swapFee: result.fees.lamports,
           // is this right? yes but we don't need to store, since we can calculate
           //entryPrice: res[0].outAmount / amt,
           timestamp: Date.now(),
