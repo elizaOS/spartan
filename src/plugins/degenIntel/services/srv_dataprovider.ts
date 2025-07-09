@@ -94,15 +94,17 @@ export class TradeDataProviderService extends Service {
     // need to get autotrader service
 
     const positions = await this.positionIntService.list()
-    //console.log('positions', positions)
     // filter thru, what token do we need to get information on?
     const tokens = []
     const ca2Positions = []
+    const solanaWallets = {}
+    let openPositions = 0
     for(const p of positions) {
       const ca = p.position.token
 
       // don't need to care about closed positions atm
       if (p.position.close) continue
+      openPositions++
 
       //console.log('p', p, 'ca', ca)
       if (!tokens.includes(ca)) {
@@ -111,11 +113,15 @@ export class TradeDataProviderService extends Service {
       if (ca2Positions[ca] === undefined) ca2Positions[ca] = []
       // how do we get pubkey? p.mw and p.position.publicKey
       //console.log('p', p)
+      solanaWallets[p.position.publicKey] = true
       ca2Positions[ca].push(p)
       // is this wallet still holding this?
       //
     }
-    console.log('watching', tokens.length, 'CAs')
+    console.log('positions', openPositions + '/' + positions.length, 'watching', tokens.length, 'CAs')
+    console.log('wallets', Object.keys(solanaWallets))
+    // get balances for all these wallets
+
     // take list of CA and get token information
     const services = this.forEachReg('lookupService')
     const results = await Promise.all(services.map(service => service.getTokensMarketData(tokens)))
@@ -223,23 +229,28 @@ export class TradeDataProviderService extends Service {
       //console.log('closePosition - hndl', hndl, 'pubkey', kp.publicKey, 'p.id', p.id)
 
       // execute sell
-      const res = await solanaService.executeSwap([wallet], signal)
-      const result = res[kp.publicKey]
-      // close position
-      if (result?.success) {
-        console.log('sold', p.id, p.token, 'in', p.publicKey, 'signature', result.signature)
-        // going to be hard to get a strategy handle...
-        // get strategy hndl and close position
-        // which position...
-        //console.log('strategyService.close_position hndl', hndl, 'pubkey', kp.publicKey, 'p.id', p.id)
-        await this.strategyService.close_position(hndl, kp.publicKey, p.id, {
-          type,
-          sellRequest: sellAmount,
-          //sellRequestUi: sellAmount * tokenBalanceUi,
-          outAmount: result.outAmount,
-          signature: result.signature,
-          fees: result.fees,
-        });
+      try {
+        const res = await solanaService.executeSwap([wallet], signal)
+        const result = res[kp.publicKey]
+        // close position
+        if (result?.success) {
+          console.log('sold', p.id, p.token, 'in', p.publicKey, 'signature', result.signature)
+          // going to be hard to get a strategy handle...
+          // get strategy hndl and close position
+          // which position...
+          //console.log('strategyService.close_position hndl', hndl, 'pubkey', kp.publicKey, 'p.id', p.id)
+          await this.strategyService.close_position(hndl, kp.publicKey, p.id, {
+            type,
+            sellRequest: sellAmount,
+            //sellRequestUi: sellAmount * tokenBalanceUi,
+            outAmount: result.outAmount,
+            signature: result.signature,
+            fees: result.fees,
+          });
+        }
+      } catch(e) {
+        console.error('failure to close position', e)
+        // retry?
       }
       console.log('done trying to close position', p.id, p.token, 'in', p.publicKey)
     }
