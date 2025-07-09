@@ -68,7 +68,7 @@ export async function getUserIdsByPubkeys(runtime, pubkeys) {
   for(const accountId in accounts) {
     const account = accounts[accountId]
     if (account) {
-      const component = account.components.find(c => c.type === CONSTANTS.COMPONENT_USER_TYPE)
+      const component = account.components.find(c => c.type === CONSTANTS.COMPONENT_ACCOUNT_TYPE)
       if (component) {
         // const mw = component.data.metawallets.find(mw => mw.keypairs[pos.chain]?.publicKey === pos.publicKey)
         for(const mw of component.data.metawallets) {
