@@ -137,6 +137,12 @@ export const checkRegistrationCode: Action = {
       if (accountEntity) {
         output = takeItPrivate(runtime, message, 'Looks good, I see your already registered before, linking to existing account')
 
+        // self healing
+        if (spartanData.data.accounts.indexOf(emailEntityId) === -1) {
+          console.log('warning spartanData didnt have accountId', emailEntityId)
+          spartanData.data.accounts.push(emailEntityId)
+        }
+
       } else {
         output = takeItPrivate(runtime, message, 'Looks good, you are now registered and have access to my services')
 
@@ -161,10 +167,17 @@ export const checkRegistrationCode: Action = {
             metawallets: [],
           },
         });
-        spartanData.data.accounts.push(emailEntityId)
+        // not sure how we'd already have accounts, but lets keep it clean
+        if (spartanData.data.accounts.indexOf(emailEntityId) === -1) {
+          spartanData.data.accounts.push(emailEntityId)
+        } else {
+          console.log('duplicate accountId in spartanData', emailEntityId)
+        }
       }
       if (spartanData.data.users.indexOf(userEntityId) === -1) {
         spartanData.data.users.push(userEntityId)
+      } else {
+        console.log('duplicate userEntityId in spartanData', userEntityId)
       }
       updateSpartanData(agentEntityId, spartanData)
     } else {
