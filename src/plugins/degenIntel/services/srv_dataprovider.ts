@@ -189,7 +189,7 @@ export class TradeDataProviderService extends Service {
       const positionTokenAmountUi = p.tokenAmount * tokenToUi
       console.log('position', positionTokenAmountUi, 'balance', tokenBalanceUi)
 
-      let sellAmount = p.tokenAmount || (p.entryPrice * p.amount)
+      let sellAmount = Math.round(p.tokenAmount || (p.entryPrice * p.amount))
 
       if (positionTokenAmountUi > tokenBalanceUi) {
         console.log('We no longer hold', positionTokenAmountUi, 'of', p.token, 'adjusting to', tokenBalanceUi)
@@ -225,7 +225,7 @@ export class TradeDataProviderService extends Service {
           privateKey: kp.privateKey,
         }
       }
-      console.log('closePosition - Selling', p.token, 'wallet', wallet)
+      console.log('closePosition - Selling', p.token, 'wallet', wallet.keypair.publicKey)
       //console.log('closePosition - hndl', hndl, 'pubkey', kp.publicKey, 'p.id', p.id)
 
       // execute sell
