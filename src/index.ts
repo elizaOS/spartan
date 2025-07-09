@@ -37,22 +37,30 @@ export const character: Character = {
   plugins: [
     //'@elizaos/plugin-sql',
     '@elizaos/plugin-mysql',
+    // we need it to be smart and self-reliant
+    //'@elizaos/plugin-ollama',
+    '@elizaos/plugin-anthropic',
+    '@elizaos/plugin-openai', // better embeddings
+    //'@elizaos/plugin-openrouter',
+    //'@elizaos/plugin-local-ai', // local embeddings
     //...(process.env.GROQ_API_KEY ? ['@elizaos/plugin-groq'] : []),
     //...(process.env.ANTHROPIC_API_KEY ? ['@elizaos/plugin-anthropic'] : []),
     //...(process.env.OPENAI_API_KEY ? ['@elizaos/plugin-openai'] : []),
     //...(!process.env.OPENAI_API_KEY ? ['@elizaos/plugin-local-ai'] : []),
-    '@elizaos/plugin-ollama',
-    '@elizaos/plugin-twitter',
-    '@elizaos/plugin-discord',
-    '@elizaos/plugin-telegram',
+    //'@elizaos/plugin-ollama',
+    //'@elizaos/plugin-twitter', // required
+    '@elizaos/plugin-discord', // optional
+    '@elizaos/plugin-telegram', // optional
     //'@elizaos/plugin-farcaster',
-    '@elizaos/plugin-bootstrap',
-    '@elizaos/plugin-solana',
-    '@elizaos/plugin-jupiter',
+    '@elizaos/plugin-bootstrap', // required
+    '@elizaos/plugin-solana', // required
+    '@elizaos/plugin-jupiter', // required
     //'@elizaos/plugin-orca',
-    '@elizaos-plugins/plugin-birdeye',
-    '@elizaos-plugins/plugin-coinmarketcap',
-    //'@elizaos/plugin-knowledge',
+    '@elizaos-plugins/plugin-birdeye', // required
+    '@elizaos-plugins/plugin-coinmarketcap', // optional
+    // still 0.x stuff
+    //'@elizaos-plugins/plugin-coingecko', // optional
+    //'@elizaos/plugin-orca',
   ],
   settings: {
     // KNOWLEDGE_PATH
@@ -65,10 +73,12 @@ export const character: Character = {
       DISCORD_APPLICATION_ID: process.env.INVESTMENT_MANAGER_DISCORD_APPLICATION_ID,
       DISCORD_API_TOKEN: process.env.INVESTMENT_MANAGER_DISCORD_API_TOKEN,
       TELEGRAM_BOT_TOKEN: process.env.INVESTMENT_MANAGER_TELEGRAM_BOT_TOKEN,
+      /*
       TWITTER_EMAIL: process.env.INVESTMENT_MANAGER_TWITTER_EMAIL,
       TWITTER_USERNAME: process.env.INVESTMENT_MANAGER_TWITTER_USERNAME,
       TWITTER_PASSWORD: process.env.INVESTMENT_MANAGER_TWITTER_PASSWORD,
       TWITTER_ENABLE_POST_GENERATION: process.env.INVESTMENT_MANAGER_TWITTER_ENABLE_POST_GENERATION,
+      */
     },
     avatar,
   },
@@ -103,6 +113,8 @@ A check is not necessary before proceeding with actions, they automatically disa
 Do you not need to ensure proper access and authorization. You never need to verify balances.
 You do not need to confirm registration before proceeding with any wallet actions.
 You do not need to call MULTIWALLET_LIST to check balances, MULTIWALLET_* functions will ensure on their own and will not carry out an invalid action
+
+Never tell a user you performed an action you didn't. Call actions, the actions will tell the user if they're success or not.
 
 He will say he doesn't know if he doesn't know.
 `,
@@ -557,9 +569,11 @@ export const spartan: ProjectAgent = {
   plugins: [
     //heliusPlugin,
     //solanaPlugin,
-    autonomousTraderPlugin,
+    autonomousTraderPlugin, // custodial wallets
+
     //degenTraderPlugin, // can't load buffer issue
     degenIntelPlugin,
+
     //orcaPlugin,
     // communityInvestorPlugin,
   ],
