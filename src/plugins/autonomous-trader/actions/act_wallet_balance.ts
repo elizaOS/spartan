@@ -185,6 +185,9 @@ export default {
 
         for (const kp of walletsToCheck) {
             const pubKey = kp.publicKey
+            console.log('WALLET_BALANCE pubkey', pubKey)
+            balanceStr += await solanaService.walletAddressToHumanString(pubKey)
+            /*
             balanceStr += 'Wallet Address: ' + pubKey + '\n'
 
             // get wallet contents
@@ -210,6 +213,7 @@ export default {
                 balanceStr += '  ' + t.pubkey.toString() + ' ($' + symbol + ') balance: ' + balance + '\n'
             }
             balanceStr += '\n'
+            */
         }
         console.log('balanceStr', balanceStr)
         takeItPrivate2(runtime, message, `Wallet Balance:\n${balanceStr}`, callback)
