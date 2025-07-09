@@ -8,7 +8,7 @@ import {
 } from '@elizaos/core';
 import { v4 as uuidv4 } from 'uuid';
 import { interface_spartan_get } from './int_spartan'
-import { interface_users_ByIds } from './int_users'
+import { interface_users_list, interface_users_ByIds } from './int_users'
 import CONSTANTS from '../constants'
 
 // look up by Ids
@@ -71,11 +71,12 @@ export async function interface_accounts_list(runtime, options = {}) {
 
 // list of IDs vs list of users?
 export async function getAccountIdsByPubkeys(runtime, pubkeys) {
-  const accountIds = await interface_accounts_list(runtime)
-  //console.log('getAccountIdsByPubkeys - accountIds', accountIds)
-  const accounts = await interface_accounts_ByIds(runtime, accountIds)
-  //console.log('getAccountIdsByPubkeys - accounts', accounts)
   const mws = []
+  /*
+  const accountIds = await interface_accounts_list(runtime)
+  console.log('getAccountIdsByPubkeys - accountIds', accountIds)
+  const accounts = await interface_accounts_ByIds(runtime, accountIds)
+  console.log('getAccountIdsByPubkeys - accounts', accounts)
   for(const entityId in accounts) {
     const account = accounts[entityId]
     if (!account) {
@@ -103,18 +104,79 @@ export async function getAccountIdsByPubkeys(runtime, pubkeys) {
       const kp = mw.keypairs[chain]
       //console.log('kp', kp)
       if (pubkeys.includes(kp.publicKey)) {
+        console.log('getAccountIdsByPubkeys - found', kp.publicKey, 'in', mw)
+        if (list[kp.publicKey]) {
+          console.log('getAccountIdsByPubkeys - stomping', kp.publicKey, 'was', list[kp.publicKey])
+        }
         list[kp.publicKey] = mw.entityId
       } else {
         //console.log('target', pubkeys, 'pubkey', kp.publicKey)
       }
     }
   }
+  */
+
+  // seems less problem prone
+  const users = await interface_users_list(runtime)
+  const emails = await interface_users_ByIds(runtime, users)
+
+  const accountIds = {}
+  const userIds = {} // revmap
+  for(const entityId in emails) {
+    const email = emails[entityId]
+    //console.log('getWalletByUserEntityIds_engine', entityId)
+    if (email.verified && email.address) {
+      const emailEntityId = createUniqueUuid(runtime, email.address);
+      //console.log('getAccountIdsByPubkeys - verified email.address', entityId, email.address, '=>', emailEntityId)
+      accountIds[entityId] = emailEntityId
+      userIds[emailEntityId] = entityId
+      //userWallets[entityId] = email.metawallets
+    //} else {
+      //console.log('getWalletByUserEntityIds_engine - waiting on verification', entityId, email)
+    }
+  }
+  const accounts = await runtime.getEntityByIds(Object.values(accountIds))
+  //const accountComponents = interface_accounts_ByIds(runtime, Object.values(accountIds))
+  const list = {}
+  // accountId is just 0, wtf...
+  for(const idx in accounts) {
+    const account = accounts[idx]
+    if (account) {
+      //console.log('getAccountIdsByPubkeys - account', account)
+      const accountId = account.id // or is it entityId?
+      const component = account.components.find(c => c.type === CONSTANTS.COMPONENT_ACCOUNT_TYPE)
+      if (component) {
+        // const mw = component.data.metawallets.find(mw => mw.keypairs[pos.chain]?.publicKey === pos.publicKey)
+        for(const mw of component.data.metawallets) {
+          for(const chain in mw.keypairs) {
+            const kp = mw.keypairs[chain]
+            //console.log('looking at', accountId, kp.publicKey)
+            if (pubkeys.includes(kp.publicKey)) {
+              // put userid in list for this pubkey
+              if (list[kp.publicKey]) {
+                console.log('getAccountIdsByPubkeys - stomping', kp.publicKey, 'was', list[kp.publicKey])
+              }
+              list[kp.publicKey] = accountId
+            }
+          }
+        }
+      } else {
+        console.log('getAccountIdsByPubkeys - no component for', CONSTANTS.COMPONENT_ACCOUNT_TYPE, 'for', accountId)
+      }
+    } else {
+      console.log('getAccountIdsByPubkeys - no account', accountId, '? weird')
+    }
+  }
+
   return list
 }
 
 // add/update/delete
 
 export async function interface_account_upsert(runtime, message, account) {
+  if (account.componentId) {
+    console.debug('interface_account_upsert - detected a componentId, weird!', account)
+  }
   if (account.id) {
     //console.debug('interface_account_upsert - updating', account.componentId)
     interface_account_update(runtime, account)
@@ -164,7 +226,10 @@ export async function interface_account_update(runtime, component) {
   delete component.type
   delete component.accountEntityId // utils injects this
   */
-  console.log('interface_account_update - accountId', component.entityId, 'component', component.id, 'componentData', component.data)
+
+  // , 'componentData', component.data
+  // is just too much
+  console.log('interface_account_update - accountId', component.entityId, 'component', component.id)
 
   const res = await runtime.updateComponent({
     id: component.id,
