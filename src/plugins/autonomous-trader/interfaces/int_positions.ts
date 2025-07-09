@@ -108,16 +108,16 @@ export async function interface_positions_ByAccountIdPosIds(runtime, accountId, 
 // list
 // open position filter? chain filter?
 export async function listPositions(runtime, options = {}) {
-  //const userIds = awiat interface_users_list(runtime)
+  //const userIds = await interface_users_list(runtime)
   //const emails = await interface_users_ByIds(runtime, users)
   //console.log('listPositions - options', options)
   const metaWallets = await getMetaWallets(runtime)
   //console.log('listPositions - metaWallets', metaWallets)
   const positions = []
   for(const mw of metaWallets) {
-    //console.log('mw', mw)
+    //console.log('listPositions - mw', mw)
     if (mw.keypairs.solana.positions?.length) {
-      //console.log('solana positions', mw.keypairs.solana.positions)
+      //console.log('listPositions - solana positions', mw.keypairs.solana.positions.length)
       // filter open positions?
       for(const p of mw.keypairs.solana.positions) {
         positions.push({ position: p, entityId: mw.entityId, mw })
@@ -167,7 +167,7 @@ export async function createPosition(runtime, accountId, pos) {
     //return false
   }
   wallet.positions.push(pos)
-  //console.log('saving', account)
+  //console.log('createPosition - saving', accountId, account)
 
   const componentData = accountMockComponent(account)
   await interface_account_update(runtime, componentData)
