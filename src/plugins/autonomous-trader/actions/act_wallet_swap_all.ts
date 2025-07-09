@@ -323,6 +323,7 @@ export default {
             }
 
             const SOL_MINT = 'So11111111111111111111111111111111111111111';
+            const WSOL_MINT = 'So11111111111111111111111111111111111111112';
             const signatures: string[] = [];
             let successfulSwaps = 0;
             let failedSwaps = 0;
@@ -346,7 +347,7 @@ export default {
                         connection,
                         senderKeypair.publicKey,
                         tokenInfo.mint,
-                        SOL_MINT,
+                        WSOL_MINT,
                         amount,
                         runtime
                     );
@@ -429,4 +430,4 @@ export default {
             },
         ],
     ] as ActionExample[][],
-} as Action; 
+} as Action;
