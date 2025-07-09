@@ -40,6 +40,7 @@ Only return the following JSON and nothing else (even if no sentiment or trendin
   buy_amount: "number between 1 and 15 (meaning to be a percentage of available funds), for example: 7",
   exit_conditions: "what conditions in which you'd change your position on this token",
   exit_sentiment_drop_threshold: "if sentiment dropped to this number, you'd change your position on this token",
+  exit_liquidity_threshold: "if liquidity drops below this number, you'd change your position on this token",
   exit_24hvolume_threshold: "if 24h volume dropped to this number, you'd change your position on this token",
   current_price: "What's the current price (in USD)",
   exit_price_drop_threshold: "what absolute price (in USD, not relative, decimal only, no $) in which you'd change your position on this token. Should be less than it's current token price (in USD)",
@@ -131,7 +132,7 @@ async function generateBuyPrompt(runtime) {
   const prompt = buyTemplate
     .replace('{{sentiment}}', sentiments)
     .replace('{{trending_tokens}}', tokens);
-  console.log('llm_start prompt', prompt)
+  //console.log('llm_start prompt', prompt)
   return prompt
 }
 
@@ -251,6 +252,46 @@ async function generateBuySignal(runtime, strategyService, hndl, retries = gener
     return false
   }
 
+  // rugcheck
+  const rugcheckResponse = await fetch(`https://api.rugcheck.xyz/v1/tokens/${response.recommend_buy_address}/report`, {
+    method: 'GET',
+    headers: {
+      'Accept': 'application/json',
+    },
+  });
+  const rugcheckData = await rugcheckResponse.json()
+  // it's a lot of data
+  delete rugcheckData.topHolders
+  delete rugcheckData.markets // don't care
+  delete rugcheckData.knownAccounts // maybe useful (creator, pools)
+  console.log('rugcheckData', rugcheckData)
+  //console.log('risks', rugcheckData.risks) // level: "danger"
+  const dangerRisks = rugcheckData.risks.filter(r => r.level === 'danger')
+  if (dangerRisks.length) {
+    console.log('dangerRisks', dangerRisks)
+    // FIXME: remove from top tokens...
+    if (retries) {
+      return generateBuySignal(runtime, strategyService, hndl, retries - 1);
+    }
+    return false
+  }
+  // totalStableLiquidity
+  // totalMarketLiquidity
+  //if (response.exit_24hvolume_threshold) { }
+
+  // if we're already under the threshold
+  if (rugcheckData.totalMarketLiquidity < response.exit_liquidity_threshold) {
+    console.log('invalid exit_liquidity_threshold', response.exit_liquidity_threshold, 'current', rugcheckData.totalMarketLiquidity)
+    if (retries) {
+      return generateBuySignal(runtime, strategyService, hndl, retries - 1);
+    }
+    return false
+  }
+
+
+  //const topHolders = rugcheckData.risks.find(r => r.name = 'Top 10 holders high ownership')
+  //const lpWarning = rugcheckData.risks.find(r => r.name = 'Large Amount of LP Unlocked')
+
   // validateTokenForTrading (look at liquidity/volume/suspicious atts)
 
   // now it's a signal
@@ -272,10 +313,14 @@ async function generateBuySignal(runtime, strategyService, hndl, retries = gener
       //console.log('bal', bal) //uiAmount
       // this can return NaN?
       if (bal === -1) continue
+
+      // prevent executeSwap? it's smarter now
+      /*
       if (bal < 0.003) {
-        console.log('not enough SOL balance in', w.publicKey)
+        console.log('not enough SOL balance in', w.publicKey, 'bal', bal)
         continue
       }
+      */
       const amt = await scaleAmount(w, bal, response) // uiAmount
       console.log(w.publicKey, 'bal', bal, 'amt (ui)', amt, 'SOL spend. Has', (bal * 1e9), 'lamports')
       // FIXME: what amt is too miniscule for this coin buy (not worth the tx fees?)
@@ -308,7 +353,7 @@ async function generateBuySignal(runtime, strategyService, hndl, retries = gener
         continue
       }
       const result = res[kp.publicKey]
-      if (result.success) {
+      if (result?.success) {
         // better to do it in solana incase it crashes inside
         //console.log('buy successful', result.signature)
         // Create position record
@@ -330,6 +375,8 @@ async function generateBuySignal(runtime, strategyService, hndl, retries = gener
             reasoning: response.exit_conditions,
             // what's current sentiment?
             sentimentDrop: response.exit_sentiment_drop_threshold,
+            // optional
+            liquidityDrop: response.exit_liquidity_threshold,
             // current vol adjusted
             volumeDrop: response.exit_24hvolume_threshold,
             // current price adjsut
