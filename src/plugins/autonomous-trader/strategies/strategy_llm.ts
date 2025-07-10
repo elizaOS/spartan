@@ -11,9 +11,7 @@ import { PublicKey } from '@solana/web3.js';
 // can't be per wallet since we're deciding across multiple wallets
 // fixme: include price history data
 
-// It is ok to say nothing is worth buying, only move if you see an opportunity
-
-const buyTemplate = `
+/*
 I want you to give a crypto buy signal based on both the sentiment analysis as well as the trending tokens.
 Only choose a token that occurs in both the Trending Tokens list as well as the Sentiment analysis. This ensures we have the proper symbol, chain and token address.
 The sentiment score has a range of -100 to 100, with -100 indicating extreme negativity and 100 indicating extreme positiveness.
@@ -24,6 +22,13 @@ if no sentiment or trending, it's ok to use your feelings instead of your mind.
 Sentiment analysis:
 
 {{sentiment}}
+*/
+
+const buyTemplate = `
+I want you to give a crypto buy signal based on the trending tokens.
+Please determine how good of an opportunity this is (how rare and how much potential).
+Also let me know what a good amount would be to buy. Buy amount should be a range between 1 and 15% of available balance.
+Ensure exit_price_drop is less than the token price and exit_target_price is above the current price.
 
 Trending Solana tokens:
 
@@ -309,18 +314,18 @@ async function generateBuySignal(runtime, strategyService, hndl, retries = gener
       continue
     }
     if (w.chain === 'solana') {
+      // check current token allocation
+      // 20% max of USD value? sol value?
       const bal = await solanaService.getBalanceByAddr(w.publicKey)
       //console.log('bal', bal) //uiAmount
       // this can return NaN?
       if (bal === -1) continue
 
-      // prevent executeSwap? it's smarter now
-      /*
-      if (bal < 0.003) {
+      // keep gas for selling
+      if (bal < 0.005) {
         console.log('not enough SOL balance in', w.publicKey, 'bal', bal)
         continue
       }
-      */
       const amt = await scaleAmount(w, bal, response) // uiAmount
       console.log(w.publicKey, 'bal', bal, 'amt (ui)', amt, 'SOL spend. Has', (bal * 1e9), 'lamports')
       // FIXME: what amt is too miniscule for this coin buy (not worth the tx fees?)
