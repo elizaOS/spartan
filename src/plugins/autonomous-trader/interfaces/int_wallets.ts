@@ -1,5 +1,5 @@
-import type { Plugin } from '@elizaos/core';
-import { type UUID, createUniqueUuid } from '@elizaos/core';
+import type { UUID, IAgentRuntime } from '@elizaos/core';
+import { createUniqueUuid } from '@elizaos/core';
 
 import { interface_users_ByIds, interface_users_list } from '../interfaces/int_users'
 import { interface_accounts_ByIds } from '../interfaces/int_accounts'
@@ -9,16 +9,21 @@ import { interface_accounts_ByIds } from '../interfaces/int_accounts'
 // list/search
 
 // return strategy, keypairs[chain] = { privateKey, publicKey }, entityId, names
-export async function getMetaWallets(runtime) {
+export async function getMetaWallets(runtime: IAgentRuntime): Promise<any[]> {
+  //console.log('getMetaWallets')
+  //interface_accounts_list is available
   const users = await interface_users_list(runtime)
-  //console.log('getMetaWallets - users', users)
+  //console.log('getMetaWallets - users', users.length)
   const mws = []
 
   const res = await getWalletByUserEntityIds_engine(runtime, users)
   //console.log('getMetaWallets - res', res)
+  // userWallets is weird
   for(const userEntityId in res.userWallets) {
     const userMws = res.userWallets[userEntityId]
+    //console.log('getMetaWallets - userEntityId', userEntityId, 'userMws', userMws.length)
     if (userMws) {
+      // code/address/verified etc
       const email = res.userEntityData[userEntityId]
       //console.log('getMetaWallets - email.names', email.names)
       for(const mw of userMws) {
@@ -49,7 +54,7 @@ export async function getMetaWallets(runtime) {
   return mws
 }
 
-export async function getWalletsByPubkey(runtime, pubkeys) {
+export async function getWalletsByPubkey(runtime: IAgentRuntime, pubkeys: string[]): Promise<Record<string, any>> {
   const metaWallets = await getMetaWallets(runtime)
   const list = {}
   for(const mw of metaWallets) {
@@ -61,7 +66,7 @@ export async function getWalletsByPubkey(runtime, pubkeys) {
 }
 
 // filter by chain or strategy
-export async function getSpartanWallets(runtime, options = {}) {
+export async function getSpartanWallets(runtime: IAgentRuntime, options = {}): Promise<any[]> {
   const wallets = []
 
   const metaWallets = await getMetaWallets(runtime)
@@ -89,7 +94,9 @@ export async function getSpartanWallets(runtime, options = {}) {
 }
 
 // list metawallets by userId
-export async function getWalletByUserEntityIds_engine(runtime, userEntityIds: UUID[]) {
+export async function getWalletByUserEntityIds_engine(
+  runtime: IAgentRuntime, userEntityIds: UUID[]
+): Promise<{ userWallets: Record<UUID, any>, accountIds: Record<UUID, UUID>, userEntityData: Record<UUID, any> }> {
   // find these users metawallets
   // each id will have a list of wallets
   const userWallets = {}
@@ -115,7 +122,7 @@ export async function getWalletByUserEntityIds_engine(runtime, userEntityIds: UU
     const metawallets = accountWallets[accountEntityId]
     //console.log('getWalletByUserEntityIds_engine - userEntityId', userEntityId, '=>', accountEntityId)
     if (metawallets) {
-      //console.log('getWalletByUserEntityIds_engine - metawallets', metawallets)
+      //console.log('getWalletByUserEntityIds_engine - metawallets', metawallets.length)
       // if found
       userWallets[userEntityId] = metawallets
     }
@@ -125,12 +132,13 @@ export async function getWalletByUserEntityIds_engine(runtime, userEntityIds: UU
   }
 }
 
-export async function getWalletByUserEntityIds(runtime, userEntityIds: UUID[]) {
+export async function getWalletByUserEntityIds(runtime: IAgentRuntime, userEntityIds: UUID[]): Promise<Record<UUID, any>> {
   const res = await getWalletByUserEntityIds_engine(runtime, userEntityIds)
   return res.userWallets
 }
 
-export async function getMetaWalletsByEmailEntityIds(runtime, emailEntityIds: UUID[]) {
+// you mean by account?
+export async function getMetaWalletsByEmailEntityIds(runtime: IAgentRuntime, emailEntityIds: UUID[]): Promise<Record<UUID, any>> {
   // find these users metawallets
   // each id will have a list of wallets
   const userWallets = {}
@@ -138,6 +146,7 @@ export async function getMetaWalletsByEmailEntityIds(runtime, emailEntityIds: UU
   for(const entityId in accounts) {
     const account = accounts[entityId]
     //console.log('getMetaWalletsByEmailEntityIds', entityId, 'wallets', account.metawallets)
+    //console.log('getMetaWalletsByEmailEntityIds', entityId, 'account', account)
     if (account.metawallets) {
       userWallets[entityId] = account.metawallets
     }
