@@ -39,7 +39,7 @@ It is ok to say nothing is worth buying, only move if you see an opportunity
 Only return the following JSON and nothing else (even if no sentiment or trending):
 {
   recommend_buy_chain: "which chain the token is on",
-  recommend_buy_address: "the address of the token to purchase, for example: Gu3LDkn7Vx3bmCzLafYNKcDxv2mH7YN44NJZFXnypump",
+  recommend_buy_index: "the index of the token to purchase, for example: 1",
   reason: "the reason why you think this is a good buy, and why you chose the specific amount",
   opportunity_score: "number, for example 50",
   buy_amount: "number between 1 and 15 (meaning to be a percentage of available funds), for example: 7",
@@ -49,8 +49,14 @@ Only return the following JSON and nothing else (even if no sentiment or trendin
   exit_24hvolume_threshold: "if 24h volume dropped to this number, you'd change your position on this token",
   current_price: "What's the current price (in USD)",
   exit_price_drop_threshold: "what absolute price (in USD, not relative, decimal only, no $) in which you'd change your position on this token. Should be less than it's current token price (in USD)",
+  exit_price_drop_threshold_reasoning: "the reason why you think this is a good stop loss threshold",
   exit_target_price: "what absolute target price (in USD, not relative, decimal only, no $) do you think we take profits at. Should be more than it's current token price (in USD)",
+  exit_target_price_reasoning: "the reason why you think this is a good take profit threshold",
 }`;
+
+// exit_price_drop_threshold / exit_target_price
+//   could be a absolute delta
+
 //   exit_price_drop_threshold: "number between 1 and 15 percent loss in which you'd change your position on this token. ",
 //   recommend_buy: "the symbol of the token for example DEGENAI. can use NULL if nothing strikes you",
 // exit_24hvolume_threshold/exit_price_drop_threshold what scale?
@@ -64,6 +70,7 @@ export async function llmStrategy(runtime: IAgentRuntime) {
 
   const me = {
     name: STRATEGY_NAME,
+    premium: true,
   };
   const hndl = await service.register_strategy(me);
   // we want trending
@@ -101,12 +108,12 @@ export async function llmStrategy(runtime: IAgentRuntime) {
 }
 
 async function generateBuyPrompt(runtime) {
-  const sentimentsData = (await runtime.getCache<Sentiment[]>('sentiments')) || [];
-  // FIXME: which chain
-  const trendingData = (await runtime.getCache<IToken[]>('tokens_solana')) || [];
-
   let sentiments = '';
+  let tokens = '';
 
+  // FIXME: which chains
+  /*
+  const sentimentsData = (await runtime.getCache<Sentiment[]>('sentiments')) || [];
   let idx = 1;
   for (const sentiment of sentimentsData) {
     if (!sentiment?.occuringTokens?.length) continue;
@@ -119,17 +126,40 @@ async function generateBuyPrompt(runtime) {
     sentiments += '\n-------------------\n';
     idx++;
   }
+  */
 
+/*
+8|odi-dev  | test {
+8|odi-dev  |   name: "Tetsuo Coin",
+8|odi-dev  |   rank: 8,
+8|odi-dev  |   chain: "solana",
+8|odi-dev  |   price: 0.003242539775876592,
+8|odi-dev  |   symbol: "TETSUO",
+8|odi-dev  |   address: "8i51XNNpGaKaj4G4nDdmQh95v4FKAxw8mhtaRoKd9tE8",
+8|odi-dev  |   logoURI: "https://ipfs.io/ipfs/QmVLxzvFArbYSqUCvWBG6ur3yxmWzVxzu3k9NP6WFFNr56",
+8|odi-dev  |   decimals: 6,
+8|odi-dev  |   provider: "birdeye",
+8|odi-dev  |   liquidity: 724013.15738663,
+8|odi-dev  |   marketcap: 0,
+8|odi-dev  |   last_updated: "2025-07-14T20:31:37.000Z",
+8|odi-dev  |   volume24hUSD: 4446524.830313826,
+8|odi-dev  |   price24hChangePercent: 57.556499266748204,
+8|odi-dev  | }
+*/
   // Get all trending tokens
-  let tokens = '';
+  const trendingData = (await runtime.getCache<IToken[]>('tokens_solana')) || [];
   if (!trendingData.length) {
     logger.warn('No trending tokens found in cache');
   } else {
-    let index = 1;
-    tokens += 'address, price (in USD), 24h change %, liquidity (in USD)\n'
+    // we need MCAP so we can price appropriately
+    tokens += 'index, price (in USD), 24h change %, liquidity (in USD)\n'
     trendingData.length = 25
+    let index = 1;
     for (const token of trendingData) {
-      tokens += [token.address, token.price.toFixed(4), token.price24hChangePercent.toFixed(2), token.liquidity.toFixed(2)].join(',') + '\n'
+      // has a marketcap but seems to always be 0
+      //console.log('token', token)
+      // maybe symbol is better than index
+      tokens += [index, token.price.toFixed(4), token.price24hChangePercent.toFixed(2), token.liquidity.toFixed(2)].join(',') + '\n'
       index++;
     }
   }
@@ -143,7 +173,7 @@ async function generateBuyPrompt(runtime) {
 
 async function pickToken(runtime, prompt, retries = 3) {
   if (retries !== 3) console.log('pickToken retries left', retries)
-  const requiredFields = ['recommend_buy_chain', 'reason', 'recommend_buy_address'];
+  const requiredFields = ['recommend_buy_chain', 'reason', 'recommend_buy_index'];
   // we have additional checks
 
   // this will retry up to 3 times * 3
@@ -176,6 +206,7 @@ async function pickToken(runtime, prompt, retries = 3) {
       return false;
     }
   }
+
   if (response.buy_amount > 15) {
     console.log('llm_strat - Bad buy amount, too high');
     if (retries) {
@@ -193,6 +224,31 @@ async function pickToken(runtime, prompt, retries = 3) {
     return false;
   }
 
+  const lowPrice = parseFloat(response.exit_price_drop_threshold)
+  if (!lowPrice) {
+    console.log('zero lowPrice')
+    if (retries) {
+      return pickToken(runtime, prompt, retries - 1);
+    }
+    return false
+  }
+
+  // translate recommend_buy_index into recommend_buy_address
+  const trendingData = (await runtime.getCache<IToken[]>('tokens_solana')) || [];
+  //console.log('trendingData', trendingData)
+  //console.log('test', trendingData[response.recommend_buy_index])
+  response.recommend_buy_address = trendingData[response.recommend_buy_index - 1].address
+  //console.log('index', response.recommend_buy_index, 'became', response.recommend_buy_address, 'test', trendingData[response.recommend_buy_index - 1])
+
+  const solanaService = await acquireService(runtime, 'chain_solana', 'llm trading strategy');
+  if (!solanaService.validateAddress(response.recommend_buy_address)) {
+    console.log('llm_strat no a valid address', response.recommend_buy_address)
+    if (retries) {
+      return pickToken(runtime, prompt, retries - 1);
+    }
+    return false
+  }
+
   return response
 }
 
@@ -201,9 +257,14 @@ const generateBuySignalRetries = 3
 // maybe should be a class to reuse the service handles
 async function generateBuySignal(runtime, strategyService, hndl, retries = generateBuySignalRetries) {
   if (retries !== generateBuySignalRetries) console.log('generateBuySignal retries left', retries)
+
+  // wallet count?
+
   const prompt = await generateBuyPrompt(runtime)
+  //console.log('prompt', prompt)
   const response = await pickToken(runtime, prompt)
-  console.log('llm_strat trending response', response);
+  // ask will expose this with think tags
+  //console.log('llm_strat trending response', response);
 
   if (!response) {
     // up to 27 llm calls
@@ -223,10 +284,20 @@ async function generateBuySignal(runtime, strategyService, hndl, retries = gener
     response.recommend_buy_chain,
     response.recommend_buy_address
   );
+  // priceSol, priceUsd, liquidity, priceChange24h
   console.log(response.recommend_buy_chain, response.recommend_buy_address, 'got token info', token)
   if (!token) {
     console.log('no token data, guessing bad generation')
     return;
+  }
+
+  const estCurPrice = parseFloat(response.current_price)
+  // vs 0.007 real vs 0.0007 est
+  const curPriceDelta = Math.abs(estCurPrice - token.priceUsd)
+  console.log('curPriceDelta', curPriceDelta)
+  // 0.0005574602241234078
+  if (curPriceDelta > 0.0006) {
+    console.log('LLM is a bit off...')
   }
 
   // amount check
@@ -248,15 +319,7 @@ async function generateBuySignal(runtime, strategyService, hndl, retries = gener
     return false
   }
 
-  const solanaService = await acquireService(runtime, 'chain_solana', 'llm trading strategy');
-  if (!solanaService.validateAddress(response.recommend_buy_address)) {
-    console.log('llm_strat no a valid address', response.recommend_buy_address)
-    if (retries) {
-      return generateBuySignal(runtime, strategyService, hndl, retries - 1);
-    }
-    return false
-  }
-
+  // validateTokenForTrading (look at liquidity/volume/suspicious atts)
   // rugcheck
   const rugcheckResponse = await fetch(`https://api.rugcheck.xyz/v1/tokens/${response.recommend_buy_address}/report`, {
     method: 'GET',
@@ -275,6 +338,9 @@ async function generateBuySignal(runtime, strategyService, hndl, retries = gener
   if (dangerRisks.length) {
     console.log('dangerRisks', dangerRisks)
     // FIXME: remove from top tokens...
+
+    // setCacheExp(runtime, 'rugTokens', [], 600)
+
     if (retries) {
       return generateBuySignal(runtime, strategyService, hndl, retries - 1);
     }
@@ -292,12 +358,10 @@ async function generateBuySignal(runtime, strategyService, hndl, retries = gener
     }
     return false
   }
-
-
   //const topHolders = rugcheckData.risks.find(r => r.name = 'Top 10 holders high ownership')
   //const lpWarning = rugcheckData.risks.find(r => r.name = 'Large Amount of LP Unlocked')
 
-  // validateTokenForTrading (look at liquidity/volume/suspicious atts)
+  const solanaService = await acquireService(runtime, 'chain_solana', 'llm trading strategy');
 
   // now it's a signal
 
@@ -322,12 +386,13 @@ async function generateBuySignal(runtime, strategyService, hndl, retries = gener
       if (bal === -1) continue
 
       // keep gas for selling
+      // Chichen says 0.05
       if (bal < 0.005) {
         console.log('not enough SOL balance in', w.publicKey, 'bal', bal)
         continue
       }
       const amt = await scaleAmount(w, bal, response) // uiAmount
-      console.log(w.publicKey, 'bal', bal, 'amt (ui)', amt, 'SOL spend. Has', (bal * 1e9), 'lamports')
+      console.log(w.publicKey, 'bal', bal, 'amt (ui)', amt, 'SOL spend. Has', Math.round(bal * 1e9), 'lamports')
       // FIXME: what amt is too miniscule for this coin buy (not worth the tx fees?)
 
       const kp = {
@@ -350,7 +415,8 @@ async function generateBuySignal(runtime, strategyService, hndl, retries = gener
         amount: Math.round(amt * 1e9), // amount of input Token in atomic units
         keypair: kp
       }], response)
-      await new Promise((waitResolve) => setTimeout(waitResolve, 1000));
+      // jup handles this itself now
+      //await new Promise((waitResolve) => setTimeout(waitResolve, 1000));
       //console.log('buy res', res)
 
       if (!res) {
@@ -367,6 +433,7 @@ async function generateBuySignal(runtime, strategyService, hndl, retries = gener
           chain: response.recommend_buy_chain.toLowerCase(),
           token: response.recommend_buy_address,
           publicKey: kp.publicKey,
+          usdAmount: (result.outAmount / result.outDecimal) * token.priceUsd, // optional
           // is this total or per token? this must be total I guess
           solAmount: amt, // in uiAmount
           // should this be uiAmount too?
@@ -375,6 +442,11 @@ async function generateBuySignal(runtime, strategyService, hndl, retries = gener
           // is this right? yes but we don't need to store, since we can calculate
           //entryPrice: res[0].outAmount / amt,
           timestamp: Date.now(),
+          tokenPriceUsd: token.priceUsd, // optional
+          // can be calculated from the remaining
+          //tokenPriceSol: token.priceSol,
+          tokenLiquidity: token.liquidity, // optional
+          // priceChange24h percentage?
           exitConditions: {
             // create consistent with original goals to make long term planning
             reasoning: response.exit_conditions,
@@ -390,12 +462,14 @@ async function generateBuySignal(runtime, strategyService, hndl, retries = gener
             targetPrice: response.exit_target_price // high exit
           }
         };
+        console.log('bought', position.id, response.recommend_buy_address, 'in', w.publicKey, 'signature', result.signature)
         //console.log('position', position)
 
         // Open position in strategy service
         await strategyService.open_position(hndl, position);
       } else {
         console.warn('no success on Buy')
+        // if slippage error, retry?
       }
     }
   }
