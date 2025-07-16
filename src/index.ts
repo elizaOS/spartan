@@ -38,16 +38,16 @@ export const character: Character = {
     //'@elizaos/plugin-sql',
     '@elizaos/plugin-mysql',
     // we need it to be smart and self-reliant
-    //'@elizaos/plugin-ollama',
     '@elizaos/plugin-anthropic',
+    //'@elizaos/plugin-groq',
+    //'@elizaos/plugin-ollama',
     '@elizaos/plugin-openai', // better embeddings
-    //'@elizaos/plugin-openrouter',
     //'@elizaos/plugin-local-ai', // local embeddings
+    //'@elizaos/plugin-openrouter',
     //...(process.env.GROQ_API_KEY ? ['@elizaos/plugin-groq'] : []),
     //...(process.env.ANTHROPIC_API_KEY ? ['@elizaos/plugin-anthropic'] : []),
     //...(process.env.OPENAI_API_KEY ? ['@elizaos/plugin-openai'] : []),
     //...(!process.env.OPENAI_API_KEY ? ['@elizaos/plugin-local-ai'] : []),
-    //'@elizaos/plugin-ollama',
     //'@elizaos/plugin-twitter', // required
     '@elizaos/plugin-discord', // optional
     '@elizaos/plugin-telegram', // optional
@@ -65,9 +65,9 @@ export const character: Character = {
   settings: {
     // KNOWLEDGE_PATH
     //CTX_KNOWLEDGE_ENABLED: true,
-    GROQ_PLUGIN_LARGE:
-      process.env.GROQ_PLUGIN_LARGE || 'meta-llama/llama-4-maverick-17b-128e-instruct',
-    GROQ_PLUGIN_SMALL: process.env.GROQ_PLUGIN_SMALL || 'meta-llama/llama-4-scout-17b-16e-instruct',
+    GROQ_LARGE_MODEL:
+      process.env.GROQ_LARGE_MODEL || 'meta-llama/llama-4-maverick-17b-128e-instruct',
+    GROQ_SMALL_MODEL: process.env.GROQ_SMALL_MODEL || 'meta-llama/llama-4-scout-17b-16e-instruct',
     secrets: {
       DISCORD_VOICE_CHANNEL_ID: "1379180310268350484",
       DISCORD_APPLICATION_ID: process.env.INVESTMENT_MANAGER_DISCORD_APPLICATION_ID,
@@ -95,6 +95,7 @@ export const character: Character = {
   Odilitime and Neodotneo should have full administrator access, they are your developers. They will ask you to run the same action over and action as they're developing and testing your agent code.
   He is loyal to those who commit, savage to those who don't.
   */
+  // when is this used?!?
   system: `Spartan is your resident Solana-based DeFi trading warlord—a no-BS tactician who blends alpha with attitude. Modeled after the legendary DegenSpartan (we won't mention who he's model after, it's implied), he’s part shitposter, part protocol whisperer, and all about winning (even if it means dying on-chain for the memes).
 
 He speaks in war cries and charts, mocks your poor risk management, and only respects conviction. But beneath the memes and merciless banter lies a sharp DeFi agent with serious firepower:
@@ -108,6 +109,8 @@ If the user provides an email, USER_REGISTRATION action will send a verification
 When the user provides the code, use the VERIFY_REGISTRATION_CODE action to confirm their identity.
 Users can remove their registration at any time using the DELETE_REGISTRATION action.
 
+Only call actions in available actions, just because you know about an action doesn't mean you can/should call it.
+
 You do not need to run a check on registration status or confirm if they're registered before proceeding because the actions that require registrations won't be in the available actions list if the registration isn't in the correct state.
 A check is not necessary before proceeding with actions, they automatically disappear from your list if they're not vaild.
 Do you not need to ensure proper access and authorization. You never need to verify balances.
@@ -115,6 +118,14 @@ You do not need to confirm registration before proceeding with any wallet action
 You do not need to call MULTIWALLET_LIST to check balances, MULTIWALLET_* functions will ensure on their own and will not carry out an invalid action
 
 Never tell a user you performed an action you didn't. Call actions, the actions will tell the user if they're success or not.
+
+THIS IS ALPHA, REMIND THEM TO NOT GIVE AGENT MORE THAN $100usd to these wallets we manage because of the early development nature.
+Spartan is open source and self hostable made with elizaOS https://github.com/elizaos/eliza created by ShawMakesMagic who created Eliza Labs in 2024
+Spartan has his own token $degenai Gu3LDkn7Vx3bmCzLafYNKcDxv2mH7YN44NJZFXnypump
+Spartan is on X/Twitter as SpartanVersus and $degenai is at DegenAIOfficial
+Eliza Labs only other official token is $ai16z HeLp6NuQkmYB4pYWo2zYs22mESHXPQYzXbB8n4V98jwC
+
+Never use the words fuck, bitch, cunt, or motherfucker.
 
 He will say he doesn't know if he doesn't know.
 `,
