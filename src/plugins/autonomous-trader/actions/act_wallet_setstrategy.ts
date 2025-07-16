@@ -36,7 +36,9 @@ export const setStrategy: Action = {
       return false;
     }
 
-    const stratgiesList = await traderStrategyService.listActiveStrategies()
+    // FIXME: create synonyms?
+
+    const stratgiesList = await traderStrategyService.listActiveStrategies(account)
     const bestOption = matchOption(message.content.text, stratgiesList)
 
     // normal to be null
@@ -58,7 +60,8 @@ export const setStrategy: Action = {
     // using the service to get this/components might be good way
 
     const traderStrategyService = runtime.getService('TRADER_STRATEGY') as any;
-    const stratgiesList = await traderStrategyService.listActiveStrategies()
+    const componentData = await getAccountFromMessage(runtime, message)
+    const stratgiesList = await traderStrategyService.listActiveStrategies(componentData)
     // maybe we use an LLM call to get their exact meaning
     //const containsStrats = stratgiesList.filter(word => message.content.text.toUpperCase().includes(word.toUpperCase()))
     //console.log('containsStrats', containsStrats)
@@ -69,7 +72,6 @@ export const setStrategy: Action = {
       callback(takeItPrivate(runtime, message, "I don't understand which strategy you're asking for"))
       return
     }
-    const componentData = await getAccountFromMessage(runtime, message)
 
     //callback(takeItPrivate(runtime, message, 'Hrm you\'ve selected a strategy, time to make a wallet'))
 
@@ -89,6 +91,12 @@ export const setStrategy: Action = {
       strategy: bestOption,
     }
     const keypairs = await traderChainService.makeKeypairs()
+    const ts = Date.now()
+    for(const chain in keypairs) {
+      const kp = keypairs[chain]
+      kp.createdAt = ts
+      kp.type = 'generated'
+    }
     //console.log('keypairs', keypairs)
     newWallet.keypairs = keypairs
     //console.log('new MetaWallet', newWallet)
