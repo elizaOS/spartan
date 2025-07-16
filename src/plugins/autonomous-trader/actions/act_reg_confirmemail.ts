@@ -8,16 +8,10 @@ import {
   type UUID,
   createUniqueUuid,
 } from '@elizaos/core';
-import { takeItPrivate, getDataFromMessage, getAccountFromMessage, HasEntityIdFromMessage, getEntityIdFromMessage } from '../utils'
+import { takeItPrivate, getDataFromMessage, getAccountFromMessage, HasEntityIdFromMessage, getEntityIdFromMessage, findGeneratedCode } from '../utils'
 import CONSTANTS from '../constants'
 import { interface_user_update } from '../interfaces/int_users'
 import { v4 as uuidv4 } from 'uuid';
-
-function findGeneratedCode(message, length) {
-  const pattern = new RegExp(`\\b[A-Za-z0-9]{${length}}\\b`);
-  const match = message.match(pattern);
-  return match ? match[0] : null;
-}
 
 export const checkRegistrationCode: Action = {
   name: 'VERIFY_REGISTRATION_CODE',
