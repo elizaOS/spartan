@@ -27,6 +27,22 @@ export class TradeStrategyService extends Service {
           console.log(asking, 'Acquired', serviceType, 'service...');
         }
       }
+
+      const serviceType2 = 'AUTONOMOUS_TRADER_INTERFACE_WALLETS'
+      this.walletIntService = this.runtime.getService(serviceType2) as any;
+      new Promise(async resolve => {
+        while (!this.walletIntService) {
+          console.log(asking, 'waiting for', serviceType2, 'service...');
+          this.walletIntService = this.runtime.getService(serviceType2) as any;
+          if (!this.walletIntService) {
+            await new Promise((waitResolve) => setTimeout(waitResolve, 1000));
+          } else {
+            console.log(asking, 'Acquired', serviceType2, 'service...');
+          }
+        }
+      })
+
+
     })
   }
 
@@ -54,8 +70,27 @@ export class TradeStrategyService extends Service {
     return false
   }
 
-  async listActiveStrategies() {
-    return Object.values(this.strategyRegistry).map(s => s.name)
+  async listActiveStrategies(account) {
+    let list = Object.values(this.strategyRegistry)
+    //console.log('listActiveStrategies - list', list)
+    // these are now context based on who the user is
+    // pass message in? user EntityId might be better
+    // still need to resolve to account, so maybe account is best...
+    // determine holdings
+    //console.log('listActiveStrategies - account', account)
+    let includePremium = false
+    if (account.holderCheck) {
+      includePremium = await this.walletIntService.walletContainsMinimum(account.holderCheck, 'Gu3LDkn7Vx3bmCzLafYNKcDxv2mH7YN44NJZFXnypump', 1_000_000)
+      if (!includePremium) {
+        includePremium = await this.walletIntService.walletContainsMinimum(account.holderCheck, 'HeLp6NuQkmYB4pYWo2zYs22mESHXPQYzXbB8n4V98jwC', 10_000)
+      }
+    }
+    //console.log('listActiveStrategies - includePremium', includePremium)
+    if (!includePremium) {
+      list = list.filter(s => !s.premium)
+      //console.log('listActiveStrategies - filtered', list)
+    }
+    return list.map(s => s.name)
   }
 
   // why is there here, why even bother stopping here
