@@ -67,7 +67,9 @@ sve:validate message {
 
     // Hrm youve already signed up,
     const traderChainService = runtime.getService('TRADER_STRATEGY') as any;
-    const stratgiesList = await traderChainService.listActiveStrategies()
+    const account = await getAccountFromMessage(runtime, message)
+    //console.log('account', account)
+    const stratgiesList = await traderChainService.listActiveStrategies(account)
     //console.log('stratgiesList', stratgiesList)
     const output = takeItPrivate(runtime, message, 'Please select an available strategies for the wallet: \n-' + stratgiesList.join('\n-') + '\n')
     callback(output)
