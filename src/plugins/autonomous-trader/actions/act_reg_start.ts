@@ -10,7 +10,7 @@ import {
 } from '@elizaos/core';
 import { v4 as uuidv4 } from 'uuid';
 import nodemailer from 'nodemailer';
-import { takeItPrivate, HasEntityIdFromMessage, getEntityIdFromMessage, getDataFromMessage } from '../utils'
+import { takeItPrivate, HasEntityIdFromMessage, getEntityIdFromMessage, extractEmails, getDataFromMessage, generateRandomString } from '../utils'
 import CONSTANTS from '../constants'
 
 // Create an SMTP transporter
@@ -23,24 +23,6 @@ const transporter = nodemailer.createTransport({
     pass: process.env.SMTP_PASSWORD        // your SMTP password or app password
   }
 });
-
-function generateRandomString(length) {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let result = '';
-  const charsLength = chars.length;
-
-  for (let i = 0; i < length; i++) {
-    result += chars.charAt(Math.floor(Math.random() * charsLength));
-  }
-
-  return result;
-}
-
-function extractEmails(text) {
-  const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-  const matches = text.match(emailRegex);
-  return matches || [];
-}
 
 async function sendVerifyEmail(address, regCode) {
   console.log('sending verify email to', address)
