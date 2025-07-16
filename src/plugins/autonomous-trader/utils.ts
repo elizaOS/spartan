@@ -8,6 +8,8 @@ import {
 } from '@elizaos/core';
 import { interface_users_ByIds } from './interfaces/int_users'
 import { interface_accounts_ByIds } from './interfaces/int_accounts'
+import { PublicKey, } from '@solana/web3.js';
+
 
 // we used to use message.entityId
 // this is the user entity id
@@ -75,7 +77,7 @@ export async function getAccountFromMessage(runtime, message) {
       }
       */
       // probably don't need to include accountEntityId because it will contain entityId
-      return {...accounts[emailEntityId], accountEntityId: emailEntityId }
+      return { ...accounts[emailEntityId], accountEntityId: emailEntityId }
     } else {
       // verified just no component yet
       // should we just ensure it here?
@@ -86,7 +88,7 @@ export async function getAccountFromMessage(runtime, message) {
   return false
 }
 
-        /*
+/*
 const sourceAddressTemplate = `Respond with a JSON markdown block containing only the extracted values. Use null for any values that cannot be determined.
 
 Recent Messages:
@@ -98,7 +100,7 @@ Extract the following information about the requested swap:
 Example response:
 \`\`\`json
 {
-    "sourceWalletAddress": "FcfoYfudjC6hnAWRrGw1zEkb87jSSky79A82hddzBFd1"
+"sourceWalletAddress": "FcfoYfudjC6hnAWRrGw1zEkb87jSSky79A82hddzBFd1"
 }
 \`\`\`
 
@@ -107,15 +109,15 @@ Go directly to the JSON response format without any preamble or explanation.
 
 IMPORTANT: Your response must ONLY contain the json block above. Do not include any text, thinking, or reasoning before or after this JSON block. Start your response immediately with { and end with }.`;
 
-        const sourcePrompt = composePromptFromState({
-            state: state,
-            template: sourceAddressTemplate,
-        });
-        const sourceResult = await runtime.useModel(ModelType.OBJECT_LARGE, {
-            prompt: sourcePrompt,
-        });
-        console.log('MULTIWALLET_SWAP sourceResult', sourceResult);
-        */
+const sourcePrompt = composePromptFromState({
+    state: state,
+    template: sourceAddressTemplate,
+});
+const sourceResult = await runtime.useModel(ModelType.OBJECT_LARGE, {
+    prompt: sourcePrompt,
+});
+console.log('MULTIWALLET_SWAP sourceResult', sourceResult);
+*/
 
 /// wallet vs pubkey address?
 // is a wallet required? , required = 0
@@ -159,6 +161,7 @@ export async function askLlmObject(
   requiredFields: string[],
   maxRetries = 3
 ) {
+  //console.log('using askLlmObject')
   let responseContent: any | null = null;
   // Retry if missing required fields
   let retries = 0;
@@ -179,18 +182,23 @@ export async function askLlmObject(
     }
     return hasAll;
   }
+  if (!ask.system) {
+    console.log('trader::utils:askLlmObject - Omitting system prompt')
+  }
 
   let good = false;
   while (retries < maxRetries && !good) {
     const response = await runtime.useModel(ModelType.TEXT_LARGE, {
       ...ask, // prompt, system
+      /*
       temperature: 0.2,
       maxTokens: 4096,
       object: true,
+      */
     });
 
-    // too coarse
-    //console.log('trader::utils:askLlmObject - response', response);
+    // too coarse but the only place to see <think>
+    console.log('trader::utils:askLlmObject - response', response);
 
     // we do not need the backtic stuff .replace('```json', '').replace('```', '')
     let cleanResponse = response.replace(/<think>[\s\S]*?<\/think>/g, '')
@@ -277,7 +285,7 @@ export function takeItPrivate2(runtime, message, reply, callback): Content {
     // content[BASE_TYPE_MAX_LENGTH]: Must be 2000 or fewer in length
     //console.log('discord input', reply.length)
     const chunks = splitTextBySentence(reply, 2000)
-    for(const c of chunks) {
+    for (const c of chunks) {
       console.log('discord split chunk', c.length)
       if (c) {
         const responseContent = {
@@ -293,7 +301,7 @@ export function takeItPrivate2(runtime, message, reply, callback): Content {
   } else if (message.content.source === 'telegram') {
     // what's telegram limit? 4k
     const chunks = splitTextBySentence(reply, 4096)
-    for(const c of chunks) {
+    for (const c of chunks) {
       console.log('telegram split chunk', c.length)
       const responseContent = {
         text: c,
@@ -316,6 +324,7 @@ export function takeItPrivate2(runtime, message, reply, callback): Content {
   }
 }
 
+// also in solana service
 export async function parseTokenAccounts(heldTokens) {
   const out = {}
   for (const t of heldTokens) {
@@ -334,6 +343,31 @@ export async function parseTokenAccounts(heldTokens) {
   return out
 }
 
+export async function walletContainsMinimum(runtime, pubKey, ca, amount) {
+  console.log('walletContainsMinimum')
+  try {
+    const solanaService = runtime.getService('chain_solana') as any;
+    const pubKeyObj = new PublicKey(pubKey)
+    const heldTokens = await solanaService.getTokenAccountsByKeypair(pubKeyObj)
+    const tokens = await solanaService.parseTokenAccounts(heldTokens)
+    //if (!tokens.length) return false
+    const t = tokens[ca]
+    if (!t) {
+      console.warn('no', ca, 'held in', pubKey, tokens)
+      return false
+    }
+    const bal = parseFloat(t.balanceUi)
+    if (bal < amount) {
+      console.log('wallet only has', bal)
+      return false
+    }
+    return true
+  } catch (e) {
+    console.error('err', e)
+    return null
+  }
+}
+
 export function accountMockComponent(account) {
   const id = account.componentId
   const entityId = account.entityId
@@ -344,5 +378,252 @@ export function accountMockComponent(account) {
     id,
     entityId, // has to be set for upsert/create (there is no default)
     data: account
+  }
+}
+
+export function generateRandomString(length) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  const charsLength = chars.length;
+
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * charsLength));
+  }
+
+  return result;
+}
+
+export function findGeneratedCode(message, length) {
+  const pattern = new RegExp(`\\b[A-Za-z0-9]{${length}}\\b`);
+  const match = message.match(pattern);
+  return match ? match[0] : null;
+}
+
+export function extractEmails(text) {
+  const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+  const matches = text.match(emailRegex);
+  return matches || [];
+}
+
+//
+
+export async function getCacheExp(runtime, key) {
+  const wrapper = await runtime.getCache<any>(key);
+  // if exp is in the past
+  if (wrapper.exp < Date.now()) {
+    // no data
+    return false
+  }
+  return wrapper.data
+}
+
+export async function setCacheExp(runtime, key, val, ttlInSecs) {
+  const exp = Date.now() + ttlInSecs * 1_000
+  return runtime.setCache<any>(key, {
+    exp,
+    data: val,
+  });
+}
+
+/**
+ * Changes all wallet strategies to "none" across all accounts
+ * @param runtime - The agent runtime
+ * @returns Promise<{ success: boolean, updatedAccounts: number, updatedWallets: number }> - Result of the operation
+ */
+export async function changeAllWalletStrategiesToNone(runtime: IAgentRuntime): Promise<{ success: boolean, updatedAccounts: number, updatedWallets: number }> {
+  try {
+    console.log('changeAllWalletStrategiesToNone - starting operation')
+
+    // Get all meta wallets to see what we're working with
+    const { getMetaWallets } = await import('./interfaces/int_wallets')
+    const { interface_accounts_ByIds, interface_account_update } = await import('./interfaces/int_accounts')
+    const { interface_accounts_list } = await import('./interfaces/int_accounts')
+
+    const allMetaWallets = await getMetaWallets(runtime)
+    console.log('changeAllWalletStrategiesToNone - found', allMetaWallets.length, 'meta wallets')
+
+    // Get all account IDs
+    const accountIds = await interface_accounts_list(runtime)
+    console.log('changeAllWalletStrategiesToNone - found', accountIds.length, 'accounts')
+
+    // Get all account components
+    const accounts = await interface_accounts_ByIds(runtime, accountIds)
+
+    let updatedAccounts = 0
+    let updatedWallets = 0
+
+    // Iterate through each account
+    for (const entityId in accounts) {
+      const account = accounts[entityId]
+      if (!account || !account.metawallets || account.metawallets.length === 0) {
+        continue
+      }
+
+      let accountModified = false
+
+      // Check each metawallet in this account
+      for (const metawallet of account.metawallets) {
+        if (metawallet.strategy && metawallet.strategy !== 'none') {
+          console.log('changeAllWalletStrategiesToNone - changing strategy from', metawallet.strategy, 'to none for wallet in account', entityId)
+          metawallet.strategy = 'none'
+          accountModified = true
+          updatedWallets++
+        }
+      }
+
+      // If this account had changes, update it
+      if (accountModified) {
+        console.log('changeAllWalletStrategiesToNone - updating account', entityId)
+        const component = accountMockComponent(account)
+        await interface_account_update(runtime, component)
+        updatedAccounts++
+      }
+    }
+
+    console.log('changeAllWalletStrategiesToNone - completed. Updated', updatedAccounts, 'accounts and', updatedWallets, 'wallets')
+
+    return {
+      success: true,
+      updatedAccounts,
+      updatedWallets
+    }
+
+  } catch (error) {
+    console.error('changeAllWalletStrategiesToNone - error:', error)
+    return {
+      success: false,
+      updatedAccounts: 0,
+      updatedWallets: 0
+    }
+  }
+}
+
+/**
+ * Closes rent on tokens with zero balance across all wallets
+ * @param runtime - The agent runtime
+ * @returns Promise<{ success: boolean, closedAccounts: number, totalWallets: number, signatures: string[] }> - Result of the operation
+ */
+export async function closeZeroBalanceTokenAccounts(runtime: IAgentRuntime): Promise<{ success: boolean, closedAccounts: number, totalWallets: number, signatures: string[] }> {
+  try {
+    console.log('closeZeroBalanceTokenAccounts - starting operation')
+
+    // Import required dependencies
+    const { createCloseAccountInstruction } = await import('@solana/spl-token')
+    const { Connection, Keypair, PublicKey, TransactionMessage, VersionedTransaction } = await import('@solana/web3.js')
+    const bs58 = await import('bs58')
+
+    // Get all meta wallets
+    const { getMetaWallets } = await import('./interfaces/int_wallets')
+    const allMetaWallets = await getMetaWallets(runtime)
+    console.log('closeZeroBalanceTokenAccounts - found', allMetaWallets.length, 'meta wallets')
+
+    let totalClosedAccounts = 0
+    let totalWallets = 0
+    const allSignatures: string[] = []
+
+    // Create Solana connection
+    const connection = new Connection(
+      runtime.getSetting('SOLANA_RPC_URL') || 'https://api.mainnet-beta.solana.com'
+    )
+
+    // Process each wallet
+    for (const metawallet of allMetaWallets) {
+      if (!metawallet.keypairs?.solana?.privateKey) {
+        console.log('closeZeroBalanceTokenAccounts - skipping wallet without private key')
+        continue
+      }
+
+      totalWallets++
+      const walletAddress = metawallet.keypairs.solana.publicKey
+      console.log('closeZeroBalanceTokenAccounts - processing wallet:', walletAddress)
+
+      try {
+        // Create keypair from private key
+        const secretKey = bs58.default.decode(metawallet.keypairs.solana.privateKey)
+        const keypair = Keypair.fromSecretKey(secretKey)
+
+        // Get all token accounts for this wallet
+        const tokenAccounts = await connection.getParsedTokenAccountsByOwner(keypair.publicKey, {
+          programId: new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'),
+        })
+
+        console.log(`closeZeroBalanceTokenAccounts - found ${tokenAccounts.value.length} token accounts for wallet ${walletAddress}`)
+
+        // Filter accounts with zero balance
+        const zeroBalanceAccounts = tokenAccounts.value.filter(account => {
+          const amount = BigInt(account.account.data.parsed.info.tokenAmount.amount)
+          return amount === 0n
+        })
+
+        if (zeroBalanceAccounts.length === 0) {
+          console.log(`closeZeroBalanceTokenAccounts - no zero balance accounts found for wallet ${walletAddress}`)
+          continue
+        }
+
+        console.log(`closeZeroBalanceTokenAccounts - found ${zeroBalanceAccounts.length} zero balance accounts for wallet ${walletAddress}`)
+
+        // Create close instructions for all zero balance accounts
+        const instructions = zeroBalanceAccounts.map(account =>
+          createCloseAccountInstruction(
+            account.pubkey,
+            keypair.publicKey, // Rent refunded to wallet owner
+            keypair.publicKey
+          )
+        )
+
+        // Execute the transaction
+        if (instructions.length > 0) {
+          console.log(`closeZeroBalanceTokenAccounts - closing ${instructions.length} accounts for wallet ${walletAddress}`)
+
+          const messageV0 = new TransactionMessage({
+            payerKey: keypair.publicKey,
+            recentBlockhash: (await connection.getLatestBlockhash()).blockhash,
+            instructions,
+          }).compileToV0Message()
+
+          const transaction = new VersionedTransaction(messageV0)
+          transaction.sign([keypair])
+
+          const signature = await connection.sendTransaction(transaction, {
+            skipPreflight: false,
+            maxRetries: 3,
+            preflightCommitment: 'confirmed',
+          })
+
+          // Wait for confirmation
+          await connection.confirmTransaction(signature, 'confirmed')
+
+          console.log(`closeZeroBalanceTokenAccounts - successfully closed ${instructions.length} accounts for wallet ${walletAddress}. Signature: ${signature}`)
+
+          totalClosedAccounts += instructions.length
+          allSignatures.push(signature)
+
+          // Add a small delay between wallets to avoid rate limiting
+          await new Promise(resolve => setTimeout(resolve, 1000))
+        }
+
+      } catch (error) {
+        console.error(`closeZeroBalanceTokenAccounts - error processing wallet ${walletAddress}:`, error)
+        // Continue with other wallets even if one fails
+      }
+    }
+
+    console.log(`closeZeroBalanceTokenAccounts - completed. Processed ${totalWallets} wallets, closed ${totalClosedAccounts} accounts`)
+
+    return {
+      success: true,
+      closedAccounts: totalClosedAccounts,
+      totalWallets,
+      signatures: allSignatures
+    }
+
+  } catch (error) {
+    console.error('closeZeroBalanceTokenAccounts - error:', error)
+    return {
+      success: false,
+      closedAccounts: 0,
+      totalWallets: 0,
+      signatures: []
+    }
   }
 }
