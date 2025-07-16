@@ -152,14 +152,14 @@ sve:validate message {
 
         if (isValid) {
           // save it
-          callback(takeItPrivate(runtime, message, `Sure dude`))
+          callback(takeItPrivate(runtime, message, `You have been verified, additional strategies are unlocked`))
           const componentData = await getAccountFromMessage(runtime, message)
           componentData.holderCheck = nonceSetup.pubkey
           console.log('componentData', componentData)
           const component = accountMockComponent(componentData)
           await interface_account_update(runtime, component)
         } else {
-          callback(takeItPrivate(runtime, message, `No way`))
+          callback(takeItPrivate(runtime, message, `Incorrect`))
         }
         return
       }
