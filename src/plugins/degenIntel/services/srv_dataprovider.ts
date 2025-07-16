@@ -46,6 +46,23 @@ export class TradeDataProviderService extends Service {
       }
     })
 
+    // not really used
+    /*
+    const serviceType3 = 'AUTONOMOUS_TRADER_INTERFACE_ACCOUNTS'
+    this.accountIntService = this.runtime.getService(serviceType3) as any;
+    new Promise(async resolve => {
+      while (!this.accountIntService) {
+        console.log(asking, 'waiting for', serviceType3, 'service...');
+        this.accountIntService = this.runtime.getService(serviceType3) as any;
+        if (!this.accountIntService) {
+          await new Promise((waitResolve) => setTimeout(waitResolve, 1000));
+        } else {
+          console.log(asking, 'Acquired', serviceType3, 'service...');
+        }
+      }
+    })
+    */
+
     // should be available by now, since it's in the same plugin
     // but it's not?
     const serviceType3 = 'TRADER_STRATEGY'
@@ -58,6 +75,21 @@ export class TradeDataProviderService extends Service {
           await new Promise((waitResolve) => setTimeout(waitResolve, 1000));
         } else {
           console.log(asking, 'Acquired', serviceType3, 'service...');
+        }
+      }
+    })
+
+    // const solanaService = this.runtime.getService('chain_solana') as any;
+    const serviceType4 = 'chain_solana'
+    this.solanaService = this.runtime.getService(serviceType4) as any;
+    new Promise(async resolve => {
+      while (!this.solanaService) {
+        console.log(asking, 'waiting for', serviceType4, 'service...');
+        this.solanaService = this.runtime.getService(serviceType4) as any;
+        if (!this.solanaService) {
+          await new Promise((waitResolve) => setTimeout(waitResolve, 1000));
+        } else {
+          console.log(asking, 'Acquired', serviceType4, 'service...');
         }
       }
     })
@@ -121,6 +153,9 @@ export class TradeDataProviderService extends Service {
     console.log('positions', openPositions + '/' + positions.length, 'watching', tokens.length, 'CAs')
     console.log('wallets', Object.keys(solanaWallets))
     // get balances for all these wallets
+    //const balances = await this.solanaService.getBalancesByAddrs(Object.keys(solanaWallets))
+    //console.log('balances', balances) // wSOL balance
+    // we could cull wallets below a threshold
 
     // take list of CA and get token information
     const services = this.forEachReg('lookupService')
@@ -137,7 +172,7 @@ export class TradeDataProviderService extends Service {
         console.Warn('unsupported chain on position', p)
         return false
       }
-      const solanaService = this.runtime.getService('chain_solana') as any;
+      //const solanaService = this.runtime.getService('chain_solana') as any;
 
       // make sure we have enough gas
       // check solana balance
@@ -168,7 +203,7 @@ export class TradeDataProviderService extends Service {
       // need to know decimals
       //console.log('publicKey', publicKey)
       const pubKeyObj = new PublicKey(publicKey)
-      const walletTokens = await solanaService.getTokenAccountsByKeypair(pubKeyObj)
+      const walletTokens = await this.solanaService.getTokenAccountsByKeypair(pubKeyObj)
       //console.log('looking for', p.token)
       //console.log('walletTokens', walletTokens.map(t => t.pubkey.toString()))
       const tokenSolanaInfo = walletTokens.find(wt => wt.account.data.parsed.info.mint === p.token)
@@ -177,7 +212,7 @@ export class TradeDataProviderService extends Service {
         //console.log('walletTokens', walletTokens.map(t => t.account.data.parsed.info.mint))
         console.log('We no longer hold', p.token, 'at all')
         await this.strategyService.close_position(hndl, kp.publicKey, p.id, {
-          type: 'unknwon',
+          type: 'unknown', // "unknwon" is a backwards compatible value
         });
         return false
       }
@@ -185,11 +220,13 @@ export class TradeDataProviderService extends Service {
       const decimals = tokenSolanaInfo.account.data.parsed.info.tokenAmount.decimals;
       const amountRaw = tokenSolanaInfo.account.data.parsed.info.tokenAmount.amount;
       const tokenToUi = 1 / (10 ** decimals);
-      const tokenBalanceUi = Number(amountRaw) * tokenToUi;
+      const tokenBalanceUi = Number(amountRaw) * tokenToUi; // how much they're holding
+      console.log('tokenAmount', p.tokenAmount)
       const positionTokenAmountUi = p.tokenAmount * tokenToUi
       console.log('position', positionTokenAmountUi, 'balance', tokenBalanceUi)
 
-      let sellAmount = Math.round(p.tokenAmount || (p.entryPrice * p.amount))
+      let sellAmount = Math.round(p.tokenAmount || (p.entryPrice * p.amount)) // in raw (like lamports)
+      console.log('sellAmount', sellAmount, 'from', p.tokenAmount, 'or', p.entryPrice * p.amount, p.entryPrice, p.amount)
 
       if (positionTokenAmountUi > tokenBalanceUi) {
         console.log('We no longer hold', positionTokenAmountUi, 'of', p.token, 'adjusting to', tokenBalanceUi)
@@ -230,7 +267,7 @@ export class TradeDataProviderService extends Service {
 
       // execute sell
       try {
-        const res = await solanaService.executeSwap([wallet], signal)
+        const res = await this.solanaService.executeSwap([wallet], signal)
         const result = res[kp.publicKey]
         // close position
         if (result?.success) {
@@ -271,13 +308,20 @@ export class TradeDataProviderService extends Service {
           //console.log('ud', ud)
           const p = ud.position
 
+          // FIXME: need to call the strategy's onPriceDelta
+
           // FIXME: double check actual amount we hold now...
 
           // sentiment? 24h volume?
           // we have: liquidity, priceChange24h, priceUsd
 
           //console.log('ud.position', p)
-          console.log('p low', p.exitConditions.priceDrop, 'high', p.exitConditions.targetPrice, 'current', td.priceUsd, 'wallet', p.publicKey)
+          const minPrice = parseFloat(p.exitConditions.priceDrop)
+          const maxPrice = parseFloat(p.exitConditions.targetPrice)
+          const per = (parseFloat(td.priceUsd) - minPrice) / (maxPrice - minPrice)
+          // solAmount or tokenAMount but neither are in usd
+          //const entryPer = parseFloat(td.priceUsd) / (maxPrice - minPrice)
+          console.log('p low', minPrice, 'high', maxPrice, 'current', td.priceUsd, 'wallet', p.publicKey, 'per', per, 'tAmount', Math.round(p.tokenAmount), 'entry', p.usdAmount)
           if (td.priceUsd < p.exitConditions.priceDrop) {
             // sad exit
             console.log('I has a sad')
@@ -323,6 +367,7 @@ export class TradeDataProviderService extends Service {
     // collect all
     const services = this.forEachReg('trendingService')
     const results = await Promise.all(services.map(service => service.getTrending()))
+
     // process results
     //console.log('srv_dataprov::updateTrending - results', results);
 
@@ -359,9 +404,31 @@ export class TradeDataProviderService extends Service {
     }
   }
 
+  /*
+  async getTokenValueUSD(chain, address) {
+    // utilitze this cache somehow?
+    let token = await this.runtime.getCache<IToken>(`token_${chain}_${address}`);
+    let tokenPrice = await this.runtime.getCache<IToken>(`token_${chain}_${address}_price`);
+    console.log('dataProvider - getTokenInfo for token', chain, address);
+    if (!token) {
+      // not cache, go fetch realtime
+
+      const services = this.forEachReg('priceService')
+      const results = await Promise.all(services.map(service => service.valueToken(chain, address)))
+      //console.log('dataprovider - results', results)
+
+      // how to convert results into token better?
+      tokenPrice = results[0] // reduce
+      await this.runtime.setCache<IToken>(`token_${chain}_${address}`, token);
+    }
+    // needs to include liquidity, 24h volume, suspicous atts
+    return tokenPrice;
+  }
+  */
+
   async getTokenInfo(chain, address) {
     let token = await this.runtime.getCache<IToken>(`token_${chain}_${address}`);
-    console.log('dataProvider - getTokenInfo for token', token);
+    //console.log('dataProvider - getTokenInfo for token', chain, address);
     if (!token) {
       // not cache, go fetch realtime
 
@@ -424,8 +491,38 @@ export class TradeDataProviderService extends Service {
 
     try {
       logger.info('Starting info trading service...');
-
       this.isRunning = true;
+
+      /*
+      const accountIds = await this.accountIntService.list_all()
+      console.log('boot accountIds', accountIds)
+      // now get all the wallets from these accountIds
+      const mws = await this.walletIntService.getWalletByAccountIds(accountIds)
+      console.log('boot mws', mws.length, mws)
+      */
+      // gather all pubkeys
+      const wallets = await this.walletIntService.getSpartanWallets({})
+      console.log('intel:DPsrv - boot wallets', wallets.length)
+      const pubKeys = Array.from(new Set(wallets.filter(w => w.chain === 'solana').map(w => w.publicKey)))
+      console.log('intel:DPsrv - pubKeys', pubKeys)
+      /*
+      pubKeys.forEach(async pk => {
+        // need to pass a handler
+        await this.solanaService.subscribeToAccount(pk)
+      })
+      */
+      /*
+      for(const w of wallets) {
+        if (!w?.publicKey) {
+          console.warn('skipping', w, 'no publicKey')
+          continue
+        }
+        if (w.chain === 'solana') {
+          await this.solanaService.subscribeToAccount(w.publicKey)
+        }
+      }
+      */
+
       logger.info('Trading info service started successfully');
     } catch (error) {
       logger.error('Error starting trading info service:', error);
