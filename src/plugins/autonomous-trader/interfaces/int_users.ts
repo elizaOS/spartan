@@ -1,17 +1,21 @@
 import {
   type IAgentRuntime,
-  ModelType,
-  logger,
-  parseJSONObjectFromText,
+  type UUID,
+  //type Component,
   createUniqueUuid,
 } from '@elizaos/core';
 
 import CONSTANTS from '../constants'
 import { interface_spartan_get } from './int_spartan'
-//import { getMetaWallets } from './int_wallets'
+
+/*
+Component data: {
+  [key: string]: any;
+};
+*/
 
 // look up by Ids
-export async function interface_users_ByIds(runtime, ids) {
+export async function interface_users_ByIds(runtime: IAgentRuntime, ids: UUID[]): Promise<Record<UUID, any>> {
   //console.log('interface_users_ByIds', ids)
   const entities = await runtime.getEntityByIds(ids)
   //console.log('interface_users_ByIds - entities', entities, 'asked for', ids)
@@ -43,7 +47,9 @@ export async function interface_users_ByIds(runtime, ids) {
 
 // who owns what
 // chain?
-export async function getUserIdsByPubkeys(runtime, pubkeys) {
+
+// keyed Object = UUID
+export async function getUserIdsByPubkeys(runtime: IAgentRuntime, pubkeys): Promise<Record<string, UUID>> {
   const users = await interface_users_list(runtime)
   const emails = await interface_users_ByIds(runtime, users)
 
@@ -56,10 +62,14 @@ export async function getUserIdsByPubkeys(runtime, pubkeys) {
       const emailEntityId = createUniqueUuid(runtime, email.address);
       //console.log('verified email.address', email.address, '=>', emailEntityId)
       accountIds[entityId] = emailEntityId
+      // FIXME: this can be multiple (discord/telegram linked to one account)
+      if (userIds[emailEntityId]) {
+        console.log('getUserIdsByPubkeys - stomping', userIds[emailEntityId], 'with', entityId)
+      }
       userIds[emailEntityId] = entityId
       //userWallets[entityId] = email.metawallets
     } else {
-      console.log('getWalletByUserEntityIds_engine - waiting on verification', entityId, email)
+      console.log('getUserIdsByPubkeys - waiting on verification', entityId, email)
     }
   }
 
@@ -123,20 +133,20 @@ export async function getUserIdsByPubkeys(runtime, pubkeys) {
 // list/search
 // list of IDs vs list of users?
 // it's a list of accounts now right?
-export async function interface_users_list(runtime, options = {}) {
+export async function interface_users_list(runtime: IAgentRuntime, options = {}): Promise<UUID[]> {
   const spartanData = await interface_spartan_get(runtime)
   return spartanData.data.users
 }
 
 // add/update/delete
 
-export async function interface_user_update(runtime, componentData) {
+export async function interface_user_update(runtime: IAgentRuntime, componentData): Promise<boolean> {
   const id = componentData.componentId
   if (!id) {
     console.warn('interface_user_update - no componentId in componentData', componentData)
     return false
   }
-  const entityId = componentData.accountEntityId
+  //const entityId = componentData.accountEntityId
   // need to strip somethings...: componentId, names
   delete componentData.componentId
   delete componentData.names
@@ -144,7 +154,8 @@ export async function interface_user_update(runtime, componentData) {
   delete componentData.accountEntityId // utils injects this
   console.log('interface_user_update - componentData', componentData)
 
-  const res = await runtime.updateComponent({
+  // const res =
+  await runtime.updateComponent({
     id,
     //worldId: roomDetails.worldId,
     //roomId: message.roomId,
