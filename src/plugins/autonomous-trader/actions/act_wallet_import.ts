@@ -58,7 +58,7 @@ export const walletImportAction: Action = {
     const roomDetails = await runtime.getRoom(message.roomId);
 
     const traderStrategyService = runtime.getService('TRADER_STRATEGY') as any;
-    const stratgiesList = await traderStrategyService.listActiveStrategies()
+    const stratgiesList = await traderStrategyService.listActiveStrategies(account)
     // maybe we use an LLM call to get their exact meaning
     const containsStrats = stratgiesList.filter(word => message.content.text.includes(word))
     console.log('containsStrats', containsStrats)
@@ -69,6 +69,7 @@ export const walletImportAction: Action = {
 
 
     // create meta wallet container on this registration
+    // or import into existing meta wallet?
 
     // which chains
     const traderChainService = runtime.getService('TRADER_CHAIN') as any;
@@ -93,7 +94,9 @@ export const walletImportAction: Action = {
         solana: {
           privateKey: bs58.encode(keypair.secretKey),
           publicKey: keypair.publicKey.toBase58(),
-        }
+          type: 'imported',
+          createdAt: Date.now(),
+        },
       }
     }
     console.log('newWallet', newWallet)
