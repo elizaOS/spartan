@@ -1,7 +1,7 @@
 import { IAgentRuntime, getSalt, encryptStringValue, Service, logger } from '@elizaos/core';
-import { acquireService } from '../utils';
+import { acquireService, accountMockComponent, walletContainsMinimum } from '../utils';
 
-import { getWalletByUserEntityIds, getWalletsByPubkey } from '../interfaces/int_wallets';
+import { getWalletByUserEntityIds, getWalletsByPubkey, getSpartanWallets } from '../interfaces/int_wallets';
 import { getUserIdsByPubkeys } from '../interfaces/int_users';
 import { createPosition } from '../interfaces/int_positions';
 
@@ -19,12 +19,68 @@ export class InterfaceWalletService extends Service {
     logger.log('AUTONOMOUS_TRADER_INTERFACE_WALLETS constructor');
   }
 
-  async getWalletByUserEntityIds(entities) {
+  async getWalletByUserEntityIds(entities: UUID[]) {
     const metawallets = await getWalletByUserEntityIds(this.runtime, entities)
     return metawallets
   }
 
-  async getWalletsByPubkey(pubKey) {
+  async getSpartanWallets(options = {}) {
+    return getSpartanWallets(this.runtime, options)
+  }
+
+  async walletContainsMinimum(pubKey, ca, amount) {
+    return walletContainsMinimum(this.runtime, pubKey, ca, amount)
+  }
+
+  async accountMeetsRequirement(account) {
+    // read last cache check
+    const lastCheck = account.lastRequiresCheckAt
+    console.log('lastCheck', lastCheck)
+    const ts = Math.round(Date.now() / 1e3)
+    if (account.lastRequiresCheckAt && account.lastRequiresCheck !== undefined) {
+      const sinceLast = ts - lastCheck
+      // if we had it give longer
+      const waitAmtInMins = account.lastRequiresCheck ? 30 : 1
+      if (sinceLast < waitAmtInMins * 60) {
+        console.log('accountMeetsRequirement using cache of', sinceLast.toLocaleString() + 's')
+        return account.lastRequiresCheck
+      }
+    }
+
+    let meetsReq = false
+    if (account.holderCheck) {
+      meetsReq = await this.walletIntService.walletContainsMinimum(account.holderCheck, 'Gu3LDkn7Vx3bmCzLafYNKcDxv2mH7YN44NJZFXnypump', 1_000_000)
+      if (!meetsReq) {
+        meetsReq = await this.walletIntService.walletContainsMinimum(account.holderCheck, 'HeLp6NuQkmYB4pYWo2zYs22mESHXPQYzXbB8n4V98jwC', 10_000)
+      }
+    }
+    // did it change from store
+    if (meetsReq !== account.lastRequiresCheck) {
+      // trigger edges
+      if (meetsReq) {
+        // just bought
+        console.log('just bought')
+      } else {
+        // just sold
+        console.log('just sold')
+      }
+    }
+    // update store
+    account.lastRequiresCheckAt = ts
+    account.lastRequiresCheck = meetsReq
+    const component = accountMockComponent(account)
+    await interface_account_update(this.runtime, component)
+    return meetsReq
+  }
+
+  /*
+  async getWalletByAccountIds(accounts: UUID[]) {
+    const metawallets = await interface_accounts_ByIds(this.runtime, accounts)
+    return metawallets
+  }
+  */
+
+  async getWalletsByPubkey(pubKey: string) {
     const metawallets = await getWalletsByPubkey(pubKey)
     return metawallets
   }
