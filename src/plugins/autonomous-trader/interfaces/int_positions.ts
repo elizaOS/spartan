@@ -1,4 +1,4 @@
-import type { Plugin } from '@elizaos/core';
+import type { UUID, Component, IAgentRuntime } from '@elizaos/core';
 import { COMPONENT_ACCOUNT_TYPE } from '../constants'
 import { interface_users_ByIds  } from './int_users'
 import { interface_accounts_ByIds, interface_account_update } from './int_accounts'
@@ -6,8 +6,15 @@ import { getMetaWallets } from './int_wallets'
 import { accountMockComponent } from '../utils'
 // look up by Ids
 
+type MwAndPos = {
+  mw: any;
+  pos: any;
+}
+
 // not used
-export async function interface_positions_ByUserIdPosIds(runtime, userId, positionIds) {
+export async function interface_positions_ByUserIdPosIds(
+  runtime: IAgentRuntime, userId: UUID, positionIds: UUID[]
+): Promise<{ email: any; list: Record<UUID, MwAndPos> } | boolean> {
 
   // one db read
   const emails = await interface_users_ByIds(runtime, [userId])
@@ -33,7 +40,9 @@ export async function interface_positions_ByUserIdPosIds(runtime, userId, positi
   return { email, list }
 }
 
-export async function interface_positions_ByAccountId(runtime, accountId) {
+export async function interface_positions_ByAccountId(
+  runtime: IAgentRuntime, accountId: UUID
+): Promise<{ account: any, component: Component, list: Record<UUID, MwAndPos> } | boolean> {
   // one db read
   const account = await runtime.getEntityById(accountId)
   //const accounts = await interface_accounts_ByIds(runtime, [accountId])
@@ -60,10 +69,12 @@ export async function interface_positions_ByAccountId(runtime, accountId) {
 }
 
 // used by updatePosition
-export async function interface_positions_ByAccountIdPosIds(runtime, accountId, positionIds) {
+export async function interface_positions_ByAccountIdPosIds(
+  runtime: IAgentRuntime, accountId: UUID, positionIds: UUID[]
+): Promise<{ account: any, component: Component | false, list: Record<UUID, MwAndPos> }> {
   // one db read
   const res = await interface_positions_ByAccountId(runtime, accountId)
-  if (!res) return { account: false, component: false, list: [] }
+  if (!res) return { account: false, component: false, list: {} }
   //console.log('interface_positions_ByAccountIdPosIds - res', res)
   const account = res.account
   const component = res.component
@@ -107,7 +118,9 @@ export async function interface_positions_ByAccountIdPosIds(runtime, accountId, 
 
 // list
 // open position filter? chain filter?
-export async function listPositions(runtime, options = {}) {
+export async function listPositions(
+  runtime: IAgentRuntime, options = {}
+): Promise<{ position: any, entityId: UUID, mw: any }[]> {
   //const userIds = await interface_users_list(runtime)
   //const emails = await interface_users_ByIds(runtime, users)
   //console.log('listPositions - options', options)
@@ -129,7 +142,7 @@ export async function listPositions(runtime, options = {}) {
 
 // add/update/delete
 // createPositions?
-export async function createPosition(runtime, accountId, pos) {
+export async function createPosition(runtime: IAgentRuntime, accountId: UUID, pos): Promise<boolean> {
   //console.log('createPosition - userId', userId, 'pos', pos)
   //console.log('createPosition - chain', pos.chain, pos.publicKey)
 
@@ -198,7 +211,7 @@ export async function createPosition(runtime, accountId, pos) {
   return true
 }
 
-export async function updatePosition(runtime, accountId, posId, delta) {
+export async function updatePosition(runtime: IAgentRuntime, accountId: UUID, posId: UUID, delta): Promise<boolean> {
   // userId, publicKey, positionId
   //const mw = email.metawallets.find(mw => mw.keypairs[pos.chain]?.positions.find(p => p.id === posId))
 
