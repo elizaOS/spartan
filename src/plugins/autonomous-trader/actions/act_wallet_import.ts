@@ -87,7 +87,7 @@ export const walletImportAction: Action = {
     //callback(takeItPrivate(runtime, message, 'Thinking about making a meta-wallet'))
 
     if (account.metawallets === undefined) account.metawallets = []
-    const strat = containsStrats?.[0] || 'LLM trading strategy'
+    const strat = containsStrats?.[0] || 'No trading strategy'
     const newWallet = {
       strategy: strat,
       keypairs: {
