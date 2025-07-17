@@ -134,8 +134,33 @@ export class TradeDataProviderService extends Service {
     for(const p of positions) {
       const ca = p.position.token
 
+      // COULD_NOT_FIND_ANY_ROUTE
+      if (ca === '84ea5vxsJuf98CRNuVuZYDPjoY4HNjTTCcYY65urxW4V'
+          || ca === '6P8EmVEfAicPdyFLpS5GHBeh87EMCk6pRHDDcQFjJXNS'
+          || ca === 'METAewgxyPbgwsseH8T16a39CQ5VyVxZi9zXiDPY18m'
+      ) {
+        continue
+      }
+
       // don't need to care about closed positions atm
       if (p.position.close) continue
+
+      const amt = Math.round(p.position.tokenAmount || (p.position.entryPrice * p.position.amount))
+      if (!amt) {
+        // might as well be a closed position
+        // ud is p
+        //console.log('p', p)
+        const kp = p.mw.keypairs[p.position.chain]
+        //console.log('kp', kp)
+        const hndl = this.strategyService.getHndlByStratName(p.mw.strategy)
+        //console.log('hndl', hndl)
+        //console.log('publicKey', kp.publicKey)
+        //console.log('id', p.position.id)
+        await this.strategyService.close_position(hndl, kp.publicKey, p.position.id, {
+          type: 'zeroamount', // "unknwon" is a backwards compatible value
+        });
+        continue
+      }
       openPositions++
 
       //console.log('p', p, 'ca', ca)
@@ -169,7 +194,11 @@ export class TradeDataProviderService extends Service {
       const publicKey = p.publicKey
 
       if (p.chain !== 'solana') {
-        console.Warn('unsupported chain on position', p)
+        console.warn('closePosition - unsupported chain on position', p)
+        return false
+      }
+      if (p.close) {
+        console.warn('closePosition - already closed', p)
         return false
       }
       //const solanaService = this.runtime.getService('chain_solana') as any;
@@ -287,6 +316,7 @@ export class TradeDataProviderService extends Service {
         }
       } catch(e) {
         console.error('failure to close position', e)
+        // is it because of balance?!?
         // retry?
       }
       console.log('done trying to close position', p.id, p.token, 'in', p.publicKey)
