@@ -420,6 +420,8 @@ export async function getCacheExp(runtime, key) {
 export async function setCacheExp(runtime, key, val, ttlInSecs) {
   const exp = Date.now() + ttlInSecs * 1_000
   return runtime.setCache<any>(key, {
+    // sys call waste atm
+    // fetchedAt: Date.now(),
     exp,
     data: val,
   });
