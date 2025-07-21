@@ -1,7 +1,7 @@
 import type { UUID, IAgentRuntime } from '@elizaos/core';
 import { createUniqueUuid } from '@elizaos/core';
 
-import { interface_users_ByIds, interface_users_list } from '../interfaces/int_users'
+import { interface_users_list, interface_users_listVerified } from '../interfaces/int_users'
 import { interface_accounts_ByIds } from '../interfaces/int_accounts'
 
 // look up by Ids
@@ -9,7 +9,11 @@ import { interface_accounts_ByIds } from '../interfaces/int_accounts'
 // list/search
 
 // return strategy, keypairs[chain] = { privateKey, publicKey }, entityId, names
-export async function getMetaWallets(runtime: IAgentRuntime): Promise<any[]> {
+export async function getMetaWallets(runtime: IAgentRuntime): Promise<any[] | false> {
+  if (!runtime) {
+    console.trace('WHAT ARE YOU DOING?')
+    return false
+  }
   //console.log('getMetaWallets')
   //interface_accounts_list is available
   const users = await interface_users_list(runtime)
@@ -18,6 +22,9 @@ export async function getMetaWallets(runtime: IAgentRuntime): Promise<any[]> {
 
   const res = await getWalletByUserEntityIds_engine(runtime, users)
   //console.log('getMetaWallets - res', res)
+
+  // this is really weird, because multiple users to an account and multiple wallets to an account
+
   // userWallets is weird
   for(const userEntityId in res.userWallets) {
     const userMws = res.userWallets[userEntityId]
@@ -59,6 +66,9 @@ export async function getWalletsByPubkey(runtime: IAgentRuntime, pubkeys: string
   const list = {}
   for(const mw of metaWallets) {
     if (pubkeys.includes(mw.keypairs.publicKey)) {
+      if (list[mw.keypairs.publicKey]) {
+        console.log('getWalletsByPubkey stomping key', mw.keypairs.publicKey, 'old value', list[mw.keypairs.publicKey], 'with', mw)
+      }
       list[mw.keypairs.publicKey] = mw
     }
   }
@@ -97,38 +107,33 @@ export async function getSpartanWallets(runtime: IAgentRuntime, options = {}): P
 export async function getWalletByUserEntityIds_engine(
   runtime: IAgentRuntime, userEntityIds: UUID[]
 ): Promise<{ userWallets: Record<UUID, any>, accountIds: Record<UUID, UUID>, userEntityData: Record<UUID, any> }> {
-  // find these users metawallets
-  // each id will have a list of wallets
-  const userWallets = {}
-  const emails = await interface_users_ByIds(runtime, userEntityIds)
-  const accountIds = {}
-  for(const entityId in emails) {
-    const email = emails[entityId]
-    //console.log('getWalletByUserEntityIds_engine', entityId)
-    if (email.verified && email.address) {
-      const emailEntityId = createUniqueUuid(runtime, email.address);
-      //console.log('verified email.address', email.address, '=>', emailEntityId)
-      accountIds[entityId] = emailEntityId
-      //userWallets[entityId] = email.metawallets
-    //} else {
-      //console.log('getWalletByUserEntityIds_engine - waiting on verification', entityId, email)
-    }
+  if (!runtime) {
+    console.trace('WHAT ARE YOU DOING?')
+    return false
   }
+  const map = await interface_users_listVerified(runtime)
+  const accounts = map.userId2accountId
+  const accountIds = map.userId2accountId
   const accountWallets = await getMetaWalletsByEmailEntityIds(runtime, Object.values(accountIds))
   //console.log('getWalletByUserEntityIds_engine - accountWallets', accountWallets)
+
   // translate it to being keyed by userEntityId
-  for(const userEntityId in accountIds) {
-    const accountEntityId = accountIds[userEntityId]
+  const userWallets = {}
+  for(const userEntityId in accounts) {
+    const accountEntityId = accounts[userEntityId]
     const metawallets = accountWallets[accountEntityId]
     //console.log('getWalletByUserEntityIds_engine - userEntityId', userEntityId, '=>', accountEntityId)
     if (metawallets) {
       //console.log('getWalletByUserEntityIds_engine - metawallets', metawallets.length)
       // if found
+
+      // probably should tuck in the accountId into this but it's an array
       userWallets[userEntityId] = metawallets
     }
   }
+  // userEntityData is wrong
   return {
-    userWallets, accountIds, userEntityData: emails
+    userWallets, accountIds, userEntityData: map.emails
   }
 }
 
