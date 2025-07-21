@@ -1,4 +1,4 @@
-import { Service, logger } from '@elizaos/core';
+import { type Memory, type TargetInfo, Service, logger } from '@elizaos/core';
 import { PublicKey } from '@solana/web3.js';
 //import { listPositions } from '../interfaces/int_positions'
 
@@ -47,21 +47,19 @@ export class TradeDataProviderService extends Service {
     })
 
     // not really used
-    /*
-    const serviceType3 = 'AUTONOMOUS_TRADER_INTERFACE_ACCOUNTS'
-    this.accountIntService = this.runtime.getService(serviceType3) as any;
+    const serviceType5 = 'AUTONOMOUS_TRADER_INTERFACE_ACCOUNTS'
+    this.accountIntService = this.runtime.getService(serviceType5) as any;
     new Promise(async resolve => {
       while (!this.accountIntService) {
-        console.log(asking, 'waiting for', serviceType3, 'service...');
-        this.accountIntService = this.runtime.getService(serviceType3) as any;
+        console.log(asking, 'waiting for', serviceType5, 'service...');
+        this.accountIntService = this.runtime.getService(serviceType5) as any;
         if (!this.accountIntService) {
           await new Promise((waitResolve) => setTimeout(waitResolve, 1000));
         } else {
-          console.log(asking, 'Acquired', serviceType3, 'service...');
+          console.log(asking, 'Acquired', serviceType5, 'service...');
         }
       }
     })
-    */
 
     // should be available by now, since it's in the same plugin
     // but it's not?
@@ -119,8 +117,16 @@ export class TradeDataProviderService extends Service {
 
   // should be a task and not here
   // so many failure codes, we should be more specific
+
+  // what's the cost of a cycle
+  // 1+ db calls?
+  // sol getBalancesByAddrs
+  // sol getTokenBalanceForWallets per ca
+  // dp getTokensMarketData
+  // dp getTokenTradeData per ca (per dp) (30m cachable)
   async checkPositions() {
-    console.log('checking positions');
+    const start = Date.now()
+    console.log('DP:checkPositions - checking positions');
     // get a list of positions (chains -> wallets -> positions)
 
     // need to get autotrader service
@@ -175,18 +181,59 @@ export class TradeDataProviderService extends Service {
       // is this wallet still holding this?
       //
     }
-    console.log('positions', openPositions + '/' + positions.length, 'watching', tokens.length, 'CAs')
-    console.log('wallets', Object.keys(solanaWallets))
+    console.log('DP:checkPositions - positions', openPositions + '/' + positions.length, 'watching', tokens.length, 'CAs')
+    console.log('DP:checkPositions - wallets', Object.keys(solanaWallets))
     // get balances for all these wallets
-    //const balances = await this.solanaService.getBalancesByAddrs(Object.keys(solanaWallets))
-    //console.log('balances', balances) // wSOL balance
+    const solBalances = await this.solanaService.getBalancesByAddrs(Object.keys(solanaWallets))
+    console.log('DP:checkPositions - solBalances', solBalances) // wSOL balance
     // we could cull wallets below a threshold
+    // what does cull here mean, remove their positions from monitoring?
+
+    // more importants we need to verify they hold this position still
+    //const ca = Object.keys(ca2Positions)[0]
+    //const CAs = Object.keys(ca2Positions)
+    console.log('DP:checkPositions - looking at', tokens.length, 'CAs')
+    // we're going to be tracking less tokens than the number of wallets we have
+    for(const ca of tokens) {
+      const mintObj = new PublicKey(ca)
+      const decimals = await this.solanaService.getDecimal(mintObj)
+      const tokenBalances = await this.solanaService.getTokenBalanceForWallets(mintObj, Object.keys(solanaWallets))
+      //console.log(ca, 'tokenBalances', tokenBalances)
+      // adjust positions accordingly to balances
+      const positions = ca2Positions[ca]
+      for(const idx in positions) {
+        const p = positions[idx]
+        // find wallet
+        const wa = p.position.publicKey
+        // how much are we supposed to be holding...
+        // tokenBalances is going to be in UI scale
+        //console.log(wa, 'p', p.position)
+
+        const actualUi = tokenBalances[wa]
+        const claimUi = p.position.tokenAmount / (10 ** decimals)
+        if (claimUi > actualUi) {
+          console.log('Oh', wa, 'is supposed to have at least', claimUi, 'but we have', actualUi, 'closing position')
+          const kp = p.mw.keypairs.solana
+          const hndl = this.strategyService.getHndlByStratName(p.mw.strategy)
+          await this.strategyService.close_position(hndl, kp.publicKey, p.position.id, {
+            type: 'unknown', // "unknwon" is a backwards compatible value
+          });
+          delete ca2Positions[ca][idx]
+        }
+      }
+    }
+    // could clean up more, but it'll be better from this point on
 
     // take list of CA and get token information
     const services = this.forEachReg('lookupService')
-    const results = await Promise.all(services.map(service => service.getTokensMarketData(tokens)))
+    // seems to be always fresh
+    const results = await Promise.all(services.map(service => service.getTokensMarketData('solana', tokens)))
     // an array of list of tokens (keyed by token)
     console.log('results', results)
+
+    // get volume for these tokens (500s rn)
+    //const results2 = await Promise.all(services.map(service => service.getTokensPriceVolume(tokens)))
+    //console.log('results2', results2)
 
     // could build a list of
     const closePosition = async (ud, type) => {
@@ -252,7 +299,8 @@ export class TradeDataProviderService extends Service {
       const tokenBalanceUi = Number(amountRaw) * tokenToUi; // how much they're holding
       console.log('tokenAmount', p.tokenAmount)
       const positionTokenAmountUi = p.tokenAmount * tokenToUi
-      console.log('position', positionTokenAmountUi, 'balance', tokenBalanceUi)
+      const exitUsd = positionTokenAmountUi * ud.price
+      console.log('position', positionTokenAmountUi, 'balance', tokenBalanceUi, 'value', exitUsd.toFixed(2))
 
       let sellAmount = Math.round(p.tokenAmount || (p.entryPrice * p.amount)) // in raw (like lamports)
       console.log('sellAmount', sellAmount, 'from', p.tokenAmount, 'or', p.entryPrice * p.amount, p.entryPrice, p.amount)
@@ -296,6 +344,8 @@ export class TradeDataProviderService extends Service {
 
       // execute sell
       try {
+        // fresh right before the sell
+        const timestampMs = Date.now()
         const res = await this.solanaService.executeSwap([wallet], signal)
         const result = res[kp.publicKey]
         // close position
@@ -308,11 +358,34 @@ export class TradeDataProviderService extends Service {
           await this.strategyService.close_position(hndl, kp.publicKey, p.id, {
             type,
             sellRequest: sellAmount,
+            timestamp: timestampMs,
             //sellRequestUi: sellAmount * tokenBalanceUi,
             outAmount: result.outAmount,
             signature: result.signature,
             fees: result.fees,
           });
+
+          const pubKey = wallet.keypair.publicKey
+          // entered at p.usdAmount (amount usd we invested)
+          // exitUsd: exited at ud.price (td.priceUsd) * positionTokenAmountUi
+          //if (type === 'win' || type === 'win_vol' || type === 'win_liq') {
+          if (exitUsd > p.usdAmount) {
+            const diff = exitUsd - p.usdAmount
+            const msg = 'you made money because I was right. dont get used to it. Made $' + diff.toFixed(2)
+            await this.walletIntService.notifyWallet(pubKey, msg)
+          } else {
+            const diff = p.usdAmount - exitUsd
+            const msg = 'i moved, you followed, we paid $' + diff.toFixed(2)
+            await this.walletIntService.notifyWallet(pubKey, msg)
+          }
+          // p.token is the CA
+          const kpObj = new PublicKey(p.token)
+          const symbol = await this.solanaService.getTokenSymbol(kpObj)
+          const msg = 'sold ' + symbol + ' position in ' + pubKey + ' signature:'
+          await this.walletIntService.notifyWallet(pubKey, msg)
+          // can we link this
+          await this.walletIntService.notifyWallet(pubKey, result.signature)
+
         }
       } catch(e) {
         console.error('failure to close position', e)
@@ -330,17 +403,26 @@ export class TradeDataProviderService extends Service {
         const td = r[ca]
         if (!td) {
           // this data provider didn't have any info on this token
-          console.log('no results for', ca)
+          console.log('DP:checkPositions - no results for', ca)
           continue
         }
-        console.log(ca, 'current price', td.priceUsd, ca2Positions[ca]?.length, 'positions')
+
+        // get volume
+        const results2 = await Promise.all(services.map(service => service.getTokenTradeData('solana', ca)))
+        //console.log('results2', results2)
+        const beData = results2[0].data // only birdeye atm
+        //console.log('beData', beData)
+        // volume_24h is in native token I think
+        // volume_24h_usd which is what the llm strategy uses
+        const curVol24h = beData.volume_24h_usd
+
+        const curLiq = parseInt(td.liquidity)
+        console.log('DP:checkPositions -', ca, 'current', '$' + td.priceUsd, 'curLiq', '$' + curLiq.toLocaleString(), 'curVol24h', '$' + Number(curVol24h.toFixed(0)).toLocaleString(), ca2Positions[ca]?.length, 'positions')
         for(const ud of ca2Positions[ca]) {
           //console.log('ud', ud)
           const p = ud.position
 
           // FIXME: need to call the strategy's onPriceDelta
-
-          // FIXME: double check actual amount we hold now...
 
           // sentiment? 24h volume?
           // we have: liquidity, priceChange24h, priceUsd
@@ -351,23 +433,57 @@ export class TradeDataProviderService extends Service {
           const per = (parseFloat(td.priceUsd) - minPrice) / (maxPrice - minPrice)
           // solAmount or tokenAMount but neither are in usd
           //const entryPer = parseFloat(td.priceUsd) / (maxPrice - minPrice)
-          console.log('p low', minPrice, 'high', maxPrice, 'current', td.priceUsd, 'wallet', p.publicKey, 'per', per, 'tAmount', Math.round(p.tokenAmount), 'entry', p.usdAmount)
-          if (td.priceUsd < p.exitConditions.priceDrop) {
+          // 'tAmount', Math.round(p.tokenAmount),  need to be in human terms
+          // calculate current worth would be cool
+          const minLiq = parseInt(p.exitConditions.liquidityDrop)
+          const minVol = parseInt(p.exitConditions.volumeDrop)
+          console.log('p low', minPrice, 'high', maxPrice, 'current', td.priceUsd, 'wallet', p.publicKey, 'per', (per * 100).toFixed(0) + '%', 'entry', p.tokenPriceUsd, 'entryAmount', '$' + p.usdAmount, 'minLiq', '$' + minLiq.toLocaleString(), 'minVol', '$' + minVol.toLocaleString())
+          ud.price = td.priceUsd // upload current price
+          if (td.priceUsd <= p.exitConditions.priceDrop) {
             // sad exit
             console.log('I has a sad')
             await closePosition(ud, 'loss')
-            await new Promise((waitResolve) => setTimeout(waitResolve, 1000));
-          }
-          if (td.priceUsd > p.exitConditions.targetPrice) {
+            continue
+          } else
+          if (td.priceUsd >= p.exitConditions.targetPrice) {
             // win
             console.log('KICK ASS')
             await closePosition(ud, 'win')
-            await new Promise((waitResolve) => setTimeout(waitResolve, 1000));
+            continue
           }
+
+          //console.log('pLiq min', minLiq.toLocaleString(), 'cur', curLiq.toLocaleString())
+          if (curLiq < minLiq) {
+            console.log('liqiduity too low')
+            // if purchase price is greater than current price
+            const type = p.tokenPriceUsd > td.priceUsd ? 'loss_liq' : 'win_liq'
+            if (type === 'loss') {
+              console.log('I has a sad')
+            } else {
+              console.log('Win!')
+            }
+            await closePosition(ud, type)
+            continue
+          }
+
+          if (curVol24h < minVol) {
+            console.log('24h volume too low')
+            // if purchase price is greater than current price
+            const type = p.tokenPriceUsd > td.priceUsd ? 'loss_vol' : 'win_vol'
+            if (type === 'loss') {
+              console.log('I has a sad')
+            } else {
+              console.log('Win!')
+            }
+            await closePosition(ud, type)
+            continue
+          }
+
         }
       }
     }
-    console.log('done checking open positions')
+    const diff = Date.now() - start
+    console.log('DP:checkPositions - done checking open positions, took', diff.toLocaleString() + 'ms')
   }
 
   forEachReg(key) {
@@ -396,6 +512,7 @@ export class TradeDataProviderService extends Service {
     console.log('checking trending');
     // collect all
     const services = this.forEachReg('trendingService')
+    // birdeye just reads the cache built from the task
     const results = await Promise.all(services.map(service => service.getTrending()))
 
     // process results
@@ -411,9 +528,6 @@ export class TradeDataProviderService extends Service {
     for (const handler of eventHandlers) {
       handler(results);
     }
-
-    // this doesn't go here, just temp hack
-    this.checkPositions();
   }
 
   // interested in price delta events
@@ -439,7 +553,7 @@ export class TradeDataProviderService extends Service {
     // utilitze this cache somehow?
     let token = await this.runtime.getCache<IToken>(`token_${chain}_${address}`);
     let tokenPrice = await this.runtime.getCache<IToken>(`token_${chain}_${address}_price`);
-    console.log('dataProvider - getTokenInfo for token', chain, address);
+    console.log('dataProvider - getTokenValueUSD for token', chain, address);
     if (!token) {
       // not cache, go fetch realtime
 
@@ -457,19 +571,24 @@ export class TradeDataProviderService extends Service {
   */
 
   async getTokenInfo(chain, address) {
-    let token = await this.runtime.getCache<IToken>(`token_${chain}_${address}`);
+    // don't need to cache the cached
+    let token
+    /*
+    token = await this.runtime.getCache<IToken>(`token_${chain}_${address}`);
     //console.log('dataProvider - getTokenInfo for token', chain, address);
     if (!token) {
+    */
       // not cache, go fetch realtime
-
+      //console.log('dataProvider::getTokenInfo - MISS')
       const services = this.forEachReg('lookupService')
-      const results = await Promise.all(services.map(service => service.lookupToken(chain, address)))
+      // this is also heavily cached
+      const results = await Promise.all(services.map(service => service.lookupToken(chain.toLowerCase(), address)))
       //console.log('dataprovider - results', results)
 
       // how to convert results into token better?
       token = results[0] // reduce
-      await this.runtime.setCache<IToken>(`token_${chain}_${address}`, token);
-    }
+      //await this.runtime.setCache<IToken>(`token_${chain}_${address}`, token);
+    //}
     // needs to include liquidity, 24h volume, suspicous atts
     return token;
   }
@@ -514,10 +633,21 @@ export class TradeDataProviderService extends Service {
       },
       10 * 60 * 1000
     );
+
+    // separate timer for sell signal
+    this.checkPosTimer = setInterval(
+      () => {
+        console.log('TRADER_DATAPROVIDER Checking positions')
+        this.checkPositions();
+      },
+      1 * 60 * 1000
+    );
+
     // immediate is actually too soon
-    setTimeout(() => {
-      this.updateTrending()
-    }, 30 * 1000)
+    setTimeout(async () => {
+      await this.updateTrending()
+      this.checkPositions();
+    }, 15 * 1000) //was 30s
 
     try {
       logger.info('Starting info trading service...');
@@ -535,12 +665,105 @@ export class TradeDataProviderService extends Service {
       console.log('intel:DPsrv - boot wallets', wallets.length)
       const pubKeys = Array.from(new Set(wallets.filter(w => w.chain === 'solana').map(w => w.publicKey)))
       console.log('intel:DPsrv - pubKeys', pubKeys)
-      /*
+
+      // we're looking for initial funding event mainly here...
       pubKeys.forEach(async pk => {
         // need to pass a handler
-        await this.solanaService.subscribeToAccount(pk)
+        await this.solanaService.subscribeToAccount(pk, async (accountAddress, accountInfo, context) => {
+          // where's the pubkey
+          //console.log('sub', accountAddress, 'Account updated:', accountInfo);
+          /*
+            sub HZoGUehwBuXkFhTkkov7VkKDo2uhUKqdoijVb9vByE9B Account updated: {
+              lamports: 48199189,
+              data: <Buffer >,
+              owner: PublicKey {
+                _bn: <BN: 0>,
+                equals: [Function: equals],
+                toBase58: [Function: toBase58],
+                toJSON: [Function: toJSON],
+                toBytes: [Function: toBytes],
+                toBuffer: [Function: toBuffer],
+                toString: [Function: toString],
+                encode: [Function: encode],
+              },
+              executable: false,
+              rentEpoch: 18446744073709552000,
+              space: 0,
+            }
+          */
+          //console.log('sub', accountAddress, 'Slot:', context.slot); // like block
+
+          const msg = accountAddress + ' $SOL balance change: ' + (accountInfo.lamports / 1e9).toFixed(4)
+
+          // resolve pubkey to something
+          await this.walletIntService.notifyWallet(accountAddress, msg)
+          //const res = await this.walletIntService.getAccountsByPubkey(accountAddress)
+          //const accountIds = res.accountComponents.map(a => a.accountEntityId)
+          //await this.accountIntService.notifyAccount(accountIds, msg)
+
+          /*
+          const accounts = res.accountComponents
+          //
+          //console.log('accounts', accounts.length)
+          // probably need to dedupe userIds before sending, so we don't send dupes
+          const userIds = []
+          for(const a of accounts) {
+            const accountId = a.accountEntityId
+            res.accountId2userIds[accountId].forEach(userId => {
+              if (userIds.indexOf(userId) === -1) {
+                userIds.push(userId)
+              }
+            })
+            //const userComponents = res.accountId2userIds[accountId].map(userId => res.userId2Component[userId])
+            //console.log('accountId', accountId, 'userComponents', userComponents)
+          }
+          //const userComponents = userIds.map(userId => res.userId2Component[userId])
+          //console.log('need to notify', userIds, userComponents)
+
+          // reget it all again
+          const entities = await this.runtime.getEntityByIds(userIds)
+          //for(const userId of userIds) {
+          for(const e of entities) {
+            const userId = e.id
+            //const componentData = res.userId2Component[userId]
+            //console.log('need to notify', userId, e)
+            const component = e.components.find(c => c.type === 'component_user_v0')
+            //console.log('component', component)
+            const source = e.metadata.telegram ? 'telegram' : 'discord'
+            const worldId = component.worldId
+            const roomId = component.roomId
+            const target: TargetInfo = {
+              source,
+              roomId,
+              // channelId
+              // serverId
+              entityId: userId,
+              // threadId
+            }
+            const content: Memory = {
+              // thought
+              text: msg,
+              // actions, providers
+              source,
+              // target
+              // url, inReplyTo, attachments
+              channelType: 'DM',
+            }
+            await this.runtime.sendMessageToTarget(target, content)
+//             console.log('source', source, 'worldId', worldId)
+//             const service = this.runtime.getService(source)
+//             console.log('service', !!service)
+//             const sendDirectMessage = (this.runtime.getService(source) as any)?.sendDirectMessage;
+//             console.log('sendDirectMessage', !!sendDirectMessage)
+//             if (sendDirectMessage) {
+//               await sendDirectMessage(runtime, userId, source, msg, worldId);
+//             } else {
+//               console.log('no such service', source)
+//             }
+          }
+             */
+        })
       })
-      */
       /*
       for(const w of wallets) {
         if (!w?.publicKey) {
