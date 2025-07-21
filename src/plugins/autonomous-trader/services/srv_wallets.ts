@@ -2,6 +2,7 @@ import { IAgentRuntime, getSalt, encryptStringValue, Service, logger } from '@el
 import { acquireService, accountMockComponent, walletContainsMinimum } from '../utils';
 
 import { getWalletByUserEntityIds, getWalletsByPubkey, getSpartanWallets } from '../interfaces/int_wallets';
+import { getAccountIdsByPubkey_engine } from '../interfaces/int_accounts';
 import { getUserIdsByPubkeys } from '../interfaces/int_users';
 import { createPosition } from '../interfaces/int_positions';
 
@@ -81,8 +82,24 @@ export class InterfaceWalletService extends Service {
   */
 
   async getWalletsByPubkey(pubKey: string) {
-    const metawallets = await getWalletsByPubkey(pubKey)
+    const metawallets = await getWalletsByPubkey(this.runtime, pubKey)
     return metawallets
+  }
+
+  async getAccountsByPubkey(pubKey: string) {
+    const res = await getAccountIdsByPubkey_engine(this.runtime, [pubKey])
+    const accountComponents = res.pubkey2accountId[pubKey].map(acctId => res.accountId2Component[acctId])
+    return {...res, accountComponents }
+  }
+
+  // maybe support an array of msgs, so we don't have to redo the routing
+  async notifyWallet(pubKey: string, msg: string) {
+    // resolve pubkey to something
+    const res = await getAccountIdsByPubkey_engine(this.runtime, [pubKey])
+    const accountComponents = res.pubkey2accountId[pubKey].map(acctId => res.accountId2Component[acctId])
+    const accountIds = accountComponents.map(a => a.accountEntityId)
+    const accountIntService = this.runtime.getService("AUTONOMOUS_TRADER_INTERFACE_ACCOUNTS") as any;
+    await accountIntService.notifyAccount(accountIds, msg)
   }
 
   /**
