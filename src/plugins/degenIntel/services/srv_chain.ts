@@ -110,6 +110,10 @@ export class TradeChainService extends Service {
     return ky
   }
 
+  // get wallet
+  // get all balances in wallet
+  // combine with dataProvider pricing today so we can evaluate it in USD
+
   /**
    * Start the scenario service with the given runtime.
    * @param {IAgentRuntime} runtime - The agent runtime
