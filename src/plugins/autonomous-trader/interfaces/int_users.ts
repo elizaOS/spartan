@@ -130,12 +130,54 @@ export async function getUserIdsByPubkeys(runtime: IAgentRuntime, pubkeys): Prom
   return list
 }
 
+export async function getUseridsByAccountId(runtime: IAgentRuntime, accountIds: UUID[]) {
+  const res = await interface_users_listVerified(runtime)
+  const out = {}
+  for(const acctId of accountIds) {
+    const userIds = res.accountId2userIds[acctId]
+    out[acctId] = userIds
+  }
+  return out
+}
+
 // list/search
 // list of IDs vs list of users?
 // it's a list of accounts now right?
 export async function interface_users_list(runtime: IAgentRuntime, options = {}): Promise<UUID[]> {
   const spartanData = await interface_spartan_get(runtime)
   return spartanData.data.users
+}
+
+// really good for accounts
+export async function interface_users_listVerified(runtime: IAgentRuntime, options = {}): Promise<{
+  userId2accountId: Record<UUID, UUID>, accountId2userIds: Record<UUID, UUID[]>, emails: Record<UUID, unknown>
+} | false> {
+  if (!runtime) {
+    console.trace('WHAT ARE YOU DOING?')
+    return false
+  }
+  const spartanData = await interface_spartan_get(runtime) // get list of userIds
+  const emails = await interface_users_ByIds(runtime, spartanData.data.users) // get entities
+
+  const userId2accountId = {}
+  const accountId2userIds = {} // revmap
+  for(const entityId in emails) {
+    const email = emails[entityId]
+    //console.log('interface_users_listVerified', entityId)
+    if (email.verified && email.address) {
+      const emailEntityId = createUniqueUuid(runtime, email.address);
+      //console.log('interface_users_listVerified - verified email.address', entityId, email.address, '=>', emailEntityId)
+      userId2accountId[entityId] = emailEntityId // each user can only have one account
+      // but an account can have multiple users
+      if (accountId2userIds[emailEntityId] === undefined) accountId2userIds[emailEntityId] = []
+      accountId2userIds[emailEntityId].push(entityId)
+      //userWallets[entityId] = email.metawallets
+    //} else {
+      //console.log('interface_users_listVerified - waiting on verification', entityId, email)
+    }
+  }
+  // NOTE: emails is NOT filtered (verified)
+  return { userId2accountId, accountId2userIds, emails }
 }
 
 // add/update/delete
