@@ -42,7 +42,7 @@ export async function interface_positions_ByUserIdPosIds(
 
 export async function interface_positions_ByAccountId(
   runtime: IAgentRuntime, accountId: UUID
-): Promise<{ account: any, component: Component, list: Record<UUID, MwAndPos> } | boolean> {
+): Promise<{ account: any, component: Component | undefined, list: Record<UUID, MwAndPos> } | false> {
   // one db read
   const account = await runtime.getEntityById(accountId)
   //const accounts = await interface_accounts_ByIds(runtime, [accountId])
