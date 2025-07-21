@@ -7,7 +7,7 @@ import {
 } from '@elizaos/core';
 import { v4 as uuidv4 } from 'uuid';
 import { interface_spartan_get } from './int_spartan'
-import { interface_users_list, interface_users_ByIds } from './int_users'
+import { interface_users_list, interface_users_listVerified, interface_users_ByIds } from './int_users'
 import CONSTANTS from '../constants'
 
 // look up by Ids
@@ -70,6 +70,8 @@ export async function interface_accounts_list(runtime: IAgentRuntime, options = 
 }
 
 // list of IDs vs list of users?
+
+// deprecated because we can import a pubkey into multiple accounts
 export async function getAccountIdsByPubkeys(runtime: IAgentRuntime, pubkeys: string[]): Promise<Record<string, UUID>> {
   /*
   const mws = []
@@ -170,6 +172,70 @@ export async function getAccountIdsByPubkeys(runtime: IAgentRuntime, pubkeys: st
 
   return list
 }
+
+export async function getAccountIdsByPubkey_engine(runtime: IAgentRuntime, pubkeys: string[]): Promise<{
+    pubkey2accountId: Record<UUID, UUID[]>, accountId2Component: Record<UUID, unknown>,
+    accountId2userIds: Record<UUID, UUID[]>, userId2Component: Record<UUID, unknown>,
+    userId2accountId: Record<UUID, UUID>
+  } | false> {
+  if (!runtime) {
+    console.trace('WHAT ARE YOU DOING?')
+    return false
+  }
+  const map = await interface_users_listVerified(runtime)
+  if (!map) {
+    return false
+  }
+
+  const accounts = await runtime.getEntityByIds(Object.values(map.userId2accountId))
+  const list = {}
+  const account2Component = {}
+  // accountId is just 0, wtf...
+  for(const idx in accounts) {
+    const account = accounts[idx]
+    if (account) {
+      //console.log('getAccountIdsByPubkey_engine - account', account)
+      const accountId = account.id // or is it entityId?
+      const component = account.components.find(c => c.type === CONSTANTS.COMPONENT_ACCOUNT_TYPE)
+      if (component) {
+        account2Component[accountId] = component.data
+        // const mw = component.data.metawallets.find(mw => mw.keypairs[pos.chain]?.publicKey === pos.publicKey)
+        for(const mw of component.data.metawallets) {
+          for(const chain in mw.keypairs) {
+            const kp = mw.keypairs[chain]
+            //console.log('looking at', accountId, kp.publicKey)
+            if (pubkeys.includes(kp.publicKey)) {
+              // put userid in list for this pubkey
+              if (list[kp.publicKey] === undefined) list[kp.publicKey] = []
+              if (list[kp.publicKey].indexOf(accountId) === -1) {
+                list[kp.publicKey].push(accountId)
+              }
+            }
+          }
+        }
+      } else {
+        console.log('getAccountIdsByPubkey_engine - no component for', CONSTANTS.COMPONENT_ACCOUNT_TYPE, 'for', accountId)
+      }
+    } else {
+      console.log('getAccountIdsByPubkey_engine - no account', account, '? weird')
+    }
+  }
+  return {
+    pubkey2accountId: list, // map of PKs to accountIds
+    accountId2Component: account2Component,
+    accountId2userIds: map.accountId2userIds,
+    // these aren't filtered
+    userId2Component: map.emails, // usersObjects keyed by userId
+    userId2accountId: map.userId2accountId,
+  }
+}
+
+// new version
+export async function getAccountIdsByPubkeys2(runtime: IAgentRuntime, pubkeys: string[]): Promise<Record<UUID, UUID[]> | undefined> {
+  const map = await getAccountIdsByPubkey_engine(runtime, pubkeys)
+  return map?.pubkey2accountId
+}
+
 
 // add/update/delete
 
