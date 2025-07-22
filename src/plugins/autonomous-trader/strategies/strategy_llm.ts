@@ -158,7 +158,7 @@ async function generateBuyPrompt(runtime) {
   } else {
     // we need MCAP so we can price appropriately
     tokens += 'index, price (in USD), Market Capitalization, 24h volume, 24h change %, liquidity (in USD)\n'
-    trendingData.length = 25
+    //trendingData.length = 25
 
     const CAs = trendingData.map(t => t.address)
     const solanaService = await acquireService(runtime, 'chain_solana', 'llm trading strategy');
@@ -404,11 +404,12 @@ async function generateBuySignal(runtime, strategyService, hndl, retries = gener
     delete rugcheckData.topHolders
     delete rugcheckData.markets // don't care
     delete rugcheckData.knownAccounts // maybe useful (creator, pools)
-    console.log('rugcheckData', rugcheckData)
+    delete rugcheckData.lockers
+    //console.log('rugcheckData', rugcheckData)
 
     // rugged, insiderNetworks, graphInsidersDetected, tokenMeta.mutable
     // totalHolders
-    //console.log('risks', rugcheckData.risks) // level: "danger"
+    console.log('risks', rugcheckData.risks) // level: "danger"
     const dangerRisks = rugcheckData.risks.filter(r => r.level === 'danger')
     if (dangerRisks.length) {
       console.log('dangerRisks', dangerRisks)
@@ -446,6 +447,12 @@ async function generateBuySignal(runtime, strategyService, hndl, retries = gener
   // list of wallets WITH this strategy ODI
   const wallets = await getSpartanWallets(runtime, { strategy: STRATEGY_NAME })
   //console.log('llm_strat - wallets', wallets)
+
+  // filter wallets for balance check
+  const allSolanaWallets = wallets.filter(w => w?.publicKey && w.chain === 'solana')
+  const allPubkeys = allSolanaWallets.map(w => w.publicKey)
+  const balances = await solanaService.getBalancesByAddrs(allPubkeys)
+
   // for each pubkey get balances
   for(const w of wallets) {
     //console.log('w', w)
@@ -463,7 +470,8 @@ async function generateBuySignal(runtime, strategyService, hndl, retries = gener
 
       // check current token allocation
       // 20% max of USD value? sol value?
-      const balances = await solanaService.getBalancesByAddrs([w.publicKey])
+
+      //const balances = await solanaService.getBalancesByAddrs([w.publicKey])
       const bal = balances[w.publicKey]
 
       //console.log('bal', bal) //uiAmount
@@ -563,6 +571,7 @@ async function generateBuySignal(runtime, strategyService, hndl, retries = gener
         const msg = 'we bought ' + tokenAmountUi + ' ' + symbol + ' (worth $' + positionInUsd.toFixed(2) + ')'
         await walletIntService.notifyWallet(kp.publicKey, msg)
       } else {
+        // can be due to lamports
         console.warn('no success on Buy')
         // if slippage error, retry?
       }
