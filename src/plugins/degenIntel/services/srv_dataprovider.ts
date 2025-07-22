@@ -144,6 +144,7 @@ export class TradeDataProviderService extends Service {
       if (ca === '84ea5vxsJuf98CRNuVuZYDPjoY4HNjTTCcYY65urxW4V'
           || ca === '6P8EmVEfAicPdyFLpS5GHBeh87EMCk6pRHDDcQFjJXNS'
           || ca === 'METAewgxyPbgwsseH8T16a39CQ5VyVxZi9zXiDPY18m'
+          || ca === '9ETrUMXSoVUXzATaBEyg5P6jX4jv69m76pC8B6uFzE1R'
       ) {
         continue
       }
@@ -418,68 +419,81 @@ export class TradeDataProviderService extends Service {
 
         const curLiq = parseInt(td.liquidity)
         console.log('DP:checkPositions -', ca, 'current', '$' + td.priceUsd, 'curLiq', '$' + curLiq.toLocaleString(), 'curVol24h', '$' + Number(curVol24h.toFixed(0)).toLocaleString(), ca2Positions[ca]?.length, 'positions')
-        for(const ud of ca2Positions[ca]) {
-          //console.log('ud', ud)
-          const p = ud.position
 
-          // FIXME: need to call the strategy's onPriceDelta
+        // do these checks in the background
+        new Promise(async (resolve) => {
+          for(const ud of ca2Positions[ca]) {
+            //console.log('ud', ud)
+            if (!ud) continue
+            const p = ud.position
 
-          // sentiment? 24h volume?
-          // we have: liquidity, priceChange24h, priceUsd
+            // FIXME: need to call the strategy's onPriceDelta
 
-          //console.log('ud.position', p)
-          const minPrice = parseFloat(p.exitConditions.priceDrop)
-          const maxPrice = parseFloat(p.exitConditions.targetPrice)
-          const per = (parseFloat(td.priceUsd) - minPrice) / (maxPrice - minPrice)
-          // solAmount or tokenAMount but neither are in usd
-          //const entryPer = parseFloat(td.priceUsd) / (maxPrice - minPrice)
-          // 'tAmount', Math.round(p.tokenAmount),  need to be in human terms
-          // calculate current worth would be cool
-          const minLiq = parseInt(p.exitConditions.liquidityDrop)
-          const minVol = parseInt(p.exitConditions.volumeDrop)
-          console.log('p low', minPrice, 'high', maxPrice, 'current', td.priceUsd, 'wallet', p.publicKey, 'per', (per * 100).toFixed(0) + '%', 'entry', p.tokenPriceUsd, 'entryAmount', '$' + p.usdAmount, 'minLiq', '$' + minLiq.toLocaleString(), 'minVol', '$' + minVol.toLocaleString())
-          ud.price = td.priceUsd // upload current price
-          if (td.priceUsd <= p.exitConditions.priceDrop) {
-            // sad exit
-            console.log('I has a sad')
-            await closePosition(ud, 'loss')
-            continue
-          } else
-          if (td.priceUsd >= p.exitConditions.targetPrice) {
-            // win
-            console.log('KICK ASS')
-            await closePosition(ud, 'win')
-            continue
-          }
+            // sentiment? 24h volume?
+            // we have: liquidity, priceChange24h, priceUsd
 
-          //console.log('pLiq min', minLiq.toLocaleString(), 'cur', curLiq.toLocaleString())
-          if (curLiq < minLiq) {
-            console.log('liqiduity too low')
-            // if purchase price is greater than current price
-            const type = p.tokenPriceUsd > td.priceUsd ? 'loss_liq' : 'win_liq'
-            if (type === 'loss') {
+            //console.log('ud.position', p)
+            const minPrice = parseFloat(p.exitConditions.priceDrop)
+            const maxPrice = parseFloat(p.exitConditions.targetPrice)
+            const per = (parseFloat(td.priceUsd) - minPrice) / (maxPrice - minPrice)
+            // solAmount or tokenAMount but neither are in usd
+            //const entryPer = parseFloat(td.priceUsd) / (maxPrice - minPrice)
+            // 'tAmount', Math.round(p.tokenAmount),  need to be in human terms
+            // calculate current worth would be cool
+            const minLiq = parseInt(p.exitConditions.liquidityDrop)
+            const minVol = parseInt(p.exitConditions.volumeDrop)
+            console.log('p low', minPrice, 'high', maxPrice, 'current', td.priceUsd, 'wallet', p.publicKey, 'per', (per * 100).toFixed(0) + '%', 'entry', p.tokenPriceUsd, 'entryAmount', '$' + p.usdAmount, 'minLiq', '$' + minLiq.toLocaleString(), 'minVol', '$' + minVol.toLocaleString())
+            ud.price = td.priceUsd // upload current price
+
+            // not awaiting close position
+            // should we tho?
+            // it's so slow
+            // seqential logs help
+            //
+
+            if (td.priceUsd <= p.exitConditions.priceDrop) {
+              // sad exit
               console.log('I has a sad')
-            } else {
-              console.log('Win!')
+              await closePosition(ud, 'loss')
+              continue
+            } else
+            if (td.priceUsd >= p.exitConditions.targetPrice) {
+              // win
+              console.log('KICK ASS')
+              await closePosition(ud, 'win')
+              continue
             }
-            await closePosition(ud, type)
-            continue
-          }
 
-          if (curVol24h < minVol) {
-            console.log('24h volume too low')
-            // if purchase price is greater than current price
-            const type = p.tokenPriceUsd > td.priceUsd ? 'loss_vol' : 'win_vol'
-            if (type === 'loss') {
-              console.log('I has a sad')
-            } else {
-              console.log('Win!')
+            //console.log('pLiq min', minLiq.toLocaleString(), 'cur', curLiq.toLocaleString())
+            if (curLiq < minLiq) {
+              console.log('liqiduity too low')
+              // if purchase price is greater than current price
+              const type = p.tokenPriceUsd > td.priceUsd ? 'loss_liq' : 'win_liq'
+              if (type === 'loss') {
+                console.log('I has a sad')
+              } else {
+                console.log('Win!')
+              }
+              await closePosition(ud, type)
+              continue
             }
-            await closePosition(ud, type)
-            continue
-          }
 
-        }
+            if (curVol24h < minVol) {
+              console.log('24h volume too low')
+              // if purchase price is greater than current price
+              const type = p.tokenPriceUsd > td.priceUsd ? 'loss_vol' : 'win_vol'
+              if (type === 'loss') {
+                console.log('I has a sad')
+              } else {
+                console.log('Win!')
+              }
+              await closePosition(ud, type)
+              continue
+            }
+
+          }
+          resolve()
+        })
       }
     }
     const diff = Date.now() - start
@@ -640,7 +654,7 @@ export class TradeDataProviderService extends Service {
         console.log('TRADER_DATAPROVIDER Checking positions')
         this.checkPositions();
       },
-      1 * 60 * 1000
+      10 * 60 * 1000
     );
 
     // immediate is actually too soon
