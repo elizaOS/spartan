@@ -61,6 +61,10 @@ export default {
             return false;
         }
 
+        // Hi spartan, please enable notification
+        // didn't trigger it
+        // needs trailing s
+
         // Check if message contains notification enabling keywords
         const messageText = message.content?.text?.toLowerCase() || '';
         const notificationKeywords = [
