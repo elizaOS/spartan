@@ -8,7 +8,7 @@ import {
 import { v4 as uuidv4 } from 'uuid';
 import { interface_spartan_get } from './int_spartan'
 import { interface_users_list, interface_users_listVerified, interface_users_ByIds } from './int_users'
-import CONSTANTS from '../constants'
+import CONSTANTS from '../../autonomous-trader/constants'
 
 // look up by Ids
 export async function interface_accounts_ByIds(runtime: IAgentRuntime, ids: UUID[]): Promise<Record<UUID, any>> {
