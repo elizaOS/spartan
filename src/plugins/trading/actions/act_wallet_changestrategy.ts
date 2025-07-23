@@ -136,7 +136,7 @@ export const changeStrategy: Action = {
         console.log('writing componentData', componentData)
         const component = accountMockComponent(componentData)
         const intAcountService = runtime.getService('AUTONOMOUS_TRADER_INTERFACE_ACCOUNTS') as any;
-        await intAcountService.interface_account_update(runtime, component)
+        await intAcountService.interface_account_update(component)
 
         // Generate response
         let responseText = `Successfully changed the strategy for wallet ${targetWalletAddress} from "${oldStrategy}" to "${bestOption}".\n\n`
