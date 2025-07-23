@@ -10,9 +10,8 @@ import {
     createUniqueUuid,
 } from '@elizaos/core';
 import { v4 as uuidv4 } from 'uuid';
-import { takeItPrivate, messageReply, HasEntityIdFromMessage, getDataFromMessage, getAccountFromMessage, accountMockComponent, getWalletsFromText } from '../utils'
-import { matchOption } from '../util_matcher'
-import { interface_account_update } from '../interfaces/int_accounts'
+import { takeItPrivate, messageReply, HasEntityIdFromMessage, getDataFromMessage, getAccountFromMessage, accountMockComponent, getWalletsFromText } from '../../autonomous-trader/utils'
+import { matchOption } from '../../autonomous-trader/util_matcher'
 
 // handle changing strategy of an existing wallet
 export const changeStrategy: Action = {
@@ -136,7 +135,8 @@ export const changeStrategy: Action = {
         // Update the account in the database
         console.log('writing componentData', componentData)
         const component = accountMockComponent(componentData)
-        await interface_account_update(runtime, component)
+        const intAcountService = runtime.getService('AUTONOMOUS_TRADER_INTERFACE_ACCOUNTS') as any;
+        await intAcountService.interface_account_update(runtime, component)
 
         // Generate response
         let responseText = `Successfully changed the strategy for wallet ${targetWalletAddress} from "${oldStrategy}" to "${bestOption}".\n\n`
