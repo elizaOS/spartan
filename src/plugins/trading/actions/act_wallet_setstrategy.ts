@@ -3,9 +3,9 @@ import {
   logger,
 } from '@elizaos/core';
 import { v4 as uuidv4 } from 'uuid';
-import { takeItPrivate, messageReply, HasEntityIdFromMessage, getDataFromMessage, getAccountFromMessage, accountMockComponent } from '../utils'
-import { matchOption } from '../util_matcher'
-import { interface_account_upsert } from '../interfaces/int_accounts'
+import { takeItPrivate, messageReply, HasEntityIdFromMessage, getDataFromMessage, getAccountFromMessage, accountMockComponent } from '../../autonomous-trader/utils'
+import { matchOption } from '../../autonomous-trader/util_matcher'
+//import { interface_account_upsert } from '../interfaces/int_accounts'
 
 // handle starting new form and collecting first field
 export const setStrategy: Action = {
@@ -125,7 +125,8 @@ export const setStrategy: Action = {
 
     console.log('writing componentData', componentData)
     const component = accountMockComponent(componentData)
-    await interface_account_upsert(runtime, message, component)
+    const intAcountService = runtime.getService('AUTONOMOUS_TRADER_INTERFACE_ACCOUNTS') as any;
+    await intAcountService.interface_account_upsert(runtime, message, component)
   },
   examples: [
     [
