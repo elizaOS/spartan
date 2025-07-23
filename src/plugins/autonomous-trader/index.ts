@@ -1,32 +1,5 @@
 import type { Plugin } from '@elizaos/core';
 
-// actions
-import { userRegistration } from "./actions/act_reg_start";
-import { checkRegistration } from "./actions/act_reg_query";
-import { checkRegistrationCode } from "./actions/act_reg_confirmemail";
-import { deleteRegistration } from "./actions/act_reg_delete";
-import { servicesMenu } from "./actions/act_menu";
-import { walletCreate } from "./actions/act_wallet_create";
-import { setStrategy } from "./actions/act_wallet_setstrategy";
-import { userMetawalletList } from "./actions/act_wallet_list";
-import { walletImportAction } from "./actions/act_wallet_import";
-
-import { devFix } from "./actions/devfix";
-import userMetawalletSwap from "./actions/act_wallet_swap";
-import userMetawalletSweep from "./actions/act_wallet_sweep";
-import userMetawalletXfer from "./actions/act_wallet_xfer";
-import userMetawalletBalance from "./actions/act_wallet_balance";
-
-// Strategies
-import { llmStrategy } from './strategies/strategy_llm';
-import { copyStrategy } from './strategies/strategy_copy';
-import { noneStrategy } from './strategies/strategy_none';
-
-// Services
-import { InterfaceUserService } from './services/srv_users';
-import { InterfaceWalletService } from './services/srv_wallets';
-import { InterfacePositionsService } from './services/srv_positions';
-
 function escapeMdV2(text) {
   return text.replace(/[_*\[\]()~`>#+\-=|{}.!\\]/g, '\\$&');
 }
@@ -36,14 +9,42 @@ export const autonomousTraderPlugin: Plugin = {
   description: 'Spartan Autonomous trading agent plugin',
   evaluators: [],
   providers: [],
-  actions: [
-    userRegistration, checkRegistrationCode, checkRegistration, deleteRegistration,
-    servicesMenu, walletCreate, setStrategy, userMetawalletList, devFix,
-    userMetawalletSwap, userMetawalletSweep, userMetawalletXfer, walletImportAction, userMetawalletBalance
-  ],
-  services: [InterfaceUserService, InterfaceWalletService, InterfacePositionsService],
+  actions: [],
+  services: [],
   init: async (_, runtime: IAgentRuntime) => {
     //console.log('autonomous-trader init');
+
+    runtime.registerEvent('DISCORD_SLASH_START', (params) => {
+      //const client = params.client
+      console.log('multiwallet discord /start handler fire!')
+      const message = `
+⚠️ WARNING: DO NOT CLICK on any ADs at the bottom of Discord,
+they are NOT from us and most likely SCAMS.
+
+Discord now display ADS in our bots without our approval. Eliza Labs will NEVER advertise any links, airdrops, groups or discounts on fees.
+
+You can find all our official bots on elizalabs.ai. Please do not search telegram for our bots. there are many impersonators.
+
+===
+
+Welcome to Spartan, the Discord bot. Spartan enables you to manage a wallet where you can put your funds.
+
+By continuing you'll create a crypto wallet that interacts with Spartan to power it up with instant swaps and live data.
+By pressing "Continue" you confirm that you accept our Terms of Use and Privacy Policy
+
+**Terms of Use:** https://spartan.elizaos.ai/tc.html
+**Privacy Policy:** https://spartan.elizaos.ai/pp.html
+
+`
+      /*
+      const channel = params.interaction.channel
+      const options: any = {
+        content: message.trim(),
+      };
+      channel.send(options);
+      */
+      params.interaction.editReply(message)
+    })
 
     runtime.registerEvent('TELEGRAM_SLASH_START', (params) => {
       //console.log('params', params)
@@ -67,11 +68,12 @@ Welcome to Spartan, the Telegram bot. Spartan enables you to manage a wallet whe
 By continuing you'll create a crypto wallet that interacts with Spartan to power it up with instant swaps and live data.
 By pressing "Continue" you confirm that you accept our Terms of Use and Privacy Policy
 
+<b>Terms of Use:</b> https://spartan.elizaos.ai/tc.html
+<b>Privacy Policy:</b> https://spartan.elizaos.ai/pp.html
 
 `,
         { parse_mode: 'HTML' }
       );
-
       /*
       ctx.replyWithMarkdownV2(`
       *What can this bot do?*
@@ -107,11 +109,6 @@ By pressing "Continue" you confirm that you accept our Terms of Use and Privacy 
       `);
       */
     })
-
-    // register strategies (are async)
-    noneStrategy(runtime);
-    llmStrategy(runtime);
-    //copyStrategy(runtime);
   }
 };
 
