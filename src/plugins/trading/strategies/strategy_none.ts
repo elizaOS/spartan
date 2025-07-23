@@ -1,10 +1,9 @@
 import type { IAgentRuntime } from '@elizaos/core';
 
-import { acquireService, askLlmObject } from '../utils';
+import { acquireService } from '../../autonomous-trader/utils';
 
 export async function noneStrategy(runtime: IAgentRuntime) {
   const service = await acquireService(runtime, 'TRADER_STRATEGY', 'no trading strategy');
-  const infoService = await acquireService(runtime, 'TRADER_DATAPROVIDER', 'no trading info');
 
   const me = {
     name: 'No trading strategy',
