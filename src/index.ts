@@ -2,14 +2,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Character, IAgentRuntime, OnboardingConfig, ProjectAgent } from '@elizaos/core';
 import dotenv from 'dotenv';
-///import { communityInvestorPlugin } from './plugins/communityInvestor';
+
 import { autonomousTraderPlugin } from './plugins/autonomous-trader';
+import { multiwalletPlugin } from './plugins/multiwallet';
+import { traderPlugin } from './plugins/trading';
 import { degenIntelPlugin } from './plugins/degenIntel';
-//import { degenTraderPlugin } from './plugins/degenTrader';
-//import { heliusPlugin } from './plugins/helius';
-//import { solanaPlugin } from './plugins/plugin-solana/src';
+//import { communityInvestorPlugin } from './plugins/communityInvestor';
 import { initCharacter } from './init';
-//import orcaPlugin from './plugins/plugin-orca/src';
 
 const imagePath = path.resolve('./src/spartan/assets/portrait.jpg');
 
@@ -40,9 +39,9 @@ export const character: Character = {
     // we need it to be smart and self-reliant
     '@elizaos/plugin-anthropic',
     //'@elizaos/plugin-groq',
-    //'@elizaos/plugin-ollama',
-    '@elizaos/plugin-openai', // better embeddings
+    //'@elizaos/plugin-ollama', // local models + embeddings
     //'@elizaos/plugin-local-ai', // local embeddings
+    '@elizaos/plugin-openai', // better embeddings
     //'@elizaos/plugin-openrouter',
     //...(process.env.GROQ_API_KEY ? ['@elizaos/plugin-groq'] : []),
     //...(process.env.ANTHROPIC_API_KEY ? ['@elizaos/plugin-anthropic'] : []),
@@ -63,8 +62,6 @@ export const character: Character = {
     //'@elizaos/plugin-orca',
   ],
   settings: {
-    // KNOWLEDGE_PATH
-    //CTX_KNOWLEDGE_ENABLED: true,
     GROQ_LARGE_MODEL:
       process.env.GROQ_LARGE_MODEL || 'meta-llama/llama-4-maverick-17b-128e-instruct',
     GROQ_SMALL_MODEL: process.env.GROQ_SMALL_MODEL || 'meta-llama/llama-4-scout-17b-16e-instruct',
@@ -578,15 +575,10 @@ const config: OnboardingConfig = {
 
 export const spartan: ProjectAgent = {
   plugins: [
-    //heliusPlugin,
-    //solanaPlugin,
-    autonomousTraderPlugin, // custodial wallets
-
-    //degenTraderPlugin, // can't load buffer issue
-    degenIntelPlugin,
-
-    //orcaPlugin,
-    // communityInvestorPlugin,
+    autonomousTraderPlugin, // Spartan product and libs/utils
+    degenIntelPlugin,  // multichain intel
+      multiwalletPlugin, // builds on multichain intel to add custodial wallets
+        traderPlugin,      // builds on custodial wallets to add trading
   ],
   character,
   init: async (runtime: IAgentRuntime) => await initCharacter({ runtime, config }),
