@@ -2,7 +2,7 @@ import { IAgentRuntime, getSalt, encryptStringValue, Service, logger } from '@el
 import { acquireService } from '../utils';
 
 import { listPositions, createPosition, updatePosition } from '../interfaces/int_positions';
-import { getAccountIdsByPubkeys } from '../interfaces/int_accounts'
+//import { getAccountIdsByPubkeys } from '../interfaces/int_accounts'
 
 export class InterfacePositionsService extends Service {
   private isRunning = false;
@@ -22,7 +22,8 @@ export class InterfacePositionsService extends Service {
     //console.log('srv_pos:open - pos', pos)
     const pubkey = pos.publicKey
     // find which user owns this wallet
-    const accountIds = await getAccountIdsByPubkeys(this.runtime, [pubkey])
+    const intAcountService = runtime.getService('AUTONOMOUS_TRADER_INTERFACE_ACCOUNTS') as any;
+    const accountIds = await intAcountService.getAccountIdsByPubkeys(this.runtime, [pubkey])
     //console.log('srv_pos:open - accountIds', accountIds, 'pubkey', pubkey)
     const accountId = accountIds[pubkey]
     if (!accountId) {
@@ -36,7 +37,8 @@ export class InterfacePositionsService extends Service {
   //const close = await this.positionIntService.close(publicKey, posHndl, closeInfo)
   async close(publicKey, posHndl, closeInfo) {
     const pubkey = publicKey
-    const accountIds = await getAccountIdsByPubkeys(this.runtime, [pubkey])
+    const intAcountService = runtime.getService('AUTONOMOUS_TRADER_INTERFACE_ACCOUNTS') as any;
+    const accountIds = await intAcountService.getAccountIdsByPubkeys(this.runtime, [pubkey])
     //console.log('srv_pos:close - accountIds', accountIds, 'pubkey', pubkey)
     const accountId = accountIds[pubkey]
     if (!accountId) {
