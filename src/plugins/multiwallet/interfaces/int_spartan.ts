@@ -5,7 +5,7 @@ import {
   createUniqueUuid,
 } from '@elizaos/core';
 
-import CONSTANTS from '../constants'
+import CONSTANTS from '../../autonomous-trader/constants'
 
 // get by id
 export async function interface_spartan_get(runtime: IAgentRuntime): Promise<any> {
