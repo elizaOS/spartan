@@ -1,5 +1,6 @@
 import { IAgentRuntime, getSalt, encryptStringValue, Service, logger } from '@elizaos/core';
 import { acquireService } from '../utils';
+import { interface_users_ByIds } from '../interfaces/int_users'
 
 export class InterfaceUserService extends Service {
   private isRunning = false;
@@ -13,6 +14,10 @@ export class InterfaceUserService extends Service {
   constructor(public runtime: IAgentRuntime) {
     super(runtime); // sets this.runtime
     logger.log('AUTONOMOUS_TRADER_INTERFACE_USER constructor');
+  }
+
+  async interface_users_ByIds(entities: UUID[]) {
+    return interface_users_ByIds(this.runtime, entities)
   }
 
   /**
