@@ -5,7 +5,7 @@ import {
   createUniqueUuid,
 } from '@elizaos/core';
 
-import CONSTANTS from '../constants'
+import CONSTANTS from '../../autonomous-trader/constants'
 import { interface_spartan_get } from './int_spartan'
 
 /*
