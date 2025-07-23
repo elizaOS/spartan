@@ -97,3 +97,63 @@ class strategy_wallet_config {
   // copy: wallet scaling factor
   // stopLoss % / takeProfit %
 }
+
+/*
+Customization setting ideas, I am aware not all of this is feasable but it is something to explore:
+
+ACCOUNT-LEVEL SETTINGS
+
+Notification Preferences
+
+Master notification toggle (on/off) - already built
+Notification intervals: 15-minute updates, 1-hour summaries, daily reports
+Notification channels perference Discord, Telegram, Email
+Alert types: Position opened/closed, stop loss triggered, take profit hit, significant gains/losses, market volatility
+
+Account Risk Management
+
+Maximum total exposure (% of portfolio in positions)
+Maximum drawdown (e.g., 10%)
+Daily loss limit (%)
+Weekly loss limit (%)
+Emergency stop loss (account-wide)
+Diversification rules: Max per token, max per sector, minimum positions
+
+Account Performance Monitoring
+Performance summary frequency (daily, weekly, monthly)
+Portfolio rebalancing intervals
+
+WALLET-LEVEL SETTINGS
+
+Risk Management
+Stop loss percentage (5%, 10%, 15%, etc.)
+Take profit percentage (20%, 30%, 50%, etc.)
+Maximum position size (% of wallet)
+Maximum trades per day
+
+Technical Indicators
+RSI settings: Oversold threshold (30), overbought threshold (70), period (14, 21)
+MACD settings: Fast period (12, 26), slow period (26, 52), signal period (9, 12)
+Moving Averages: Fast MA (10, 20), slow MA (50, 200), MA type (SMA/EMA/WMA), crossover strategy
+Bollinger Bands: Period (20), standard deviations (2)
+Stochastic Oscillator: K period (14), D period (3), oversold/overbought levels
+ATR (Average True Range): Period (14), volatility multiplier
+
+Market Conditions
+Minimum volume ($10k, $50k, $100k)
+Minimum liquidity ($50k, $100k, $500k)
+Volume spike threshold
+Liquidity check intervals
+
+Execution Settings
+Slippage tolerance (0.5%, 1%, 2%)
+Gas optimization (on/off)
+Priority fees (low, medium, high)
+
+Advanced Wallet Settings
+Custom scoring weights for different indicators
+Market sentiment thresholds
+Social score requirements
+Token age requirements
+Market cap thresholds
+*/
