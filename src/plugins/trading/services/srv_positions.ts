@@ -23,7 +23,7 @@ export class InterfacePositionsService extends Service {
     const pubkey = pos.publicKey
     // find which user owns this wallet
     const intAcountService = runtime.getService('AUTONOMOUS_TRADER_INTERFACE_ACCOUNTS') as any;
-    const accountIds = await intAcountService.getAccountIdsByPubkeys(this.runtime, [pubkey])
+    const accountIds = await intAcountService.getAccountIdsByPubkeys([pubkey])
     //console.log('srv_pos:open - accountIds', accountIds, 'pubkey', pubkey)
     const accountId = accountIds[pubkey]
     if (!accountId) {
@@ -38,7 +38,7 @@ export class InterfacePositionsService extends Service {
   async close(publicKey, posHndl, closeInfo) {
     const pubkey = publicKey
     const intAcountService = runtime.getService('AUTONOMOUS_TRADER_INTERFACE_ACCOUNTS') as any;
-    const accountIds = await intAcountService.getAccountIdsByPubkeys(this.runtime, [pubkey])
+    const accountIds = await intAcountService.getAccountIdsByPubkeys([pubkey])
     //console.log('srv_pos:close - accountIds', accountIds, 'pubkey', pubkey)
     const accountId = accountIds[pubkey]
     if (!accountId) {
