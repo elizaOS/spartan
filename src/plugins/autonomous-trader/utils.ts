@@ -6,8 +6,8 @@ import {
   parseJSONObjectFromText,
   createUniqueUuid,
 } from '@elizaos/core';
-import { interface_users_ByIds } from './interfaces/int_users'
-import { interface_accounts_ByIds } from './interfaces/int_accounts'
+//import { interface_users_ByIds } from './interfaces/int_users'
+//import { interface_accounts_ByIds } from './interfaces/int_accounts'
 import { PublicKey, } from '@solana/web3.js';
 
 
@@ -53,7 +53,8 @@ export async function getDataFromMessage(runtime, message) {
     console.error('autotrade::getDataFromMessage - no entityId found')
     return false // avoid database look up
   }
-  const components = await interface_users_ByIds(runtime, [entityId])
+  const intUserService = runtime.getService('AUTONOMOUS_TRADER_INTERFACE_USER') as any;
+  const components = await intUserService.interface_users_ByIds([entityId])
   //console.debug('autotrade::getDataFromMessage - user components', components)
   // .componentId
   return components[entityId]
@@ -66,7 +67,8 @@ export async function getAccountFromMessage(runtime, message) {
   if (componentData?.verified) {
     const emailAddr = componentData.address
     const emailEntityId = createUniqueUuid(runtime, emailAddr);
-    const accounts = await interface_accounts_ByIds(runtime, [emailEntityId])
+    const intAcountService = runtime.getService('AUTONOMOUS_TRADER_INTERFACE_ACCOUNTS') as any;
+    const accounts = await intAcountService.interface_accounts_ByIds(runtime, [emailEntityId])
     if (accounts[emailEntityId]) {
       // accounts[emailEntityId] is componentData
       // .componentId
