@@ -18,9 +18,6 @@ import { actionLinks } from "./actions/act_links";
 import { walletCreate } from "./actions/act_wallet_create";
 import { userMetawalletDelete } from "./actions/act_wallet_delete";
 
-//import { setStrategy } from "./actions/act_wallet_setstrategy";
-//import { changeStrategy } from "./actions/act_wallet_changestrategy";
-
 import { userMetawalletList } from "./actions/act_wallet_list";
 import { walletImportAction } from "./actions/act_wallet_import";
 import userMetawalletSwap from "./actions/act_wallet_swap";
@@ -47,7 +44,6 @@ import { devFix } from "./actions/devfix";
 import { multiwalletProvider } from "./providers/multiwallet";
 import { walletProvider } from "./providers/wallet";
 import { accountProvider } from "./providers/account";
-//import { positionProvider } from "./providers/position";
 import { tokenProvider } from "./providers/token";
 //import { analyticsProvider } from "./providers/analytics";
 
@@ -55,7 +51,6 @@ import { tokenProvider } from "./providers/token";
 import { InterfaceUserService } from './services/srv_users';
 import { InterfaceAccountService } from './services/srv_accounts';
 import { InterfaceWalletService } from './services/srv_wallets';
-//import { InterfacePositionsService } from './services/srv_positions';
 
 function escapeMdV2(text) {
   return text.replace(/[_*\[\]()~`>#+\-=|{}.!\\]/g, '\\$&');
@@ -65,14 +60,14 @@ export const multiwalletPlugin: Plugin = {
   name: 'multitenant wallet',
   description: 'Enduser wallet plugin',
   evaluators: [],
-  providers: [multiwalletProvider, walletProvider, accountProvider, tokenProvider, analyticsProvider],
+  providers: [multiwalletProvider, walletProvider, accountProvider, tokenProvider],
   actions: [
     userRegistration, checkRegistrationCode, checkRegistration, deleteRegistration,
     actionFrequentlyAsked, actionLinks, servicesMenu,
     //devFix,
     verifyHolder, actHolderQuery,
     //actEmailUuid,
-    walletCreate, setStrategy, changeStrategy, walletImportAction, userMetawalletDelete,
+    walletCreate, walletImportAction, userMetawalletDelete,
     userMetawalletXfer, userMetawalletSwap, userMetawalletSweep, userMetawalletSwapAll,
     userMetawalletList,
     //userMetawalletBalance, userMetawalletPnl,
