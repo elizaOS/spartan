@@ -2,7 +2,7 @@ import {
   createUniqueUuid,
   logger,
 } from '@elizaos/core';
-import { HasEntityIdFromMessage, getAccountFromMessage, takeItPrivate, walletContainsMinimum } from '../utils'
+import { HasEntityIdFromMessage, getAccountFromMessage, takeItPrivate, walletContainsMinimum } from '../../autonomous-trader/utils'
 
 // handle starting new form and collecting first field
 // maybe combine with setstrategy, so the mode can help steer outcome

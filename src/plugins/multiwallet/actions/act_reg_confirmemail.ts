@@ -8,8 +8,8 @@ import {
   type UUID,
   createUniqueUuid,
 } from '@elizaos/core';
-import { takeItPrivate, getDataFromMessage, getAccountFromMessage, HasEntityIdFromMessage, getEntityIdFromMessage, findGeneratedCode } from '../utils'
-import CONSTANTS from '../constants'
+import { takeItPrivate, getDataFromMessage, getAccountFromMessage, HasEntityIdFromMessage, getEntityIdFromMessage, findGeneratedCode } from '../../autonomous-trader/utils'
+import CONSTANTS from '../../autonomous-trader/constants'
 import { interface_user_update } from '../interfaces/int_users'
 import { v4 as uuidv4 } from 'uuid';
 

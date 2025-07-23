@@ -7,9 +7,9 @@ import {
   type ActionExample,
 } from '@elizaos/core';
 import { v4 as uuidv4 } from 'uuid';
-import { getDataFromMessage, getAccountFromMessage, messageReply } from '../utils'
-import { matchOptions } from '../util_matcher'
-import CONSTANTS from '../constants'
+import { getDataFromMessage, getAccountFromMessage, messageReply } from '../../autonomous-trader/utils'
+import { matchOptions } from '../../autonomous-trader/util_matcher'
+import CONSTANTS from '../../autonomous-trader/constants'
 
 const menutext = 'Heres an answer to your frequently asked question'
 
@@ -43,7 +43,7 @@ export const actionFrequentlyAsked: Action = {
     const account = await getAccountFromMessage(runtime, message)
     const responseContent = {
       text: account ? 'You can ask me to create a wallet (non-custodial) wallet for autonomous trading'
-      : 'After you sign up, you can ask me to create a wallet (non-custodial) wallet for autonomous trading',
+        : 'After you sign up, you can ask me to create a wallet (non-custodial) wallet for autonomous trading',
       // for the web UI
       //actions: ['REPLY'],
     };

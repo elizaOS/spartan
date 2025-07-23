@@ -7,8 +7,8 @@ import {
   type ActionExample,
   type UUID,
 } from '@elizaos/core';
-import { takeItPrivate, HasEntityIdFromMessage, getDataFromMessage, getAccountFromMessage } from '../utils'
-import CONSTANTS from '../constants'
+import { takeItPrivate, HasEntityIdFromMessage, getDataFromMessage, getAccountFromMessage } from '../../autonomous-trader/utils'
+import CONSTANTS from '../../autonomous-trader/constants'
 
 // probably should be a provider
 export const checkRegistration: Action = {

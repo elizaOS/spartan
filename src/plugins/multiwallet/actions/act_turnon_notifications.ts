@@ -8,7 +8,7 @@ import {
     type State,
     logger,
 } from '@elizaos/core';
-import { HasEntityIdFromMessage, getAccountFromMessage, takeItPrivate2, accountMockComponent } from '../utils';
+import { HasEntityIdFromMessage, getAccountFromMessage, takeItPrivate2, accountMockComponent } from '../../autonomous-trader/utils';
 import { interface_account_update } from '../interfaces/int_accounts';
 
 /**

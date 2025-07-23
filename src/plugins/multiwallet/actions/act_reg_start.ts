@@ -10,8 +10,8 @@ import {
 } from '@elizaos/core';
 import { v4 as uuidv4 } from 'uuid';
 import nodemailer from 'nodemailer';
-import { takeItPrivate, HasEntityIdFromMessage, getEntityIdFromMessage, extractEmails, getDataFromMessage, generateRandomString } from '../utils'
-import CONSTANTS from '../constants'
+import { takeItPrivate, HasEntityIdFromMessage, getEntityIdFromMessage, extractEmails, getDataFromMessage, generateRandomString } from '../../autonomous-trader/utils'
+import CONSTANTS from '../../autonomous-trader/constants'
 
 // Create an SMTP transporter
 const transporter = nodemailer.createTransport({

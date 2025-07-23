@@ -8,8 +8,8 @@ import {
   type UUID,
   type Content,
 } from '@elizaos/core';
-import { takeItPrivate, HasEntityIdFromMessage, getDataFromMessage } from '../utils'
-import CONSTANTS from '../constants'
+import { takeItPrivate, HasEntityIdFromMessage, getDataFromMessage } from '../../autonomous-trader/utils'
+import CONSTANTS from '../../autonomous-trader/constants'
 
 export const deleteRegistration: Action = {
   name: 'DELETE_REGISTRATION',

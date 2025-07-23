@@ -2,7 +2,7 @@ import {
   createUniqueUuid,
   logger,
 } from '@elizaos/core';
-import { HasEntityIdFromMessage, getAccountFromMessage, getEntityIdFromMessage, takeItPrivate, generateRandomString, accountMockComponent, walletContainsMinimum } from '../utils'
+import { HasEntityIdFromMessage, getAccountFromMessage, getEntityIdFromMessage, takeItPrivate, generateRandomString, accountMockComponent, walletContainsMinimum } from '../../autonomous-trader/utils'
 import { interface_account_update } from '../interfaces/int_accounts'
 
 function extractBase64Strings(input) {

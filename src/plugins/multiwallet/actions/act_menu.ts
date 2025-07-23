@@ -7,8 +7,8 @@ import {
   type ActionExample,
 } from '@elizaos/core';
 import { v4 as uuidv4 } from 'uuid';
-import { getDataFromMessage, getAccountFromMessage, messageReply } from '../utils'
-import CONSTANTS from '../constants'
+import { getDataFromMessage, getAccountFromMessage, messageReply } from '../../autonomous-trader/utils'
+import CONSTANTS from '../../autonomous-trader/constants'
 const menutext = 'Heres what you can do'
 
 export const servicesMenu: Action = {
