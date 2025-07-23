@@ -44,4 +44,4 @@ export const traderPlugin: Plugin = {
   }
 };
 
-export default autonomousTraderPlugin;
+export default traderPlugin;
