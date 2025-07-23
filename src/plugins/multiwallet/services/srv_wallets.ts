@@ -1,10 +1,9 @@
 import { IAgentRuntime, getSalt, encryptStringValue, Service, logger } from '@elizaos/core';
-import { acquireService, accountMockComponent, walletContainsMinimum } from '../utils';
+import { acquireService, accountMockComponent, walletContainsMinimum } from '../../autonomous-trader/utils';
 
-import { getWalletByUserEntityIds, getWalletsByPubkey, getSpartanWallets } from '../interfaces/int_wallets';
+import { getWalletByUserEntityIds, getWalletsByPubkey, getSpartanWallets, getMetaWallets } from '../interfaces/int_wallets';
 import { getAccountIdsByPubkey_engine } from '../interfaces/int_accounts';
 import { getUserIdsByPubkeys } from '../interfaces/int_users';
-import { createPosition } from '../interfaces/int_positions';
 
 export class InterfaceWalletService extends Service {
   private isRunning = false;
@@ -23,6 +22,10 @@ export class InterfaceWalletService extends Service {
   async getWalletByUserEntityIds(entities: UUID[]) {
     const metawallets = await getWalletByUserEntityIds(this.runtime, entities)
     return metawallets
+  }
+
+  async getMetaWallets(options = {}) {
+    return getMetaWallets(this.runtime)
   }
 
   async getSpartanWallets(options = {}) {
