@@ -3,7 +3,7 @@ import {
   logger,
 } from '@elizaos/core';
 import { v4 as uuidv4 } from 'uuid';
-import { HasEntityIdFromMessage, takeItPrivate, messageReply, getAccountFromMessage } from '../utils'
+import { HasEntityIdFromMessage, takeItPrivate, messageReply, getAccountFromMessage } from '../../autonomous-trader/utils'
 
 // handle starting new form and collecting first field
 export const userMetawalletList: Action = {
@@ -52,11 +52,18 @@ export const userMetawalletList: Action = {
     // metawallet
     //   strategy
     //   keypairs
-    let wStr = '\n\n'
+    let wStr = 'List wallets: \n\n'
     if (!Object.values(account.metawallets).length) {
       // no keypairs?
       wStr += '  None'
     }
+
+    function flushString() {
+      const output = takeItPrivate(runtime, message, wStr)
+      callback(output)
+      wStr = ''
+    }
+
     for(const mw of account.metawallets) {
       //console.log('mw', mw)
       wStr += 'Wallet:\n'
@@ -66,8 +73,12 @@ export const userMetawalletList: Action = {
       for(const c in mw.keypairs) {
         const kp = mw.keypairs[c]
         //console.log('c', c, 'kp', kp)
-        wStr += '    Chain: ' + c + "\n"
-        wStr += '    Address: ' + kp.publicKey + "\n"
+        wStr += '    Chain: ' + c + 'Address:' + "\n"
+        flushString(wStr)
+        // a pause might be goodhere
+        await new Promise(resolve => setTimeout(resolve, 100))
+        wStr += kp.publicKey + "\n"
+        flushString(wStr)
       }
       if (!Object.values(mw.keypairs).length) {
         // no keypairs?
@@ -75,9 +86,10 @@ export const userMetawalletList: Action = {
       }
       wStr += '\n\n'
     }
+    flushString(wStr)
 
-    const output = takeItPrivate(runtime, message, 'List wallets: ' + wStr)
-    callback(output)
+    //const output = takeItPrivate(runtime, message, wStr)
+    //callback(output)
   },
   examples: [
     [

@@ -3,9 +3,9 @@ import {
   logger,
 } from '@elizaos/core';
 import { v4 as uuidv4 } from 'uuid';
-import { HasEntityIdFromMessage, getAccountFromMessage, takeItPrivate, messageReply, getDataFromMessage, accountMockComponent } from '../utils'
+import { HasEntityIdFromMessage, getAccountFromMessage, takeItPrivate, messageReply, getDataFromMessage, accountMockComponent } from '../../autonomous-trader/utils'
 import { interface_account_upsert, interface_account_update } from '../interfaces/int_accounts'
-import CONSTANTS from '../constants'
+import CONSTANTS from '../../autonomous-trader/constants'
 const { Keypair } = require('@solana/web3.js');
 import bs58 from 'bs58'
 

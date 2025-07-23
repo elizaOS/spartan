@@ -3,7 +3,7 @@ import {
   logger,
 } from '@elizaos/core';
 import { v4 as uuidv4 } from 'uuid';
-import { takeItPrivate, messageReply, HasEntityIdFromMessage, getAccountFromMessage, getDataFromMessage } from '../utils'
+import { takeItPrivate, messageReply, HasEntityIdFromMessage, getAccountFromMessage, getDataFromMessage } from '../../autonomous-trader/utils'
 
 // handle starting new form and collecting first field
 // maybe combine with setstrategy, so the mode can help steer outcome

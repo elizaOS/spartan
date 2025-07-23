@@ -187,33 +187,6 @@ export default {
             const pubKey = kp.publicKey
             console.log('WALLET_BALANCE pubkey', pubKey)
             balanceStr += await solanaService.walletAddressToHumanString(pubKey)
-            /*
-            balanceStr += 'Wallet Address: ' + pubKey + '\n'
-
-            // get wallet contents
-            const pubKeyObj = new PublicKey(pubKey)
-            const [solBal, heldTokens] = await Promise.all([
-                solanaService.getBalanceByAddr(pubKeyObj),
-                solanaService.getTokenAccountsByKeypair(pubKeyObj),
-            ]);
-
-            balanceStr += '  Token Address (Symbol)\n'
-            balanceStr += '  So11111111111111111111111111111111111111111 ($sol) balance: ' + (solBal ?? 'unknown') + '\n'
-            console.log('solBal', solBal)
-            // heldTokens
-
-            // loop on remaining tokens and output
-            for (const t of heldTokens) {
-                const amountRaw = t.account.data.parsed.info.tokenAmount.amount;
-                const mintKey = new PublicKey(t.account.data.parsed.info.mint);
-                const decimals = t.account.data.parsed.info.tokenAmount.decimals;
-                const balance = Number(amountRaw) / (10 ** decimals);
-                const symbol = await solanaService.getTokenSymbol(mintKey)
-                console.log('WALLET_BALANCE symbol', symbol)
-                balanceStr += '  ' + t.pubkey.toString() + ' ($' + symbol + ') balance: ' + balance + '\n'
-            }
-            balanceStr += '\n'
-            */
         }
         console.log('balanceStr', balanceStr)
         takeItPrivate2(runtime, message, `Wallet Balance:\n${balanceStr}`, callback)

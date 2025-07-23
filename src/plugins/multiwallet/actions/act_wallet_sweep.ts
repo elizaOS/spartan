@@ -29,8 +29,8 @@ import {
 } from '@solana/web3.js';
 import bs58 from 'bs58';
 import { v4 as uuidv4 } from 'uuid';
-import { SOLANA_SERVICE_NAME } from '../constants';
-import { HasEntityIdFromMessage, getWalletsFromText, getAccountFromMessage, askLlmObject } from '../utils';
+import { SOLANA_SERVICE_NAME } from '../../autonomous-trader/constants';
+import { HasEntityIdFromMessage, getWalletsFromText, getAccountFromMessage, askLlmObject } from '../../autonomous-trader/utils';
 
 /**
  * Interface representing the content of a sweep operation.
@@ -225,10 +225,11 @@ export default {
             contextStr += 'Wallet Address: ' + pubKey + '\n';
             // get wallet contents
             const pubKeyObj = new PublicKey(pubKey);
-            const [solBal, heldTokens] = await Promise.all([
-                solanaService.getBalanceByAddr(pubKeyObj),
-                solanaService.getTokenAccountsByKeypair(pubKeyObj),
+            const [balances, heldTokens] = await Promise.all([
+              solanaService.getBalancesByAddrs([pubKey]),
+              solanaService.getTokenAccountsByKeypair(pubKeyObj),
             ]);
+            const solBal = balances[pubKey]
             contextStr += '  Token Address (Symbol)\n';
             contextStr += '  So11111111111111111111111111111111111111111 ($sol) balance: ' + (solBal ?? 'unknown') + '\n';
             console.log('solBal', solBal, 'heldTokens', heldTokens);

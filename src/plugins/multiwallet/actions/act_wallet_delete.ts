@@ -6,8 +6,8 @@ import {
   type State,
   type HandlerCallback,
 } from '@elizaos/core';
-import { HasEntityIdFromMessage, getAccountFromMessage, getWalletsFromText, takeItPrivate, takeItPrivate2, accountMockComponent } from '../utils'
-import CONSTANTS from '../constants'
+import { HasEntityIdFromMessage, getAccountFromMessage, getWalletsFromText, takeItPrivate, takeItPrivate2, accountMockComponent } from '../../autonomous-trader/utils'
+import CONSTANTS from '../../autonomous-trader/constants'
 import { interface_account_update } from '../interfaces/int_accounts'
 
 // handle starting new form and collecting first field

@@ -22,8 +22,8 @@ import {
 import BigNumber from 'bignumber.js';
 import bs58 from 'bs58';
 import { v4 as uuidv4 } from 'uuid';
-import { SOLANA_SERVICE_NAME } from '../constants';
-import { HasEntityIdFromMessage, getWalletsFromText, getAccountFromMessage, askLlmObject, takeItPrivate } from '../utils';
+import { SOLANA_SERVICE_NAME } from '../../autonomous-trader/constants';
+import { HasEntityIdFromMessage, getWalletsFromText, getAccountFromMessage, askLlmObject, takeItPrivate } from '../../autonomous-trader/utils';
 
 /**
  * Interface representing the content of a swap all operation.
@@ -59,7 +59,7 @@ async function getTokenDecimals(connection: Connection, mintAddress: string): Pr
         'parsed' in tokenAccountInfo.value.data
     ) {
         const parsedInfo = tokenAccountInfo.value.data.parsed?.info;
-        console.log('parsedInfo', parsedInfo)
+        //console.log('parsedInfo', parsedInfo)
         if (parsedInfo && typeof parsedInfo?.decimals === 'number') {
             return parsedInfo.decimals;
         }
@@ -204,11 +204,11 @@ export default {
             state: state,
             template: sourceAddressTemplate,
         });
-        console.log('prompt', sourcePrompt)
+        //console.log('prompt', sourcePrompt)
 
         const sourceResult = await askLlmObject(runtime, { prompt: sourcePrompt },
             ['sourceWalletAddress'])
-        console.log('MULTIWALLET_SWAP_ALL sourceResult', sourceResult);
+        //console.log('MULTIWALLET_SWAP_ALL sourceResult', sourceResult);
 
         if (!sourceResult.sourceWalletAddress) {
             console.log('MULTIWALLET_SWAP_ALL cant determine source wallet address');
@@ -232,17 +232,17 @@ export default {
         const accountComponentData = await getAccountFromMessage(runtime, message)
 
         const metawallets = accountComponentData.metawallets
-        console.log('metawallets', metawallets)
+        //console.log('metawallets', metawallets)
 
         const userMetawallet = metawallets.find(mw => mw.keypairs?.solana?.publicKey === sourceResult.sourceWalletAddress);
-        console.log('userMetawallet', userMetawallet)
+        //console.log('userMetawallet', userMetawallet)
         if (!userMetawallet) {
             callback?.({ text: 'The requested wallet is not registered in your account.' });
             return false;
         }
         let found = [userMetawallet.keypairs.solana];
 
-        console.log('MULTIWALLET_SWAP_ALL found', found);
+        //console.log('MULTIWALLET_SWAP_ALL found', found);
 
         // gather possibilities
         let contextStr = '';
@@ -252,13 +252,14 @@ export default {
             contextStr += 'Wallet Address: ' + pubKey + '\n';
             // get wallet contents
             const pubKeyObj = new PublicKey(pubKey);
-            const [solBal, heldTokens] = await Promise.all([
-                solanaService.getBalanceByAddr(pubKeyObj),
-                solanaService.getTokenAccountsByKeypair(pubKeyObj),
+            const [balances, heldTokens] = await Promise.all([
+              solanaService.getBalancesByAddrs([pubKey]),
+              solanaService.getTokenAccountsByKeypair(pubKeyObj),
             ]);
+            const solBal = balances[pubKey]
             contextStr += '  Token Address (Symbol)\n';
             contextStr += '  So11111111111111111111111111111111111111111 ($sol) balance: ' + (solBal ?? 'unknown') + '\n';
-            console.log('solBal', solBal, 'heldTokens', heldTokens);
+            //console.log('solBal', solBal, 'heldTokens', heldTokens);
             // loop on remaining tokens and output
             for (const t of heldTokens) {
                 const amountRaw = t.account.data.parsed.info.tokenAmount.amount;
@@ -266,7 +267,7 @@ export default {
                 const decimals = t.account.data.parsed.info.tokenAmount.decimals;
                 const balance = Number(amountRaw) / (10 ** decimals);
                 const symbol = await solanaService.getTokenSymbol(mintKey);
-                console.log('MULTIWALLET_SWAP_ALL symbol', symbol);
+                //console.log('MULTIWALLET_SWAP_ALL symbol', symbol);
                 contextStr += '  ' + t.pubkey.toString() + ' ($' + symbol + ') balance: ' + balance + '\n';
             }
             contextStr += '\n';
@@ -292,7 +293,7 @@ export default {
             callback?.({ text: 'Could not find the specified wallet' });
             return false;
         }
-        console.log('sourceKp', sourceKp)
+        console.log('sourceKp', sourceKp.publicKey)
 
         const secretKey = bs58.decode(sourceKp.privateKey);
         const senderKeypair = Keypair.fromSecretKey(secretKey);
@@ -419,6 +420,21 @@ export default {
                 name: '{{name1}}',
                 content: {
                     text: 'Swap all tokens in my wallet FcfoYfudjC6hnAWRrGw1zEkb87jSSky79A82hddzBFd1 back to SOL',
+                },
+            },
+            {
+                name: '{{name2}}',
+                content: {
+                    text: "I'll help you swap all tokens in your wallet back to SOL",
+                    actions: ['MULTIWALLET_SWAP_ALL'],
+                },
+            },
+        ],
+        [
+            {
+                name: '{{name1}}',
+                content: {
+                    text: 'swap all to SOL on FcfoYfudjC6hnAWRrGw1zEkb87jSSky79A82hddzBFd1',
                 },
             },
             {
