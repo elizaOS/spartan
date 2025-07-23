@@ -68,7 +68,7 @@ export async function getAccountFromMessage(runtime, message) {
     const emailAddr = componentData.address
     const emailEntityId = createUniqueUuid(runtime, emailAddr);
     const intAcountService = runtime.getService('AUTONOMOUS_TRADER_INTERFACE_ACCOUNTS') as any;
-    const accounts = await intAcountService.interface_accounts_ByIds(runtime, [emailEntityId])
+    const accounts = await intAcountService.interface_accounts_ByIds([emailEntityId])
     if (accounts[emailEntityId]) {
       // accounts[emailEntityId] is componentData
       // .componentId
