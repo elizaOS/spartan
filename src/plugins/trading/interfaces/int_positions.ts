@@ -1,9 +1,9 @@
 import type { UUID, Component, IAgentRuntime } from '@elizaos/core';
-import { COMPONENT_ACCOUNT_TYPE } from '../constants'
-import { interface_users_ByIds  } from './int_users'
-import { interface_accounts_ByIds, interface_account_update } from './int_accounts'
-import { getMetaWallets } from './int_wallets'
-import { accountMockComponent } from '../utils'
+import { COMPONENT_ACCOUNT_TYPE } from '../../autonomous-trader/constants'
+//import { interface_users_ByIds  } from './int_users'
+//import { interface_accounts_ByIds, interface_account_update } from './int_accounts'
+//import { getMetaWallets } from './int_wallets'
+import { accountMockComponent } from '../../autonomous-trader/utils'
 // look up by Ids
 
 type MwAndPos = {
@@ -17,7 +17,8 @@ export async function interface_positions_ByUserIdPosIds(
 ): Promise<{ email: any; list: Record<UUID, MwAndPos> } | boolean> {
 
   // one db read
-  const emails = await interface_users_ByIds(runtime, [userId])
+  const intUserService = runtime.getService('AUTONOMOUS_TRADER_INTERFACE_USER') as any;
+  const emails = await intUserService.interface_users_ByIds(runtime, [userId])
   const email = emails[userId]
   if (!email) {
     return false
@@ -124,7 +125,8 @@ export async function listPositions(
   //const userIds = await interface_users_list(runtime)
   //const emails = await interface_users_ByIds(runtime, users)
   //console.log('listPositions - options', options)
-  const metaWallets = await getMetaWallets(runtime)
+  const intWalletService = runtime.getService('AUTONOMOUS_TRADER_INTERFACE_WALLETS') as any;
+  const metaWallets = await intWalletService.getMetaWallets()
   //console.log('listPositions - metaWallets', metaWallets)
   const positions = []
   for(const mw of metaWallets) {
@@ -146,7 +148,9 @@ export async function createPosition(runtime: IAgentRuntime, accountId: UUID, po
   //console.log('createPosition - userId', userId, 'pos', pos)
   //console.log('createPosition - chain', pos.chain, pos.publicKey)
 
-  const accounts = await interface_accounts_ByIds(runtime, [accountId])
+  const intAccountService = runtime.getService('AUTONOMOUS_TRADER_INTERFACE_ACCOUNTS') as any;
+
+  const accounts = await intAccountService.interface_accounts_ByIds([accountId])
   const account = accounts[accountId]
 
   // because we need to save, it's missing the
@@ -183,7 +187,7 @@ export async function createPosition(runtime: IAgentRuntime, accountId: UUID, po
   //console.log('createPosition - saving', accountId, account)
 
   const componentData = accountMockComponent(account)
-  await interface_account_update(runtime, componentData)
+  await intAccountService.interface_account_update(componentData)
   /*
   const id = account.componentId
   const entityId = account.entityId
@@ -242,11 +246,13 @@ export async function updatePosition(runtime: IAgentRuntime, accountId: UUID, po
   // integrate changed data
   wallet.positions[idx] = {...wallet.positions[idx], ...delta }
 
+  const intAccountService = runtime.getService('AUTONOMOUS_TRADER_INTERFACE_ACCOUNTS') as any;
+
   //console.log('updatePosition - mw', mw)
   //console.log('updatePosition - component', component)
   // expects componentId to be in componentData.id
   // component needs component.data
-  await interface_account_update(runtime, component)
+  await intAccountService.interface_account_update(component)
   /*
   await runtime.updateComponent({
     id: email.componentId,
