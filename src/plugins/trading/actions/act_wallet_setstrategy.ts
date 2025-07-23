@@ -126,7 +126,7 @@ export const setStrategy: Action = {
     console.log('writing componentData', componentData)
     const component = accountMockComponent(componentData)
     const intAcountService = runtime.getService('AUTONOMOUS_TRADER_INTERFACE_ACCOUNTS') as any;
-    await intAcountService.interface_account_upsert(runtime, message, component)
+    await intAcountService.interface_account_upsert(message, component)
   },
   examples: [
     [
