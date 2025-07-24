@@ -13,7 +13,7 @@ import { actHolderQuery } from "./actions/act_holder_query";
 import actEmailUuid from "./actions/act_email_uuid";
 
 import { actionFrequentlyAsked } from "./actions/act_faq";
-import { actionLinks } from "./actions/act_links";
+//import { actionLinks } from "./actions/act_links";
 
 import { walletCreate } from "./actions/act_wallet_create";
 import { userMetawalletDelete } from "./actions/act_wallet_delete";
@@ -63,7 +63,8 @@ export const multiwalletPlugin: Plugin = {
   providers: [multiwalletProvider, walletProvider, accountProvider, tokenProvider],
   actions: [
     userRegistration, checkRegistrationCode, checkRegistration, deleteRegistration,
-    actionFrequentlyAsked, actionLinks, servicesMenu,
+    actionFrequentlyAsked, servicesMenu,
+    //actionLinks,
     //devFix,
     verifyHolder, actHolderQuery,
     //actEmailUuid,
