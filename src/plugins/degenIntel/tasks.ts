@@ -2,7 +2,7 @@ import { type IAgentRuntime, type UUID, logger } from '@elizaos/core';
 
 import Birdeye from './tasks/birdeye';
 import BuySignal from './tasks/buySignal';
-import SellSignal from './tasks/sellSignal';
+//import SellSignal from './tasks/sellSignal';
 import Twitter from './tasks/twitter';
 import TwitterParser from './tasks/twitterParser';
 import type { Sentiment } from './types';
@@ -220,6 +220,7 @@ export const registerTasks = async (runtime: IAgentRuntime, worldId?: UUID) => {
     );
   }
 
+/*
   // enable trading stuff only if we need to
   //const tradeService = runtime.getService(ServiceTypes.DEGEN_TRADING) as unknown; //  as ITradeService
   // has to be included after degenTrader
@@ -258,7 +259,6 @@ export const registerTasks = async (runtime: IAgentRuntime, worldId?: UUID) => {
       },
       tags: ['queue', 'repeat', 'degen_intel', 'immediate'],
     });
-
     runtime.registerTaskWorker({
       name: 'INTEL_GENERATE_SELL_SIGNAL',
       validate: async (runtime, _message, _state) => {
@@ -296,4 +296,5 @@ export const registerTasks = async (runtime: IAgentRuntime, worldId?: UUID) => {
       'WARNING: Trader service not found, skipping creation of INTEL_GENERATE_*_SIGNAL task'
     );
   }
+*/
 };
