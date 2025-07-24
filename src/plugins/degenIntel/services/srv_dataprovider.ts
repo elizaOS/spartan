@@ -194,6 +194,13 @@ export class TradeDataProviderService extends Service {
     //const ca = Object.keys(ca2Positions)[0]
     //const CAs = Object.keys(ca2Positions)
     console.log('DP:checkPositions - looking at', tokens.length, 'CAs')
+
+    if (!tokens.length) {
+      const diff = Date.now() - start
+      console.log('DP:checkPositions - done checking open positions, took', diff.toLocaleString() + 'ms')
+      return
+    }
+
     // we're going to be tracking less tokens than the number of wallets we have
     for(const ca of tokens) {
       const mintObj = new PublicKey(ca)
