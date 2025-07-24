@@ -1,8 +1,8 @@
 import { logger, type IAgentRuntime, createUniqueUuid } from '@elizaos/core';
 import { v4 as uuidv4 } from 'uuid';
-import { acquireService, askLlmObject } from '../utils';
+import { acquireService, askLlmObject } from '../../autonomous-trader/utils';
 //import { getTokenBalance } from '../wallet';
-import { getSpartanWallets } from '../interfaces/int_wallets'
+//import { getSpartanWallets } from '../interfaces/int_wallets'
 import { PublicKey } from '@solana/web3.js';
 import BigNumber from 'bignumber.js';
 
@@ -445,7 +445,8 @@ async function generateBuySignal(runtime, strategyService, hndl, retries = gener
   // phase 1 in parallel (fetch wallets/balance)
   // assess response, figure what wallet are buying based on balance
   // list of wallets WITH this strategy ODI
-  const wallets = await getSpartanWallets(runtime, { strategy: STRATEGY_NAME })
+  const walletService = await acquireService(runtime, 'AUTONOMOUS_TRADER_INTERFACE_WALLETS', 'llm trading info');
+  const wallets = await walletService.getSpartanWallets({ strategy: STRATEGY_NAME })
   //console.log('llm_strat - wallets', wallets)
 
   // filter wallets for balance check
