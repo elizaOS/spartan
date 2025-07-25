@@ -10,6 +10,7 @@ export const userMetawalletList: Action = {
   name: 'USER_METAWALLET_LIST',
   similes: [
   ],
+  description: 'Allows a user to list all wallet addresses they have',
   validate: async (runtime: IAgentRuntime, message: Memory) => {
     //console.log('USER_METAWALLET_LIST validate', message?.metadata?.fromId)
     if (!await HasEntityIdFromMessage(runtime, message)) {
@@ -27,7 +28,6 @@ export const userMetawalletList: Action = {
 
     return true
   },
-  description: 'Allows a user to list all wallets they have',
   handler: async (
     runtime: IAgentRuntime,
     message: Memory,
@@ -73,7 +73,7 @@ export const userMetawalletList: Action = {
       for(const c in mw.keypairs) {
         const kp = mw.keypairs[c]
         //console.log('c', c, 'kp', kp)
-        wStr += '    Chain: ' + c + 'Address:' + "\n"
+        wStr += '    Chain: ' + c + ' Address:' + "\n"
         flushString(wStr)
         // a pause might be goodhere
         await new Promise(resolve => setTimeout(resolve, 100))
