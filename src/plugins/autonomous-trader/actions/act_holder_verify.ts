@@ -3,7 +3,6 @@ import {
   logger,
 } from '@elizaos/core';
 import { HasEntityIdFromMessage, getAccountFromMessage, getEntityIdFromMessage, takeItPrivate, generateRandomString, accountMockComponent, walletContainsMinimum } from '../../autonomous-trader/utils'
-import { interface_account_update } from '../interfaces/int_accounts'
 
 function extractBase64Strings(input) {
     const base64Regex = /(?:[A-Za-z0-9+/]{4}){4,}(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?/g;
@@ -26,11 +25,11 @@ function extractBase64Strings(input) {
 // handle starting new form and collecting first field
 // maybe combine with setstrategy, so the mode can help steer outcome
 export const verifyHolder: Action = {
-  name: 'VERIFY_SPARTAN_HOLDER',
+  name: 'BECOME_VERIFIED_HOLDER',
   similes: [
   ],
   // 10k ai16z?
-  description: 'Replies, and verifies wallet holds 1m $degenai tokens (hoplite)',
+  description: 'Replies, sets verification wallet that holds 1m $degenai tokens (hoplite) or 10k $ai16z (partner)',
   validate: async (runtime: IAgentRuntime, message: Memory) => {
     //console.log('VERIFY_SPARTAN_HOLDER validate')
 /*
@@ -157,7 +156,8 @@ sve:validate message {
           componentData.holderCheck = nonceSetup.pubkey
           console.log('componentData', componentData)
           const component = accountMockComponent(componentData)
-          await interface_account_update(runtime, component)
+          const intAcountService = runtime.getService('AUTONOMOUS_TRADER_INTERFACE_ACCOUNTS') as any;
+          await intAcountService.interface_account_update(runtime, component)
         } else {
           callback(takeItPrivate(runtime, message, `Incorrect`))
         }
@@ -206,7 +206,7 @@ sve:validate message {
         name: '{{name2}}',
         content: {
           text: "I'll help you get started",
-          actions: ['VERIFY_SPARTAN_HOLDER'],
+          actions: ['BECOME_VERIFIED_HOLDER'],
         },
       },
     ],
@@ -221,7 +221,7 @@ sve:validate message {
         name: '{{name2}}',
         content: {
           text: "I'll help you get started",
-          actions: ['VERIFY_SPARTAN_HOLDER'],
+          actions: ['BECOME_VERIFIED_HOLDER'],
         },
       },
     ],
@@ -236,7 +236,7 @@ sve:validate message {
         name: '{{name2}}',
         content: {
           text: "I'll help you get started",
-          actions: ['VERIFY_SPARTAN_HOLDER'],
+          actions: ['BECOME_VERIFIED_HOLDER'],
         },
       },
     ],
