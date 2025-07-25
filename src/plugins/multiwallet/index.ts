@@ -1,19 +1,6 @@
 import type { Plugin } from '@elizaos/core';
 
 // actions
-
-// move to spartan
-/*
-import { servicesMenu } from "./actions/act_menu";
-import { verifyHolder } from "./actions/act_holder_verify";
-import { actHolderQuery } from "./actions/act_holder_query";
-import { actionFrequentlyAsked } from "./actions/act_faq";
-import { actionLinks } from "./actions/act_links";
-import { devFix } from "./actions/devfix";
-import spartanNews from "./actions/act_spartan_news";
-*/
-
-// keep
 import { walletCreate } from "./actions/act_wallet_create";
 import { userMetawalletDelete } from "./actions/act_wallet_delete";
 
@@ -48,13 +35,10 @@ export const multiwalletPlugin: Plugin = {
   evaluators: [],
   providers: [multiwalletProvider, walletProvider, tokenProvider],
   actions: [
-    //actionFrequentlyAsked, actionLinks, servicesMenu,
-    //devFix,
-    //verifyHolder, actHolderQuery,
     walletCreate, walletImportAction, userMetawalletDelete,
     userMetawalletXfer, userMetawalletSwap, userMetawalletSweep, userMetawalletSwapAll,
-    userMetawalletList,
-    userMetawalletBalance,
+    userMetawalletList, // keep this enabled for the special formatting
+    //userMetawalletBalance,
     //actionPositionList,
     //openPositionAction,
     //actionTokenScam, actionTokenRug,
