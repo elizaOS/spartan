@@ -112,7 +112,7 @@ export class InterfaceWalletService extends Service {
   }
 
   async getAccountsByPubkey(pubKey: string) {
-    const res = await this.intAccountService.getAccountIdsByPubkey_engine(this.runtime, [pubKey])
+    const res = await this.intAccountService.getAccountIdsByPubkey_engine([pubKey])
     const accountComponents = res.pubkey2accountId[pubKey].map(acctId => res.accountId2Component[acctId])
     return {...res, accountComponents }
   }
@@ -120,7 +120,7 @@ export class InterfaceWalletService extends Service {
   // maybe support an array of msgs, so we don't have to redo the routing
   async notifyWallet(pubKey: string, msg: string) {
     // resolve pubkey to something
-    const res = await this.intAccountService.getAccountIdsByPubkey_engine(this.runtime, [pubKey])
+    const res = await this.intAccountService.getAccountIdsByPubkey_engine([pubKey])
     const accountComponents = res.pubkey2accountId[pubKey].map(acctId => res.accountId2Component[acctId])
     const accountIds = accountComponents.map(a => a.accountEntityId)
     await this.intAccountService.notifyAccount(accountIds, msg)
