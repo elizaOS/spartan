@@ -1,0 +1,74 @@
+<div class="max-w-7xl mx-auto dark:text-white">
+  <a href="/previous-page" class="p-3 text-gray-600 dark:text-gray-400 hover:underline inline-flex items-center">
+    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+    </svg>
+    Back to Trades
+  </a>
+  <div x-data="{
+    loading: true,
+    address: '<%- address %>',
+    async refresh() {
+      this.loading = true
+      const res = await fetch('json/tokens/' + this.address)
+      const data = await res.json()
+      console.log('data', data)
+      this.loading = false
+    },
+    init() {
+      this.refresh()
+      console.log('address', this.address)
+      setInterval(() => {
+        this.refresh()
+      }, 1 * 60 * 1000)
+    }
+  }">
+
+    <div class="flex flex-col md:flex-row">
+      <h3>Token information for <span x-text="address"></span></h3>
+      <span x-show="loading">token data loading...</span>
+      <!-- 75% column -->
+      <div class="w-full md:w-3/4 p-4">
+      </div>
+
+      <!-- 25% column -->
+      <div class="w-full md:w-1/4 p-4 text-sm">
+        <div class="bg-white dark:bg-gray-800 shadow-md rounded-b-lg p-6 mb-8">
+          <h2 class="font-medium text-lg">AI Agent Status</h2>
+          <h3 class="font-normal">Agent Status</h3>
+          <span class="font-thin">Actively Trading...</span>
+          <br>
+          <h3 class="font-normal">Next Scan</h3>
+          <span class="font-thin">Some date</span>
+        </div>
+
+        <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 mb-8">
+          <h2 class="text-lg">Trade Statistics</h2>
+        </div>
+
+        <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 mb-8">
+          <h2 class="text-lg">Recent Performance</h2>
+          <br>
+          <div class="flex flex-row w-full">
+            <div>
+              <p>win</p>
+              50%
+            </div>
+            <div>
+              <p>avg pft</p>
+              1%
+            </div>
+            <div>
+              <p>avg lss</p>
+              99%
+            </div>
+          </div>
+          Profit Factor
+          <br>
+          <span>2.34</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>

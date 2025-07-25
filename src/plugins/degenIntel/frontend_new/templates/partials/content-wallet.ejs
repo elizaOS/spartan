@@ -1,0 +1,182 @@
+<div class="max-w-7xl mx-auto dark:text-white">
+  <div x-data="{
+    loading: true,
+    walletAddress: '',
+    usdValue: 0.00,
+    tokens: [],
+    trades: [],
+    async refresh() {
+      this.loading = true
+      //const res = await fetch('../wallet', { method: 'POST'})
+      const res = await fetch('json/wallets/<%- walletAddress %>', { method: 'GET'})
+      const data = await res.json()
+      //console.log('history', data.history[0])
+      //console.log('portfolio', data.portfolio.items[0])
+      this.trades = data.history
+      //console.log('trades', this.trades.length)
+      this.usdValue = data.portfolio.totalUsd
+      this.walletAddress = data.portfolio.wallet
+      this.tokens = data.portfolio.items
+
+      this.loading = false
+    },
+    init() {
+      this.refresh()
+      setInterval(() => {
+        this.refresh()
+      }, 1 * 60 * 1000)
+    }
+  }">
+
+    <div class="flex flex-col md:flex-row">
+      <!-- 75% column -->
+      <div class="w-full md:w-3/4 p-4">
+        <h3>Portfolio Holdings for <span x-text="walletAddress"></span></h3>
+        <span x-show="loading">wallet data loading...</span>
+        <br>
+        <div class="flex flex-row items-center">
+          <h2 x-text="'$' + Number(usdValue.toFixed(2)).toLocaleString(2)" class="text-3xl"></h2>
+          <small class="ml-4"></small>
+        </div>
+
+        <br>
+
+        <!-- Top Tokens Section -->
+        <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 mb-8">
+          <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-semibold text-gray-900 dark:text-white">Assets</h2>
+            <%# a href="#" class="text-primary-600 hover:text-primary-500 text-sm font-medium">View All</a %>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+              <thead>
+                <tr>
+                  <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">#</th>
+                  <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider max-w-[100px]">Token</th>
+                  <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Amount</th>
+                  <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Value</th>
+                  <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Change</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                <template x-for="(item, idx) in tokens" :key="item.address">
+                  <tr class="hover:bg-teal-50 dark:hover:bg-gray-700 overflow-hidden" >
+                    <td class="px-3 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400" x-text="idx + 1"></td>
+                    <td class="px-3 py-4 whitespace-nowrap">
+                      <div class="flex items-center">
+                        <div class="h-8 w-8 flex-shrink-0 rounded-full bg-teal-100 flex items-center justify-center">
+                          <span class="text-teal-600 font-bold text-xs" x-text="item.chainId"></span>
+                        </div>
+                        <div class="ml-3">
+                          <p class="text-sm font-medium text-gray-900 dark:text-white" x-text="item.name?.length > 16 ? item.symbol : item.name"></p>
+                          <p class="text-xs text-gray-500 dark:text-gray-400" x-text="item.symbol"></p>
+                        </div>
+                      </div>
+                    </td>
+                    <!-- item.balance item.uiAmount -->
+                    <td class="px-3 py-4 whitespace-nowrap text-right text-sm font-medium text-gray-900 dark:text-white" x-text="Number(Number(item.uiAmount).toFixed(2)).toLocaleString()"></td>
+                    <td class="px-3 py-4 whitespace-nowrap text-right text-sm font-medium text-gray-900 dark:text-white" x-text="(isNaN(Number(item.valueUsd)) ? 'Unknown' : ('$' + Number(item.valueUsd.toFixed(2))))"></td>
+                    <td class="px-3 py-4 whitespace-nowrap text-right text-sm font-medium text-gray-900 dark:text-white">🤷</td>
+                  </tr>
+                </template>
+
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- 25% column -->
+      <div class="w-full md:w-1/4 p-4 text-sm">
+        <img src="images/sparty.jpg" class="rounded-t-lg">
+        <div class="bg-white dark:bg-gray-800 shadow-md rounded-b-lg p-6 mb-8">
+          <h2 class="font-medium text-lg">AI Agent Status</h2>
+          <h3 class="font-normal">Agent Status</h3>
+          <span class="font-thin">Actively Trading...</span>
+          <br>
+          <h3 class="font-normal">Next Scan</h3>
+          <span class="font-thin">Some date</span>
+        </div>
+
+        <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 mb-8">
+          <h2 class="text-lg">Trade Statistics</h2>
+          <p>Total Trades: <span x-text="trades.length"></span></p>
+          <p>Winning Trades: <span x-text="trades.length"></span></p>
+          <p>Losing Trades: <span x-text="trades.length"></span></p>
+        </div>
+
+        <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 mb-8">
+          <h2 class="text-lg">Recent Performance</h2>
+          <br>
+          <div class="flex flex-row w-full">
+            <div>
+              <p>win</p>
+              50%
+            </div>
+            <div>
+              <p>avg pft</p>
+              1%
+            </div>
+            <div>
+              <p>avg lss</p>
+              99%
+            </div>
+          </div>
+          Profit Factor
+          <br>
+          <span>2.34</span>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- Top Tokens Section -->
+    <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 mb-8">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-semibold text-gray-900 dark:text-white">Trades</h2>
+        <%# a href="#" class="text-primary-600 hover:text-primary-500 text-sm font-medium">View All</a %>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+          <thead>
+            <tr>
+              <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider max-w-[100px]">Ticker</th>
+              <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Buy</th>
+              <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Price</th>
+              <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Amount</th>
+              <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">When</th>
+              <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+            <template x-for="(item, idx) in trades" :key="item.txHash">
+              <tr class="hover:bg-teal-50 dark:hover:bg-gray-700 overflow-hidden" >
+                <td class="px-3 py-4 whitespace-nowrap">
+                  <div class="flex items-center">
+                    <div class="h-8 w-8 flex-shrink-0 rounded-full bg-teal-100 flex items-center justify-center">
+                      <span class="text-teal-600 font-bold text-xs"></span>
+                    </div>
+                    <div class="ml-3">
+                      <p class="text-sm font-medium text-gray-900 dark:text-white"></p>
+                      <p class="text-xs text-gray-500 dark:text-gray-400"></p>
+                    </div>
+                  </div>
+                </td>
+                <!-- item.balance item.uiAmount -->
+                <td class="px-3 py-4 whitespace-nowrap text-right text-sm font-medium text-gray-900 dark:text-white" x-text="item.data.mainAction"></td>
+                <td class="px-3 py-4 whitespace-nowrap text-right text-sm font-medium text-gray-900 dark:text-white"></td>
+                <td class="px-3 py-4 whitespace-nowrap text-right text-sm font-medium text-gray-900 dark:text-white"></td>
+                <td class="px-3 py-4 whitespace-nowrap text-right text-sm font-medium text-gray-900 dark:text-white" x-text="item.blockTime"></td>
+                <td class="px-3 py-4 whitespace-nowrap text-right text-sm font-medium text-gray-900 dark:text-white" x-text="item.data.status"></td>
+              </tr>
+            </template>
+
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
