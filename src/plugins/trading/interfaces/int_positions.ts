@@ -17,7 +17,7 @@ export async function interface_positions_ByUserIdPosIds(
 ): Promise<{ email: any; list: Record<UUID, MwAndPos> } | boolean> {
 
   // one db read
-  const intUserService = runtime.getService('AUTONOMOUS_TRADER_INTERFACE_USER') as any;
+  const intUserService = runtime.getService('AUTONOMOUS_TRADER_INTERFACE_USERS') as any;
   const emails = await intUserService.interface_users_ByIds(runtime, [userId])
   const email = emails[userId]
   if (!email) {
