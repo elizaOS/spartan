@@ -1,5 +1,5 @@
 import { IAgentRuntime, getSalt, encryptStringValue, Service, logger } from '@elizaos/core';
-import { interface_accounts_list, interface_accounts_ByIds, getAccountIdsByPubkeys, interface_account_update, interface_account_upsert } from '../interfaces/int_accounts'
+import { getAccountIdsByPubkey_engine, interface_accounts_list, interface_accounts_ByIds, getAccountIdsByPubkeys, interface_account_update, interface_account_upsert } from '../interfaces/int_accounts'
 import { getUseridsByAccountId } from '../interfaces/int_users'
 
 export class InterfaceAccountService extends Service {
@@ -25,6 +25,10 @@ export class InterfaceAccountService extends Service {
 
   async interface_accounts_ByIds(accountIds) {
     return interface_accounts_ByIds(this.runtime, accountIds)
+  }
+
+  async getAccountIdsByPubkey_engine(pubKeys) {
+    return getAccountIdsByPubkey_engine(this.runtime, pubKeys)
   }
 
   async interface_account_upsert(message, componentData) {
