@@ -1,5 +1,21 @@
 import type { Plugin } from '@elizaos/core';
 
+
+import { verifyHolder } from "./actions/act_holder_verify";
+// FIXME: remove/change holder address
+
+// convert to providers
+//import { servicesMenu } from "./actions/act_menu";
+//import { actionFrequentlyAsked } from "./actions/act_faq";
+//import { actionLinks } from "./actions/act_links";
+import spartanNews from "./actions/act_spartan_news";
+
+// odi utility
+//import { devFix } from "./actions/devfix";
+
+// account provider had this
+import { holderProvider } from "./providers/holder";
+
 function escapeMdV2(text) {
   return text.replace(/[_*\[\]()~`>#+\-=|{}.!\\]/g, '\\$&');
 }
@@ -8,8 +24,8 @@ export const autonomousTraderPlugin: Plugin = {
   name: 'autonomous-trader',
   description: 'Spartan Autonomous trading agent plugin',
   evaluators: [],
-  providers: [],
-  actions: [],
+  providers: [holderProvider],
+  actions: [verifyHolder, spartanNews],
   services: [],
   init: async (_, runtime: IAgentRuntime) => {
     //console.log('autonomous-trader init');
