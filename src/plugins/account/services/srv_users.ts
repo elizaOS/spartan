@@ -1,19 +1,27 @@
 import { IAgentRuntime, getSalt, encryptStringValue, Service, logger } from '@elizaos/core';
-import { acquireService } from '../utils';
-import { interface_users_ByIds } from '../interfaces/int_users'
+import { interface_users_list, interface_users_listVerified, interface_users_ByIds } from '../interfaces/int_users'
 
 export class InterfaceUserService extends Service {
   private isRunning = false;
   private registry: Record<number, any> = {};
 
-  static serviceType = 'AUTONOMOUS_TRADER_INTERFACE_USER';
+  // was USER
+  static serviceType = 'AUTONOMOUS_TRADER_INTERFACE_USERS';
   capabilityDescription = 'The agent serves multiple users';
 
   // config (key/string)
 
   constructor(public runtime: IAgentRuntime) {
     super(runtime); // sets this.runtime
-    logger.log('AUTONOMOUS_TRADER_INTERFACE_USER constructor');
+    logger.log('AUTONOMOUS_TRADER_INTERFACE_USERS constructor');
+  }
+
+  async interface_users_list() {
+    return interface_users_list(this.runtime)
+  }
+
+  async interface_users_listVerified() {
+    return interface_users_listVerified(this.runtime)
   }
 
   async interface_users_ByIds(entities: UUID[]) {
