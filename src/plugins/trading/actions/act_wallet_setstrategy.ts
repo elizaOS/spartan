@@ -112,11 +112,11 @@ export const setStrategy: Action = {
     for(const c in keypairs) {
       const kp = keypairs[c]
       str += '  Chain: ' + c + '\n'
-      str += '    Private key: ' + kp.privateKey + ' (Write this down/save it somewhere safe, we will not show this again. This key allows you to spend the funds)\n'
+      str += '    Private key: ' + kp.privateKey + ' (Write this down/save it somewhere safe and delete this message, we will not show this again. This key allows to access the funds.)\n'
       str += '    Public key: ' + kp.publicKey + ' (This is the wallet address that you can publicly send to people)\n'
     }
 
-    const output = takeItPrivate(runtime, message, 'Made a meta-wallet\n' + str + ' please fund it with SOL to start trading')
+    const output = takeItPrivate(runtime, message, 'Made a meta-wallet\n' + str + ' please fund it with SOL to start trading.')
     callback(output)
 
     componentData.metawallets.push(newWallet)
