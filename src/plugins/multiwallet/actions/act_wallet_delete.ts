@@ -8,7 +8,6 @@ import {
 } from '@elizaos/core';
 import { HasEntityIdFromMessage, getAccountFromMessage, getWalletsFromText, takeItPrivate, takeItPrivate2, accountMockComponent } from '../../autonomous-trader/utils'
 import CONSTANTS from '../../autonomous-trader/constants'
-import { interface_account_update } from '../interfaces/int_accounts'
 
 // handle starting new form and collecting first field
 export const userMetawalletDelete: Action = {
@@ -23,6 +22,8 @@ export const userMetawalletDelete: Action = {
     if (!traderChainService) return false
     const traderStrategyService = runtime.getService('TRADER_STRATEGY') as any;
     if (!traderStrategyService) return false
+    const intAccountService = runtime.getService('AUTONOMOUS_TRADER_INTERFACE_ACCOUNTS') as any;
+    if (!intAccountService) return false
 
     if (!await HasEntityIdFromMessage(runtime, message)) {
       console.warn('USER_METAWALLET_DELETE validate - author not found')
@@ -66,7 +67,8 @@ export const userMetawalletDelete: Action = {
 
     console.log('writing componentData', componentData)
 
-    await interface_account_update(runtime, accountMockComponent(componentData))
+    const intAccountService = runtime.getService('AUTONOMOUS_TRADER_INTERFACE_ACCOUNTS') as any;
+    await intAccountService.interface_account_update(accountMockComponent(componentData))
     takeItPrivate2(runtime, message, "Wallet " + sources[0] + " deleted", callback)
   },
   examples: [
