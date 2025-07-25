@@ -8,7 +8,7 @@ import { parseDateFilterFromMessage, applyDateFilterToAccount, formatDateFilterT
  */
 export const accountProvider: Provider = {
     name: 'ACCOUNT_DETAILS',
-    description: 'Account-level information including all metawallets, strategies, and overall performance',
+    description: 'Account-level information including verified wallet, metawallets, strategies, and overall performance',
     dynamic: true,
     get: async (runtime: IAgentRuntime, message: Memory, state: State) => {
         console.log('ACCOUNT_DETAILS')
