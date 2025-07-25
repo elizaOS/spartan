@@ -4,7 +4,6 @@ import {
 } from '@elizaos/core';
 import { v4 as uuidv4 } from 'uuid';
 import { HasEntityIdFromMessage, getAccountFromMessage, takeItPrivate, messageReply, getDataFromMessage, accountMockComponent } from '../../autonomous-trader/utils'
-import { interface_account_upsert, interface_account_update } from '../interfaces/int_accounts'
 import CONSTANTS from '../../autonomous-trader/constants'
 const { Keypair } = require('@solana/web3.js');
 import bs58 from 'bs58'
@@ -22,6 +21,8 @@ export const walletImportAction: Action = {
     if (!traderChainService) return false
     const traderStrategyService = runtime.getService('TRADER_STRATEGY') as any;
     if (!traderStrategyService) return false
+    const intAccountService = runtime.getService('AUTONOMOUS_TRADER_INTERFACE_ACCOUNTS') as any;
+    if (!intAccountService) return false
 
     if (!await HasEntityIdFromMessage(runtime, message)) {
       console.log('WALLET_IMPORT validate - author not found')
@@ -113,10 +114,11 @@ export const walletImportAction: Action = {
     // dev mode
     //newData.metawallets = [newWallet]
     //await interface_account_update(runtime, account)
+    const intAccountService = runtime.getService('AUTONOMOUS_TRADER_INTERFACE_ACCOUNTS') as any;
     console.log('account', account)
     const component = accountMockComponent(account)
     console.log('component', component)
-    await interface_account_upsert(runtime, message, component)
+    await intAccountService.interface_account_upsert(message, component)
     /*
     await runtime.updateComponent({
       id: account.componentId,
