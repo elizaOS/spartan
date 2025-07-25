@@ -17,8 +17,8 @@ import {
 } from '@solana/web3.js';
 import { v4 as uuidv4 } from 'uuid';
 import { UUID } from 'crypto';
-import { SOLANA_SERVICE_NAME } from '../constants';
-import { HasEntityIdFromMessage, getAccountFromMessage, getWalletsFromText, takeItPrivate, takeItPrivate2 } from '../utils';
+import { SOLANA_SERVICE_NAME } from '../../autonomous-trader/constants';
+import { HasEntityIdFromMessage, getAccountFromMessage, getWalletsFromText, takeItPrivate, takeItPrivate2 } from '../../autonomous-trader/utils';
 import { listPositions, interface_positions_ByAccountId } from '../interfaces/int_positions';
 
 /**
