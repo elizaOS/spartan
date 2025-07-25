@@ -1,4 +1,5 @@
 import { Service, logger } from '@elizaos/core';
+import { acquireService } from '../../autonomous-trader/utils';
 
 export class TradeStrategyService extends Service {
   private isRunning = false;
@@ -8,41 +9,24 @@ export class TradeStrategyService extends Service {
 
   // config (key/string)
 
+  positionIntService: any;
+  walletIntService: any;
+
   constructor(public runtime: IAgentRuntime) {
     super(runtime); // sets this.runtime
     this.strategyRegistry = {};
 
+
+    const asking = 'Strategy service'
+
     // bad smell
     // AUTONOMOUS_TRADER_INTERFACE_POSITIONS should register with me...
-    const asking = 'Trader Strategy Service'
-    const serviceType = 'AUTONOMOUS_TRADER_INTERFACE_POSITIONS'
-    this.positionIntService = this.runtime.getService(serviceType) as any;
-    new Promise(async resolve => {
-      while (!this.positionIntService) {
-        console.log(asking, 'waiting for', serviceType, 'service...');
-        this.positionIntService = this.runtime.getService(serviceType) as any;
-        if (!this.positionIntService) {
-          await new Promise((waitResolve) => setTimeout(waitResolve, 1000));
-        } else {
-          console.log(asking, 'Acquired', serviceType, 'service...');
-        }
-      }
+    acquireService(this.runtime, 'AUTONOMOUS_TRADER_INTERFACE_POSITIONS', asking).then(service => {
+      this.positionIntService = service
+    })
 
-      const serviceType2 = 'AUTONOMOUS_TRADER_INTERFACE_WALLETS'
-      this.walletIntService = this.runtime.getService(serviceType2) as any;
-      new Promise(async resolve => {
-        while (!this.walletIntService) {
-          console.log(asking, 'waiting for', serviceType2, 'service...');
-          this.walletIntService = this.runtime.getService(serviceType2) as any;
-          if (!this.walletIntService) {
-            await new Promise((waitResolve) => setTimeout(waitResolve, 1000));
-          } else {
-            console.log(asking, 'Acquired', serviceType2, 'service...');
-          }
-        }
-      })
-
-
+    acquireService(this.runtime, 'AUTONOMOUS_TRADER_INTERFACE_WALLETS', asking).then(service => {
+      this.walletIntService = service
     })
   }
 
@@ -165,12 +149,12 @@ export class TradeStrategyService extends Service {
 
     this.infoService = this.runtime.getService('TRADER_DATAPROVIDER');
     while (!this.infoService) {
-      console.log('waiting for Trading info service...');
+      console.log('waiting for strategy service...');
       this.infoService = this.runtime.getService('TRADER_DATAPROVIDER');
       if (!this.infoService) {
         await new Promise((resolve) => setTimeout(resolve, 1000));
       } else {
-        console.log('Acquired trading info service...');
+        console.log('Acquired strategy service...');
       }
     }
 
