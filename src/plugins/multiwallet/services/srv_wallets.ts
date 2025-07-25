@@ -1,9 +1,6 @@
 import { IAgentRuntime, getSalt, encryptStringValue, Service, logger } from '@elizaos/core';
-import { acquireService, accountMockComponent, walletContainsMinimum } from '../../autonomous-trader/utils';
-
 import { getWalletByUserEntityIds, getWalletsByPubkey, getSpartanWallets, getMetaWallets } from '../interfaces/int_wallets';
-import { getAccountIdsByPubkey_engine } from '../interfaces/int_accounts';
-import { getUserIdsByPubkeys } from '../interfaces/int_users';
+import { acquireService, accountMockComponent, walletContainsMinimum } from '../../autonomous-trader/utils';
 
 export class InterfaceWalletService extends Service {
   private isRunning = false;
@@ -12,11 +9,36 @@ export class InterfaceWalletService extends Service {
   static serviceType = 'AUTONOMOUS_TRADER_INTERFACE_WALLETS';
   capabilityDescription = 'The agent serves multiple wallets';
 
+  intAccountService: any;
+  //intUserService: any;
+
   // config (key/string)
 
   constructor(public runtime: IAgentRuntime) {
     super(runtime); // sets this.runtime
-    logger.log('AUTONOMOUS_TRADER_INTERFACE_WALLETS constructor');
+    //runtime.logger.debug('AUTONOMOUS_TRADER_INTERFACE_WALLETS constructor');
+    const asking = 'Multiwallet service'
+
+    acquireService(this.runtime, 'AUTONOMOUS_TRADER_INTERFACE_ACCOUNTS', asking).then(service => {
+      this.intAccountService = service
+    })
+
+    /*
+    const getUserAcct = async (asking) => {
+      const serviceType = 'AUTONOMOUS_TRADER_INTERFACE_USERS'
+      this.intUserService = this.runtime.getService(serviceType) as any;
+      while (!this.intUserService) {
+        runtime.logger.debug(asking, 'waiting for', serviceType, 'service...');
+        this.intUserService = this.runtime.getService(serviceType) as any;
+        if (!this.intUserService) {
+          await new Promise((waitResolve) => setTimeout(waitResolve, 1000));
+        } else {
+          runtime.logger.debug(asking, 'Acquired', serviceType, 'service...');
+        }
+      }
+    }
+    getUserAcct(asking) // no wait
+    */
   }
 
   async getWalletByUserEntityIds(entities: UUID[]) {
@@ -53,9 +75,9 @@ export class InterfaceWalletService extends Service {
 
     let meetsReq = false
     if (account.holderCheck) {
-      meetsReq = await this.walletIntService.walletContainsMinimum(account.holderCheck, 'Gu3LDkn7Vx3bmCzLafYNKcDxv2mH7YN44NJZFXnypump', 1_000_000)
+      meetsReq = await walletContainsMinimum(this.runtime, account.holderCheck, 'Gu3LDkn7Vx3bmCzLafYNKcDxv2mH7YN44NJZFXnypump', 1_000_000)
       if (!meetsReq) {
-        meetsReq = await this.walletIntService.walletContainsMinimum(account.holderCheck, 'HeLp6NuQkmYB4pYWo2zYs22mESHXPQYzXbB8n4V98jwC', 10_000)
+        meetsReq = await walletContainsMinimum(this.runtime, account.holderCheck, 'HeLp6NuQkmYB4pYWo2zYs22mESHXPQYzXbB8n4V98jwC', 10_000)
       }
     }
     // did it change from store
@@ -73,7 +95,7 @@ export class InterfaceWalletService extends Service {
     account.lastRequiresCheckAt = ts
     account.lastRequiresCheck = meetsReq
     const component = accountMockComponent(account)
-    await interface_account_update(this.runtime, component)
+    await this.intAccountService.interface_account_update(this.runtime, component)
     return meetsReq
   }
 
@@ -90,7 +112,7 @@ export class InterfaceWalletService extends Service {
   }
 
   async getAccountsByPubkey(pubKey: string) {
-    const res = await getAccountIdsByPubkey_engine(this.runtime, [pubKey])
+    const res = await this.intAccountService.getAccountIdsByPubkey_engine(this.runtime, [pubKey])
     const accountComponents = res.pubkey2accountId[pubKey].map(acctId => res.accountId2Component[acctId])
     return {...res, accountComponents }
   }
@@ -98,11 +120,10 @@ export class InterfaceWalletService extends Service {
   // maybe support an array of msgs, so we don't have to redo the routing
   async notifyWallet(pubKey: string, msg: string) {
     // resolve pubkey to something
-    const res = await getAccountIdsByPubkey_engine(this.runtime, [pubKey])
+    const res = await this.intAccountService.getAccountIdsByPubkey_engine(this.runtime, [pubKey])
     const accountComponents = res.pubkey2accountId[pubKey].map(acctId => res.accountId2Component[acctId])
     const accountIds = accountComponents.map(a => a.accountEntityId)
-    const accountIntService = this.runtime.getService("AUTONOMOUS_TRADER_INTERFACE_ACCOUNTS") as any;
-    await accountIntService.notifyAccount(accountIds, msg)
+    await this.intAccountService.notifyAccount(accountIds, msg)
   }
 
   /**
