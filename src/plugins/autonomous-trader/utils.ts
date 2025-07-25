@@ -53,7 +53,7 @@ export async function getDataFromMessage(runtime, message) {
     console.error('autotrade::getDataFromMessage - no entityId found')
     return false // avoid database look up
   }
-  const intUserService = runtime.getService('AUTONOMOUS_TRADER_INTERFACE_USER') as any;
+  const intUserService = runtime.getService('AUTONOMOUS_TRADER_INTERFACE_USERS') as any;
   const components = await intUserService.interface_users_ByIds([entityId])
   //console.debug('autotrade::getDataFromMessage - user components', components)
   // .componentId
