@@ -10,6 +10,11 @@ export class TradeDataProviderService extends Service {
 
   // config (key/string)
 
+  positionIntService: any;
+  walletIntService: any;
+  accountIntService: any;
+  solanaService: any;
+
   constructor(public runtime: IAgentRuntime) {
     super(runtime); // sets this.runtime
     this.registry = {};
@@ -91,7 +96,6 @@ export class TradeDataProviderService extends Service {
         }
       }
     })
-
 
     this.events = new Map();
   }
@@ -194,6 +198,13 @@ export class TradeDataProviderService extends Service {
     //const ca = Object.keys(ca2Positions)[0]
     //const CAs = Object.keys(ca2Positions)
     console.log('DP:checkPositions - looking at', tokens.length, 'CAs')
+
+    if (!tokens.length) {
+      const diff = Date.now() - start
+      console.log('DP:checkPositions - done checking open positions, took', diff.toLocaleString() + 'ms')
+      return
+    }
+
     // we're going to be tracking less tokens than the number of wallets we have
     for(const ca of tokens) {
       const mintObj = new PublicKey(ca)
@@ -674,8 +685,11 @@ export class TradeDataProviderService extends Service {
       const mws = await this.walletIntService.getWalletByAccountIds(accountIds)
       console.log('boot mws', mws.length, mws)
       */
+
       // gather all pubkeys
       const wallets = await this.walletIntService.getSpartanWallets({})
+      // not account here...
+      //console.log('wallet0', wallets[0])
       console.log('intel:DPsrv - boot wallets', wallets.length)
       const pubKeys = Array.from(new Set(wallets.filter(w => w.chain === 'solana').map(w => w.publicKey)))
       console.log('intel:DPsrv - pubKeys', pubKeys)
@@ -711,84 +725,8 @@ export class TradeDataProviderService extends Service {
 
           // resolve pubkey to something
           await this.walletIntService.notifyWallet(accountAddress, msg)
-          //const res = await this.walletIntService.getAccountsByPubkey(accountAddress)
-          //const accountIds = res.accountComponents.map(a => a.accountEntityId)
-          //await this.accountIntService.notifyAccount(accountIds, msg)
-
-          /*
-          const accounts = res.accountComponents
-          //
-          //console.log('accounts', accounts.length)
-          // probably need to dedupe userIds before sending, so we don't send dupes
-          const userIds = []
-          for(const a of accounts) {
-            const accountId = a.accountEntityId
-            res.accountId2userIds[accountId].forEach(userId => {
-              if (userIds.indexOf(userId) === -1) {
-                userIds.push(userId)
-              }
-            })
-            //const userComponents = res.accountId2userIds[accountId].map(userId => res.userId2Component[userId])
-            //console.log('accountId', accountId, 'userComponents', userComponents)
-          }
-          //const userComponents = userIds.map(userId => res.userId2Component[userId])
-          //console.log('need to notify', userIds, userComponents)
-
-          // reget it all again
-          const entities = await this.runtime.getEntityByIds(userIds)
-          //for(const userId of userIds) {
-          for(const e of entities) {
-            const userId = e.id
-            //const componentData = res.userId2Component[userId]
-            //console.log('need to notify', userId, e)
-            const component = e.components.find(c => c.type === 'component_user_v0')
-            //console.log('component', component)
-            const source = e.metadata.telegram ? 'telegram' : 'discord'
-            const worldId = component.worldId
-            const roomId = component.roomId
-            const target: TargetInfo = {
-              source,
-              roomId,
-              // channelId
-              // serverId
-              entityId: userId,
-              // threadId
-            }
-            const content: Memory = {
-              // thought
-              text: msg,
-              // actions, providers
-              source,
-              // target
-              // url, inReplyTo, attachments
-              channelType: 'DM',
-            }
-            await this.runtime.sendMessageToTarget(target, content)
-//             console.log('source', source, 'worldId', worldId)
-//             const service = this.runtime.getService(source)
-//             console.log('service', !!service)
-//             const sendDirectMessage = (this.runtime.getService(source) as any)?.sendDirectMessage;
-//             console.log('sendDirectMessage', !!sendDirectMessage)
-//             if (sendDirectMessage) {
-//               await sendDirectMessage(runtime, userId, source, msg, worldId);
-//             } else {
-//               console.log('no such service', source)
-//             }
-          }
-             */
         })
       })
-      /*
-      for(const w of wallets) {
-        if (!w?.publicKey) {
-          console.warn('skipping', w, 'no publicKey')
-          continue
-        }
-        if (w.chain === 'solana') {
-          await this.solanaService.subscribeToAccount(w.publicKey)
-        }
-      }
-      */
 
       logger.info('Trading info service started successfully');
     } catch (error) {
