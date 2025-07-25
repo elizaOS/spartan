@@ -1,8 +1,6 @@
 import type { UUID, IAgentRuntime } from '@elizaos/core';
 import { createUniqueUuid } from '@elizaos/core';
-
-import { interface_users_list, interface_users_listVerified } from '../interfaces/int_users'
-import { interface_accounts_ByIds } from '../interfaces/int_accounts'
+import { acquireService } from '../../autonomous-trader/utils'
 
 // look up by Ids
 
@@ -16,7 +14,9 @@ export async function getMetaWallets(runtime: IAgentRuntime): Promise<any[] | fa
   }
   //console.log('getMetaWallets')
   //interface_accounts_list is available
-  const users = await interface_users_list(runtime)
+  const intUserService = await acquireService(runtime, 'AUTONOMOUS_TRADER_INTERFACE_USERS', 'wallet interface')
+  //console.log('Have intUserService')
+  const users = await intUserService.interface_users_list()
   //console.log('getMetaWallets - users', users.length)
   const mws = []
 
@@ -111,9 +111,14 @@ export async function getWalletByUserEntityIds_engine(
     console.trace('WHAT ARE YOU DOING?')
     return false
   }
-  const map = await interface_users_listVerified(runtime)
+  //console.log('getting users')
+  const intUserService = runtime.getService('AUTONOMOUS_TRADER_INTERFACE_USERS') as any;
+  //console.log('Got users')
+  const map = await intUserService.interface_users_listVerified()
+  //console.log('Got verified list', map)
   const accounts = map.userId2accountId
   const accountIds = map.userId2accountId
+  //console.log('accountIds', accountIds)
   const accountWallets = await getMetaWalletsByEmailEntityIds(runtime, Object.values(accountIds))
   //console.log('getWalletByUserEntityIds_engine - accountWallets', accountWallets)
 
@@ -147,7 +152,10 @@ export async function getMetaWalletsByEmailEntityIds(runtime: IAgentRuntime, ema
   // find these users metawallets
   // each id will have a list of wallets
   const userWallets = {}
-  const accounts = await interface_accounts_ByIds(runtime, emailEntityIds)
+  const intAccountService = await acquireService(runtime, 'AUTONOMOUS_TRADER_INTERFACE_ACCOUNTS', 'wallet interface')
+  //console.log('have accounts', emailEntityIds)
+  const accounts = await intAccountService.interface_accounts_ByIds(emailEntityIds)
+  //console.log('got interface_accounts_ByIds - accounts', accounts)
   for(const entityId in accounts) {
     const account = accounts[entityId]
     //console.log('getMetaWalletsByEmailEntityIds', entityId, 'wallets', account.metawallets)
