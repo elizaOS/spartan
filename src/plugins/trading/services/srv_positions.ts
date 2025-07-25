@@ -1,8 +1,6 @@
 import { IAgentRuntime, getSalt, encryptStringValue, Service, logger } from '@elizaos/core';
-import { acquireService } from '../utils';
-
 import { listPositions, createPosition, updatePosition } from '../interfaces/int_positions';
-//import { getAccountIdsByPubkeys } from '../interfaces/int_accounts'
+import { acquireService } from '../../autonomous-trader/utils';
 
 export class InterfacePositionsService extends Service {
   private isRunning = false;
@@ -13,17 +11,27 @@ export class InterfacePositionsService extends Service {
 
   // config (key/string)
 
+  intAccountService: any;
+
   constructor(public runtime: IAgentRuntime) {
     super(runtime); // sets this.runtime
     logger.log('AUTONOMOUS_TRADER_INTERFACE_POSITIONS constructor');
+    const asking = 'Position service'
+
+    acquireService(this.runtime, 'AUTONOMOUS_TRADER_INTERFACE_ACCOUNTS', asking).then(service => {
+      this.intAccountService = service
+    })
+  }
+
+  async list(options = {}) {
+    return listPositions(this.runtime, options)
   }
 
   async open(pos) {
     //console.log('srv_pos:open - pos', pos)
     const pubkey = pos.publicKey
     // find which user owns this wallet
-    const intAcountService = runtime.getService('AUTONOMOUS_TRADER_INTERFACE_ACCOUNTS') as any;
-    const accountIds = await intAcountService.getAccountIdsByPubkeys([pubkey])
+    const accountIds = await this.intAccountService.getAccountIdsByPubkeys([pubkey])
     //console.log('srv_pos:open - accountIds', accountIds, 'pubkey', pubkey)
     const accountId = accountIds[pubkey]
     if (!accountId) {
@@ -37,8 +45,7 @@ export class InterfacePositionsService extends Service {
   //const close = await this.positionIntService.close(publicKey, posHndl, closeInfo)
   async close(publicKey, posHndl, closeInfo) {
     const pubkey = publicKey
-    const intAcountService = runtime.getService('AUTONOMOUS_TRADER_INTERFACE_ACCOUNTS') as any;
-    const accountIds = await intAcountService.getAccountIdsByPubkeys([pubkey])
+    const accountIds = await this.intAccountService.getAccountIdsByPubkeys([pubkey])
     //console.log('srv_pos:close - accountIds', accountIds, 'pubkey', pubkey)
     const accountId = accountIds[pubkey]
     if (!accountId) {
@@ -47,10 +54,6 @@ export class InterfacePositionsService extends Service {
     }
     //console.log('updating account', accountId, 'posHndl', posHndl)
     return updatePosition(this.runtime, accountId, posHndl, { close: closeInfo })
-  }
-
-  async list(options = {}) {
-    return listPositions(this.runtime, options)
   }
 
   /**
