@@ -82,70 +82,72 @@ export const multiwalletProvider: Provider = {
         balanceStr += await solanaService.walletAddressToLLMString(pubKey)
         balanceStr += 'Current wallet: ' + pubKey + ' \n'
         balanceStr += '  strategy: ' + kp.strategy + '\n'
-        balanceStr += '  positions in csv format:\n'
-        balanceStr += '    CA,solAmount,openTimestamp,openDate,closeTimestamp,tokenAmount,status,pnl\n'
-        for (const p of kp.positions) {
-          //console.log('p', p)
-          let amount = p.solAmount
-          let pnl = ''
-          let openTimestamp = p.timestamp
-          let closeTimestamp = ''
+        if (kp.positions) {
+          balanceStr += '  positions in csv format:\n'
+          balanceStr += '    CA,solAmount,openTimestamp,openDate,closeTimestamp,tokenAmount,status,pnl\n'
+          for (const p of kp.positions) {
+            //console.log('p', p)
+            let amount = p.solAmount
+            let pnl = ''
+            let openTimestamp = p.timestamp
+            let closeTimestamp = ''
 
-          if (p.close) {
-            if (p.close.type !== 'unknown' && p.close.type !== 'unknwon') {
-              //console.log('closed p', p.close, parseFloat(p.close.outAmount))
-              const outAmountSol = parseFloat(p.close.outAmount) / 1e9
-              amount += ' => ' + outAmountSol
+            if (p.close) {
+              if (p.close.type !== 'unknown' && p.close.type !== 'unknwon') {
+                //console.log('closed p', p.close, parseFloat(p.close.outAmount))
+                const outAmountSol = parseFloat(p.close.outAmount) / 1e9
+                amount += ' => ' + outAmountSol
 
-              // Calculate PnL
-              const initialSol = parseFloat(p.solAmount)
-              const finalSol = outAmountSol
-              const pnlAbsolute = finalSol - initialSol
-              const pnlPercentage = (pnlAbsolute / initialSol) * 100
+                // Calculate PnL
+                const initialSol = parseFloat(p.solAmount)
+                const finalSol = outAmountSol
+                const pnlAbsolute = finalSol - initialSol
+                const pnlPercentage = (pnlAbsolute / initialSol) * 100
 
-              pnl = `${pnlAbsolute.toFixed(6)} SOL (${pnlPercentage > 0 ? '+' : ''}${pnlPercentage.toFixed(2)}%)`
+                pnl = `${pnlAbsolute.toFixed(6)} SOL (${pnlPercentage > 0 ? '+' : ''}${pnlPercentage.toFixed(2)}%)`
 
-              // Add close timestamp if available
-              if (p.close.timestamp) {
-                closeTimestamp = p.close.timestamp
-              } else {
-                // If no close timestamp, use current time or leave empty
-                closeTimestamp = ''
+                // Add close timestamp if available
+                if (p.close.timestamp) {
+                  closeTimestamp = p.close.timestamp
+                } else {
+                  // If no close timestamp, use current time or leave empty
+                  closeTimestamp = ''
+                }
               }
             }
+            /*
+            8|odi-dev  | p {
+            8|odi-dev  |   id: "202ef36e-0b60-4049-a96b-59d45aa2be46",
+            8|odi-dev  |   chain: "solana",
+            8|odi-dev  |   close: {
+            8|odi-dev  |     fees: {
+            8|odi-dev  |       sol: 0.000105,
+            8|odi-dev  |       lamports: 105000,
+            8|odi-dev  |     },
+            8|odi-dev  |     type: "win",
+            8|odi-dev  |     outAmount: "3768179",
+            8|odi-dev  |     signature: "2PrUcjJqvmfLS5nMoccg3a3DXkC7tprigtzXGRQVxFGgzVayrenz6wSGfmoUVhoQY2mxLkbcqnbhGeTW8nDArNH4",
+            8|odi-dev  |     sellRequest: 273584798,
+            8|odi-dev  |   },
+            8|odi-dev  |   token: "GJU3bXxNkNtYxgjkoFhAdq7VrXJAB2GW4Cpt6kLcbonk",
+            8|odi-dev  |   swapFee: 105000,
+            8|odi-dev  |   publicKey: "HZoGUehwBuXkFhTkkov7VkKDo2uhUKqdoijVb9vByE9B",
+            8|odi-dev  |   solAmount: 0.003093,
+            8|odi-dev  |   timestamp: 1752103641542,
+            8|odi-dev  |   tokenAmount: 273584798,
+            8|odi-dev  |   exitConditions: {
+            8|odi-dev  |     priceDrop: "0.001",
+            8|odi-dev  |     reasoning: "If price drops below $0.001, liquidity falls below $100k, or sentiment analysis (if available) turns negative",
+            8|odi-dev  |     volumeDrop: "50000",
+            8|odi-dev  |     targetPrice: "0.002",
+            8|odi-dev  |     liquidityDrop: "100000",
+            8|odi-dev  |     sentimentDrop: "-20",
+            8|odi-dev  |   },
+            8|odi-dev  | }
+            */
+            const openDate = formatYYMMDD_HHMMSS(new Date(openTimestamp))
+            balanceStr += '    ' + [p.token, amount, openTimestamp, openDate, closeTimestamp, p.tokenAmount, !!p.close ? p.close.type : 'open', pnl].join(',') + '\n'
           }
-          /*
-          8|odi-dev  | p {
-          8|odi-dev  |   id: "202ef36e-0b60-4049-a96b-59d45aa2be46",
-          8|odi-dev  |   chain: "solana",
-          8|odi-dev  |   close: {
-          8|odi-dev  |     fees: {
-          8|odi-dev  |       sol: 0.000105,
-          8|odi-dev  |       lamports: 105000,
-          8|odi-dev  |     },
-          8|odi-dev  |     type: "win",
-          8|odi-dev  |     outAmount: "3768179",
-          8|odi-dev  |     signature: "2PrUcjJqvmfLS5nMoccg3a3DXkC7tprigtzXGRQVxFGgzVayrenz6wSGfmoUVhoQY2mxLkbcqnbhGeTW8nDArNH4",
-          8|odi-dev  |     sellRequest: 273584798,
-          8|odi-dev  |   },
-          8|odi-dev  |   token: "GJU3bXxNkNtYxgjkoFhAdq7VrXJAB2GW4Cpt6kLcbonk",
-          8|odi-dev  |   swapFee: 105000,
-          8|odi-dev  |   publicKey: "HZoGUehwBuXkFhTkkov7VkKDo2uhUKqdoijVb9vByE9B",
-          8|odi-dev  |   solAmount: 0.003093,
-          8|odi-dev  |   timestamp: 1752103641542,
-          8|odi-dev  |   tokenAmount: 273584798,
-          8|odi-dev  |   exitConditions: {
-          8|odi-dev  |     priceDrop: "0.001",
-          8|odi-dev  |     reasoning: "If price drops below $0.001, liquidity falls below $100k, or sentiment analysis (if available) turns negative",
-          8|odi-dev  |     volumeDrop: "50000",
-          8|odi-dev  |     targetPrice: "0.002",
-          8|odi-dev  |     liquidityDrop: "100000",
-          8|odi-dev  |     sentimentDrop: "-20",
-          8|odi-dev  |   },
-          8|odi-dev  | }
-          */
-          const openDate = formatYYMMDD_HHMMSS(new Date(openTimestamp))
-          balanceStr += '    ' + [p.token, amount, openTimestamp, openDate, closeTimestamp, p.tokenAmount, !!p.close ? p.close.type : 'open', pnl].join(',') + '\n'
         }
         balanceStr += '==='
       }
