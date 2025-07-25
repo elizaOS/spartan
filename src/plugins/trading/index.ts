@@ -8,6 +8,7 @@ import { positionSettings } from "./actions/act_position_settings";
 
 //import actionPositionList from "./actions/act_position_list";
 import openPositionAction from "./actions/act_open_position";
+//import userMetawalletPnl from "./actions/act_wallet_pnl";
 
 // Providers
 import { analyticsProvider } from "./providers/analytics";
@@ -21,10 +22,6 @@ import { noneStrategy } from './strategies/strategy_none';
 // Services
 import { InterfacePositionsService } from './services/srv_positions';
 
-function escapeMdV2(text) {
-  return text.replace(/[_*\[\]()~`>#+\-=|{}.!\\]/g, '\\$&');
-}
-
 export const traderPlugin: Plugin = {
   name: 'trader',
   description: 'Agent trading plugin',
@@ -34,6 +31,7 @@ export const traderPlugin: Plugin = {
     setStrategy, changeStrategy,
     //actionPositionList,
     openPositionAction, positionSettings,
+    //userMetawalletPnl
   ],
   services: [InterfacePositionsService],
   init: async (_, runtime: IAgentRuntime) => {
