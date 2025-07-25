@@ -411,6 +411,7 @@ export function extractEmails(text) {
 
 export async function getCacheExp(runtime, key) {
   const wrapper = await runtime.getCache<any>(key);
+  if (!wrapper) return false
   // if exp is in the past
   if (wrapper.exp < Date.now()) {
     // no data
