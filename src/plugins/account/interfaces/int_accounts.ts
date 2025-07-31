@@ -14,6 +14,7 @@ import CONSTANTS from '../../autonomous-trader/constants'
 export async function interface_accounts_ByIds(runtime: IAgentRuntime, ids: UUID[]): Promise<Record<UUID, any>> {
   //console.log('interface_accounts_ByIds', ids)
   const entities = await runtime.getEntityByIds(ids)
+  //console.log('interface_accounts_ByIds - entities', entities, 'asked for', ids)
 
   // we should key this, each account can and should have only one COMPONENT_ACCOUNT_TYPE component
   const components = {}
@@ -42,6 +43,7 @@ export async function interface_accounts_ByIds(runtime: IAgentRuntime, ids: UUID
       console.warn('interface_accounts_ByIds - user', entityId, 'has no entity, skipping')
     }
   }
+  //console.log('interface_accounts_ByIds - out', components)
   return components
 }
 
@@ -64,9 +66,11 @@ export async function interface_accounts_ByUserIds(runtime: IAgentRuntime, userI
 }
 
 // list/search
+
+// filter by X field (like notificatoin) + value?
 export async function interface_accounts_list(runtime: IAgentRuntime, options = {}): Promise<UUID[]> {
   const spartanData = await interface_spartan_get(runtime)
-  return spartanData.data.accounts
+  return spartanData.data.accounts // just a list of accountIds
 }
 
 // list of IDs vs list of users?
