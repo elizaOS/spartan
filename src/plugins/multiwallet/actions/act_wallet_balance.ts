@@ -15,8 +15,8 @@ import {
 import { PublicKey } from '@solana/web3.js';
 import { v4 as uuidv4 } from 'uuid';
 import { UUID } from 'crypto';
-import { SOLANA_SERVICE_NAME } from '../constants';
-import { HasEntityIdFromMessage, getWalletsFromText, takeItPrivate2, takeItPrivate, getAccountFromMessage } from '../utils'
+import { SOLANA_SERVICE_NAME } from '../../autonomous-trader/constants';
+import { HasEntityIdFromMessage, getWalletsFromText, takeItPrivate2, takeItPrivate, getAccountFromMessage } from '../../autonomous-trader/utils'
 
 /**
  * Interface representing the content of a balance check request.
