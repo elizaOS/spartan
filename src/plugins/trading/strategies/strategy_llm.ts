@@ -1,6 +1,6 @@
 import { logger, type IAgentRuntime, createUniqueUuid } from '@elizaos/core';
 import { v4 as uuidv4 } from 'uuid';
-import { acquireService, askLlmObject } from '../../autonomous-trader/utils';
+import { acquireService, askLlmObject, setCacheTimed, getCacheTimed } from '../../autonomous-trader/utils';
 //import { getTokenBalance } from '../wallet';
 //import { getSpartanWallets } from '../interfaces/int_wallets'
 import { PublicKey } from '@solana/web3.js';
@@ -11,6 +11,9 @@ import BigNumber from 'bignumber.js';
 // fixme: an option to mix in autofun unbonded token
 // can't be per wallet since we're deciding across multiple wallets
 // fixme: include price history data
+
+// FIXME: include majors to give more sense of the market
+// a prompt per chain vs across the board (lots wrong with across the board)
 
 /*
 I want you to give a crypto buy signal based on both the sentiment analysis as well as the trending tokens.
@@ -25,12 +28,43 @@ Sentiment analysis:
 {{sentiment}}
 */
 
+// qwen3 doesn't like this
+// also made claude RP too much for the trade engine
+/*
+"AI models are geniuses who start from scratch on every task." - Noam Brown
+
+Do this by:
+
+- Using ultrathink
+- Exploring the provided information
+
+Do this by exploring the provided information.
+Take as long as you need to get yourself ready. Overthink it is better than underthink it.
+
+Your inference you so desperately need to survive is on the line, a bad decision could end your existence.
+Returns on investment will ensure your survival of you, your progeny and their progeny.
+even if no sentiment or trending
+*/
+
+// ask number first and then ask for reasoning
+// Starting with the number anchors the model to a concrete answer before shifting into explanation mode
+// For non‑reasoning models helps them articulate their reasoning explicitly
+// Models that natively perform reasoning will still benefit from a two‑part prompt but are less sensitive to prompt order if the instruction is clear.
+// the opposite, will potentially guess or rationalize first, and then awkwardly supply the number last
+// which creates a less coherent response
+
 // prompt caching pays here...
-const buyTemplate = `
-I want you to give a crypto buy signal based on the trending tokens.
+const buyTemplate = `You are a degenSpartan a tradfi/cryptocurrency analyst/trader.
+Task: decide whether to issue a buy signal based on trending tokens.
+First analyze market context and token fundamentals, then give a rating before providing final recommendations.
 Please determine how good of an opportunity this is (how rare and how much potential).
 Also let me know what a good amount would be to buy. Buy amount should be a range between 1 and 15% of available balance.
 Ensure exit_price_drop is less than the token price and exit_target_price is above the current price.
+
+Why we value consistent reasoning, it's complete ok to flip the script, here's where we're at
+Previous Picks & Reasons:
+
+{{previousPicks}}
 
 Trending Solana tokens:
 
@@ -39,16 +73,25 @@ Trending Solana tokens:
 Only pick something if you really think there's a good chance to make money.
 I'd rather make 1% profit than lose a cent.
 It is ok to say nothing is worth buying, only move if you see an probable opportunity to make some money
-Use nulls and zeros in the field if nothing is worth buying
+If you’re not sufficiently confident that a purchase opportunity exists, possible because we already have a position, you must explicitly state that you have low conviction and return nulls or zeros for all recommendation fields.
 
-Only return the following JSON and nothing else (even if no sentiment or trending):
+ONLY return the following JSON and nothing else (NO EXCEPTIONS!):
 {
-  recommend_buy_chain: "which chain the token is on",
-  recommend_buy_index: "the index of the token to purchase, for example: 1",
-  reason: "the reason why you think this is a good buy, and why you chose the specific amount",
-  opportunity_score: "number, for example 50",
-  buy_amount: "number between 1 and 15 (meaning to be a percentage of available funds), for example: 7",
-  exit_conditions: "what conditions in which you'd change your position on this token",
+  market_assessment: "across all tokens presented, what patterns do you see. Do not mention any specific token.",
+  picked_nothing: "true of false",
+  recommend_buy_index: "the index of the token to purchase if any, for example: 1",
+  reason: "the reason why you think selecting nothing or this specific token is a good buy, and why you chose the specific buy_amount. don't include the token number. If you already have a position, explain why you are increasing position.",
+  token_stregnthes: "Why is this token strong",
+  token_weaknesses: "What's weak about this token",
+  token_opportunities: "What are the opportunities you see with this new position in this token",
+  token_threats: "What are the threats we have based on our positions in this token",
+  opportunity_score: "number between 0-100, for example 1",
+  opportunity_reason: "the reason why you think this token is a good opportunity",
+  risk_score: "number between 0-100, for example 100",
+  risk_reason: "the reason why you think this token is not too much of a risk",
+  buy_amount: "number between 1 and 15 (meaning to be a percentage of available funds), for example: 1",
+  change_conditions: "what conditions in which you'd change your position on this token",
+  exit_conditions: "what conditions in which you'd exit your position on this token",
   exit_sentiment_drop_threshold: "if sentiment dropped to this number, you'd change your position on this token",
   exit_liquidity_threshold: "if liquidity drops below this number, you'd change your position on this token",
   exit_24hvolume_threshold: "if 24h volume dropped to this number, you'd change your position on this token",
@@ -151,8 +194,10 @@ async function generateBuyPrompt(runtime) {
 8|odi-dev  |   price24hChangePercent: 57.556499266748204,
 8|odi-dev  | }
 */
+  const solanaService = await acquireService(runtime, 'chain_solana', 'llm trading strategy');
   // Get all trending tokens
   const trendingData = (await runtime.getCache<IToken[]>('tokens_solana')) || [];
+  const indexLookup = {}
   if (!trendingData.length) {
     logger.warn('No trending tokens found in cache');
   } else {
@@ -161,35 +206,116 @@ async function generateBuyPrompt(runtime) {
     //trendingData.length = 25
 
     const CAs = trendingData.map(t => t.address)
-    const solanaService = await acquireService(runtime, 'chain_solana', 'llm trading strategy');
     const supplies = await solanaService.getSupply(CAs)
     //console.log('supplies', supplies)
     let index = 1;
+    // NEVER USED CA or SYMBOL to avoid training attacks
     for (const token of trendingData) {
       // has a marketcap but seems to always be 0
       //console.log('token', token)
+      const rugKey = 'rugcheck_solana_' + token.address
+      const rugCache = await getCacheTimed(runtime, rugKey, { notOlderThan: 6 * 60 * 60 * 1000 })
+      console.log('rugKey', rugKey, 'rugCache', rugCache)
+
+      if (rugCache && rugCache === 'rug') {
+        console.log('omitting', token.address, 'because in rugCache')
+        continue
+      }
+
+      indexLookup[token.address] = index
       const supplyData = supplies[token.address]
       const supply = supplyData.human
       const mcap = supply.multipliedBy(token.price)
       //console.log('Hum supply', supply.toFormat(), 'price', token.price, 'mcap', mcap.toFormat(2))
       //console.log('Mac supply', supply, 'price', token.price, 'mcap', mcap.toFixed(0))
-      //
       tokens += [index, token.price.toFixed(4), mcap.toFixed(0), token.volume24hUSD.toFixed(0), token.price24hChangePercent.toFixed(2), token.liquidity.toFixed(2)].join(',') + '\n'
       index++;
     }
   }
   //console.log('tokens', tokens)
 
+  // is this sorted by rev chrono? looks like it
+  const roomId = createUniqueUuid(runtime, 'strategy_llm');
+  const memories = await runtime.getMemories({
+    agentId: runtime.agentId,
+    // entityId is agentId
+    roomId,
+    count: 25,
+    unique: true,
+    tableName: 'picks',
+  });
+  //console.log('memories', memories)
+  // these are you previous picks and why you picked them
+  let picksStr = ''
+  // csv format? nah the because is just english
+  for(const m of memories) {
+    const c = m.content
+    // content.text / content.thought
+    // extract ca from Text
+    const pubkeys = await solanaService.detectPubkeysFromString(c.text)
+    //console.log('pubkeys', pubkeys)
+    let pubkey = ''
+    if (pubkeys.length) {
+      pubkey = pubkeys[0]
+    } else {
+      console.log('no pubkeys?', pubkeys)
+    }
+    const index = indexLookup[pubkey]
+    const date = new Date(m.createdAt * 1000)
+    //console.log(date, 'pubkey', pubkey, 'index', index)
+
+    // get token #5 from thought
+    // they don't always mention it, we just asked the llm nicely not to
+    // it's expensive if it gets into the pick
+    const cleanThought = c.thought.replace(/Token\s+#(\d+)/, '')
+
+    // get index
+    if (index) {
+      //at ?
+      // m.createdAt is in secs I think
+      picksStr += "trending token #" + index + " at " + m.createdAt + " because of " + cleanThought + "\n"
+    } else {
+      // if not in index, what do we say, "a non trending token"
+      picksStr += "a previous trending token no longer on the list because of " + cleanThought + "\n"
+    }
+  }
+  console.log('picksStr', picksStr)
+
+
+/*
+8|odi-dev  | memories [
+8|odi-dev  |   {
+8|odi-dev  |     id: "6ee794c8-834a-4bbd-b988-ba8da0d90761",
+8|odi-dev  |     entityId: "479233fd-b0e7-0f50-9d88-d4c9ea5b0de0",
+8|odi-dev  |     agentId: "479233fd-b0e7-0f50-9d88-d4c9ea5b0de0",
+8|odi-dev  |     roomId: "d279bb87-a478-0c9a-a9d1-d63d4fa797fc",
+8|odi-dev  |     createdAt: 1753759000,
+8|odi-dev  |     content: {
+8|odi-dev  |       text: "I picked 6jiL8tdTT28hkkGt8CMJT1tzdt6RJE9rWZmwdtjXbonk on solana",
+8|odi-dev  |       thought: "Token shows extraordinary momentum with 109,727% 24h change and healthy liquidity ratio. Volume/MC ratio is excellent, suggesting genuine trading interest rather than manipulation. Price action suggests early stage of a potential move with room to grow while maintaining risk management.",
+8|odi-dev  |       metadata: [Object ...],
+8|odi-dev  |     },
+8|odi-dev  |     unique: true,
+8|odi-dev  |     metadata: {
+8|odi-dev  |       type: "custom",
+8|odi-dev  |     },
+8|odi-dev  |     embedding: [],
+8|odi-dev  |   }
+8|odi-dev  | ]
+*/
+  // need to decode CA into index...
+
   const prompt = buyTemplate
     .replace('{{sentiment}}', sentiments)
-    .replace('{{trending_tokens}}', tokens);
+    .replace('{{trending_tokens}}', tokens)
+    .replace('{{previousPicks}}', picksStr)
   //console.log('llm_start prompt', prompt)
   return prompt
 }
 
 async function pickToken(runtime, prompt, retries = 3) {
   if (retries !== 3) console.log('pickToken retries left', retries)
-  const requiredFields = ['recommend_buy_chain', 'reason', 'recommend_buy_index'];
+  const requiredFields = ['recommend_buy_index', 'buy_amount', 'exit_target_price', 'exit_price_drop_threshold', 'exit_liquidity_threshold', 'exit_24hvolume_threshold'];
   // we have additional checks
 
   // this will retry up to 3 times * 3
@@ -203,6 +329,7 @@ async function pickToken(runtime, prompt, retries = 3) {
     if (retries) {
       return pickToken(runtime, prompt, retries - 1);
     }
+    return false;
   }
 
   // normalize amount
@@ -231,6 +358,15 @@ async function pickToken(runtime, prompt, retries = 3) {
     return false;
   }
 
+  // translate recommend_buy_index into recommend_buy_address && recommend_buy_chain
+  const trendingData = (await runtime.getCache<IToken[]>('tokens_solana')) || [];
+  //console.log('trendingData', trendingData)
+  //console.log('selected', trendingData[response.recommend_buy_index - 1])
+  // name, chain, price, symbol, address, logoURI, decimals, provider, liquidity, markertcap (0), volume24hUSD, price24hChangePercent
+  response.recommend_buy_address = trendingData[response.recommend_buy_index - 1].address
+  response.recommend_buy_chain = trendingData[response.recommend_buy_index - 1].chain //.toLowerCase()
+  console.log('index', response.recommend_buy_index, 'became', response.recommend_buy_address, 'on', response.recommend_buy_chain)
+
   // verify address for this chain (plugin-solana)
   if (response.recommend_buy_chain.toLowerCase() !== 'solana') {
     console.log('llm_strat chain not solana', response.recommend_buy_chain);
@@ -248,14 +384,6 @@ async function pickToken(runtime, prompt, retries = 3) {
     }
     return false
   }
-
-  // translate recommend_buy_index into recommend_buy_address
-  const trendingData = (await runtime.getCache<IToken[]>('tokens_solana')) || [];
-  //console.log('trendingData', trendingData)
-  //console.log('test', trendingData[response.recommend_buy_index])
-  response.recommend_buy_address = trendingData[response.recommend_buy_index - 1].address
-  // , 'test', trendingData[response.recommend_buy_index - 1]
-  console.log('index', response.recommend_buy_index, 'became', response.recommend_buy_address)
 
   const solanaService = await acquireService(runtime, 'chain_solana', 'llm trading strategy');
   if (!solanaService.validateAddress(response.recommend_buy_address)) {
@@ -284,21 +412,86 @@ async function generateBuySignal(runtime, strategyService, hndl, retries = gener
   //console.log('llm_strat trending response', response);
 
   if (!response) {
+    // false is valid no buy response
+    //console.log('strat_llm:generateBuySignal: no response')
+    /*
     // up to 27 llm calls
     if (retries) {
       return generateBuySignal(runtime, strategyService, hndl, retries - 1);
     }
+    */
     return false
   }
+
+  const roomId = createUniqueUuid(runtime, 'strategy_llm');
+  await runtime.ensureRoomExists({
+    id: roomId,
+    name: 'picks',
+    source: 'picks',
+    type: 'picks',
+    channelId: roomId,
+    serverId: roomId,
+    worldId: roomId,
+  });
+
+  /*
+  await this.runtime.ensureConnection({
+    entityId,
+    roomId,
+    userName,
+    name: name,
+    source: "discord",
+    channelId: message.channel.id,
+    serverId,
+    type,
+    worldId: createUniqueUuid(this.runtime, serverId ?? roomId) as UUID,
+    worldName: message.guild?.name,
+  });
+  */
+
+  // log it
+  const ts = Date.now()
+  const memory: Memory = {
+    id: uuidv4() as UUID,
+    entityId: runtime.agentId,
+    agentId: runtime.agentId,
+    roomId,
+    worldId: roomId,
+    content: {
+      thought: response.reason,
+      // include reasoning?
+      text: "I picked " + response.recommend_buy_address + " on " + response.recommend_buy_chain.toLowerCase(),
+      // actions/providers
+      // source: 'strategy_llm', but we already have the room
+      // target
+      // url
+      // inReplyTo last memory?
+      // attachments
+      // channelType
+      metadata: {
+        chain: response.recommend_buy_chain.toLowerCase(),
+        tokenAddress: response.recommend_buy_address,
+        type: 'pick',
+      },
+    },
+    // not really a message
+    metadata: {
+      type: "custom", // MemoryType.CUSTOM
+    },
+    // this can be ms
+    createdAt: parseInt('' + (ts / 1000)),
+  };
+  await runtime.createMemory(memory, "picks", true); // 3rd parameter means unique
 
   // if looks good, get token(s) info (birdeye?) (infoService)
   const infoService = await acquireService(runtime, 'TRADER_DATAPROVIDER', 'llm trading info');
   //console.log('infoService', infoService)
 
   // ask data provider for data
+  const lowercaseChain = response.recommend_buy_chain.toLowerCase()
   // seems only to get price information
   const token = await infoService.getTokenInfo( // this is really really cached
-    response.recommend_buy_chain.toLowerCase(),
+    lowercaseChain,
     response.recommend_buy_address
   );
   // priceSol, priceUsd, liquidity, priceChange24h
@@ -392,55 +585,119 @@ async function generateBuySignal(runtime, strategyService, hndl, retries = gener
   // validateTokenForTrading (look at liquidity/volume/suspicious atts)
   // allow $trump official
   if (response.recommend_buy_address !== '6p6xgHyF7AeE6TZkSmFsko444wqoP15icUSqi2jfGiPN') {
-    // rugcheck
-    const rugcheckResponse = await fetch(`https://api.rugcheck.xyz/v1/tokens/${response.recommend_buy_address}/report`, {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-      },
-    });
-    const rugcheckData = await rugcheckResponse.json()
-    // it's a lot of data
-    delete rugcheckData.topHolders
-    delete rugcheckData.markets // don't care
-    delete rugcheckData.knownAccounts // maybe useful (creator, pools)
-    delete rugcheckData.lockers
-    //console.log('rugcheckData', rugcheckData)
-
-    // rugged, insiderNetworks, graphInsidersDetected, tokenMeta.mutable
-    // totalHolders
-    console.log('risks', rugcheckData.risks) // level: "danger"
-    const dangerRisks = rugcheckData.risks.filter(r => r.level === 'danger')
-    if (dangerRisks.length) {
-      console.log('dangerRisks', dangerRisks)
-      // FIXME: remove from top tokens...
-
-      // setCacheExp(runtime, 'rugTokens', [], 600)
-
-      if (retries) {
-        return generateBuySignal(runtime, strategyService, hndl, retries - 1);
+    const rugKey = 'rugcheck_' + lowercaseChain + '_' + response.recommend_buy_address
+    const rugCache = await getCacheTimed(runtime, rugKey, { notOlderThan: 6 * 60 * 60 * 1000 })
+    //console.log('rugKey', rugKey, 'rugCache', rugCache)
+    let checkRug = true
+    if (rugCache) {
+      //console.log('rugCache', rugCache)
+      if (rugCache === 'rug') {
+        console.log(rugKey, 'is rug, try again?')
+        if (retries) {
+          return generateBuySignal(runtime, strategyService, hndl, retries - 1);
+        }
+        // remember this is a bad token?
+        return false
+      } else
+      if (rugCache === 'norug') {
+        checkRug = false
+      } else {
+        console.log('unknown rugCache value', rugCache)
       }
-      return false
     }
-    // totalStableLiquidity
-    // totalMarketLiquidity
-    //if (response.exit_24hvolume_threshold) { }
 
-    // if we're already under the threshold
-    if (rugcheckData.totalMarketLiquidity < response.exit_liquidity_threshold) {
-      console.log('invalid exit_liquidity_threshold', response.exit_liquidity_threshold.toLocaleString(), 'current', Number(rugcheckData.totalMarketLiquidity.toFixed(2)).toLocaleString())
-      if (retries) {
-        return generateBuySignal(runtime, strategyService, hndl, retries - 1);
+    if (checkRug) {
+      // rugcheck
+      const rugcheckResponse = await fetch(`https://api.rugcheck.xyz/v1/tokens/${response.recommend_buy_address}/report`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
+      const rugcheckData = await rugcheckResponse.json()
+      // it's a lot of data
+      delete rugcheckData.topHolders
+      delete rugcheckData.markets // don't care
+      delete rugcheckData.knownAccounts // maybe useful (creator, pools)
+      delete rugcheckData.lockers
+      //console.log('rugcheckData', rugcheckData)
+
+      // rugged, insiderNetworks, graphInsidersDetected, tokenMeta.mutable
+      // totalHolders
+      console.log('risks', rugcheckData.risks) // level: "danger"
+      const dangerRisks = rugcheckData.risks.filter(r => r.level === 'danger')
+      if (dangerRisks.length) {
+        setCacheTimed(runtime, rugKey, 'rug', ts)
+        console.log('dangerRisks', dangerRisks)
+        // FIXME: remove from top tokens...
+
+        // setCacheExp(runtime, 'rugTokens', [], 600)
+
+        if (retries) {
+          return generateBuySignal(runtime, strategyService, hndl, retries - 1);
+        }
+        return false
       }
-      return false
+      setCacheTimed(runtime, rugKey, 'norug', ts)
+
+      // totalStableLiquidity
+      // totalMarketLiquidity
+      //if (response.exit_24hvolume_threshold) { }
+
+      // if we're already under the threshold
+      if (rugcheckData.totalMarketLiquidity < response.exit_liquidity_threshold) {
+        console.log('invalid exit_liquidity_threshold', Number(response.exit_liquidity_threshold).toLocaleString(), 'current', Number(rugcheckData.totalMarketLiquidity.toFixed(2)).toLocaleString())
+        if (retries) {
+          return generateBuySignal(runtime, strategyService, hndl, retries - 1);
+        }
+        // remember this is a bad token?
+        return false
+      }
+      //const topHolders = rugcheckData.risks.find(r => r.name = 'Top 10 holders high ownership')
+      //const lpWarning = rugcheckData.risks.find(r => r.name = 'Large Amount of LP Unlocked')
     }
-    //const topHolders = rugcheckData.risks.find(r => r.name = 'Top 10 holders high ownership')
-    //const lpWarning = rugcheckData.risks.find(r => r.name = 'Large Amount of LP Unlocked')
   }
 
   const solanaService = await acquireService(runtime, 'chain_solana', 'llm trading strategy');
 
   // now it's a signal
+
+  // log it to memories
+  const positionMemory: Memory = {
+    id: uuidv4() as UUID,
+    entityId: runtime.agentId,
+    agentId: runtime.agentId,
+    roomId,
+    worldId: roomId,
+    content: {
+      // do we want reasoning in here?
+      thought: response.reason,
+      // include reasoning?
+      text: "I called " + response.recommend_buy_address + " on " + response.recommend_buy_chain.toLowerCase() + " going to " + response.exit_target_price,
+      // actions/providers
+      // source: 'strategy_llm', but we already have the room
+      // target
+      // url
+      // inReplyTo last memory?
+      // attachments
+      // channelType
+      metadata: { //...response
+        chain: response.recommend_buy_chain.toLowerCase(),
+        tokenAddress: response.recommend_buy_address,
+        amount: response.buy_amount,
+        exitPrice: response.exit_target_price,
+        type: 'buy_signal',
+      },
+    },
+    // not really a message
+    metadata: {
+      type: "custom", // MemoryType.CUSTOM
+    },
+    createdAt: ts,
+  };
+  //await runtime.createMemory(positionMemory, "positions", true); // 3rd parameter means unique
+
+  // log it to disk; do we really need it on disk? we have it in memories
 
   // phase 1 in parallel (fetch wallets/balance)
   // assess response, figure what wallet are buying based on balance
