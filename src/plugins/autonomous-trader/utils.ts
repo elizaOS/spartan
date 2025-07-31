@@ -46,6 +46,7 @@ export async function HasEntityIdFromMessage(runtime, message) {
 
 // they've started the registered process by providing an email
 export async function getDataFromMessage(runtime, message) {
+  //console.log('getDataFromMessage', message)
   //return createUniqueUuid(runtime, message.metadata.fromId);
   const entityId = await getEntityIdFromMessage(runtime, message)
   //console.debug('autotrade::getDataFromMessage - entityId', entityId)
@@ -55,9 +56,32 @@ export async function getDataFromMessage(runtime, message) {
   }
   const intUserService = runtime.getService('AUTONOMOUS_TRADER_INTERFACE_USERS') as any;
   const components = await intUserService.interface_users_ByIds([entityId])
+  const component = components[entityId]
   //console.debug('autotrade::getDataFromMessage - user components', components)
   // .componentId
-  return components[entityId]
+
+  // fix update user record to include discord information if we don't already have it
+  if (message.content.source === 'discord') {
+    //console.log('discord')
+    if (component && !component.discordUserId) {
+      //console.log('component', component)
+      // find the id
+      const discordUserId = message.metadata.fromId
+      component.discordUserId = discordUserId
+      // save update it
+      //const mockComponent = accountMockComponent(component)
+      //const intAcountService = runtime.getService('AUTONOMOUS_TRADER_INTERFACE_ACCOUNTS') as any;
+      //await intAcountService.interface_account_upsert(message, component)
+      const intUserService = runtime.getService('AUTONOMOUS_TRADER_INTERFACE_USERS') as any;
+      // we need componentId
+      if (intUserService) {
+        // don't need to await it
+        intUserService.interface_user_update(component)
+      }
+    }
+  }
+  return component
+
 }
 
 // they have a verified email
@@ -396,6 +420,7 @@ export function generateRandomString(length) {
 }
 
 export function findGeneratedCode(message, length) {
+  if (!message?.match) return null;
   const pattern = new RegExp(`\\b[A-Za-z0-9]{${length}}\\b`);
   const match = message.match(pattern);
   return match ? match[0] : null;
@@ -426,6 +451,30 @@ export async function setCacheExp(runtime, key, val, ttlInSecs) {
     // sys call waste atm
     // fetchedAt: Date.now(),
     exp,
+    data: val,
+  });
+}
+
+export async function getCacheTimed(runtime, key, options = {}) {
+  const wrapper = await runtime.getCache<any>(key);
+  if (!wrapper) return false
+  if (options.notOlderThan) {
+    const diff = Date.now() - wrapper.setAt
+    //console.log('checking notOlderThan', diff + 'ms', 'setAt', wrapper.setAt, 'asking', options.notOlderThan)
+    if (diff > options.notOlderThan) {
+      // no data
+      return false
+    }
+  }
+  // return data
+  return wrapper.data
+}
+
+export async function setCacheTimed(runtime, key, val, tsInMs = 0) {
+  if (tsInMs === 0) tsInMs = Date.now()
+  return runtime.setCache<any>(key, {
+    // sys call waste atm
+    setAt: tsInMs,
     data: val,
   });
 }
