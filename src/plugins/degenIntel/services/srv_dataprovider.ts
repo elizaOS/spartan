@@ -686,8 +686,28 @@ export class TradeDataProviderService extends Service {
       console.log('boot mws', mws.length, mws)
       */
 
+      // get all accounts
+      const accountIds = await this.accountIntService.list_all()
+      const componentDatas = await this.accountIntService.interface_accounts_ByIds(accountIds)
+      //console.log('one', componentDatas[accountIds[0]])
+
+      // do notifications filtering and conver to special format
+      const ws = []
+      for(const accountId in componentDatas) {
+        const componentData = componentDatas[accountId]
+        //console.log(accountId, 'componentData', componentData)
+        if (componentData.notifications) {
+          for(const mw of componentData.metawallets) {
+            if (mw.keypairs.solana) {
+              ws.push({ chain: 'solana', publicKey: mw.keypairs.solana.publicKey })
+            }
+          }
+        }
+      }
+
       // gather all pubkeys
-      const wallets = await this.walletIntService.getSpartanWallets({})
+      //const wallets = await this.walletIntService.getSpartanWallets({})
+      const wallets = ws
       // not account here...
       //console.log('wallet0', wallets[0])
       console.log('intel:DPsrv - boot wallets', wallets.length)
