@@ -17,11 +17,9 @@ export class InterfaceAccountService extends Service {
   }
 
   // get a list of accounts
-  /*
   async list_all() {
-    return interface_accounts_list()
+    return interface_accounts_list(this.runtime)
   }
-  */
 
   async interface_accounts_ByIds(accountIds) {
     return interface_accounts_ByIds(this.runtime, accountIds)
@@ -41,6 +39,19 @@ export class InterfaceAccountService extends Service {
 
   async getAccountIdsByPubkeys(pubkeys: string[]) {
     return getAccountIdsByPubkeys(this.runtime, pubkeys)
+  }
+
+  async turnOnNotes(accountId) {
+    // get pks
+    // await this.solanaService.subscribeToAccount(pk, async (accountAddress, accountInfo, context) => {
+    //    const msg = accountAddress + ' $SOL balance change: ' + (accountInfo.lamports / 1e9).toFixed(4)
+    //    await this.walletIntService.notifyWallet(accountAddress, msg)
+    // })
+  }
+
+  async turnOffNotes(accountId) {
+    // unsub?
+    // await solanaService.unsubscribeFromAccount(accountAddress)
   }
 
   async notifyAccount(accountIds, msg) {
@@ -114,6 +125,13 @@ export class InterfaceAccountService extends Service {
       if (source === 'telegram') {
         const sendRes = await this.runtime.sendMessageToTarget(target, content)
       } else {
+        // entityId is good enough for discord
+        //console.log('discord component', component.data)
+        // we need channelId or entityId
+        if (component.data.discordUserId) {
+          target.entityId = component.data.discordUserId
+          const sendRes = await this.runtime.sendMessageToTarget(target, content)
+        } else {
 /*
 6|staging  | [2025-07-22 02:23:33] DEBUG: [Bootstrap] Message sent: 6WNLbwhaPyusZnV9ReLq6LURXGZXBDztGtMVzwDJHHiy $SOL balance change: 0.0484
 6|staging  | [2025-07-22 02:23:33] INFO: [Telegram SendHandler] Message sent to chat ID: 418984751
@@ -172,7 +190,8 @@ export class InterfaceAccountService extends Service {
 6|staging  | turbo 2.5.4
 6|staging  | • Packages in scope: @
 */
-        console.log('cant notify discord rn', target)
+          console.log('cant notify discord rn', target)
+        }
       }
       // know the messageId so we could reply would be good
       //console.log('sendRes', sendRes) // undefined ;_;
