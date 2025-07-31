@@ -83,6 +83,7 @@ export const multiwalletProvider: Provider = {
         balanceStr += 'Current wallet: ' + pubKey + ' \n'
         balanceStr += '  strategy: ' + kp.strategy + '\n'
         if (kp.positions) {
+          // we really can't list all positions
           balanceStr += '  positions in csv format:\n'
           balanceStr += '    CA,solAmount,openTimestamp,openDate,closeTimestamp,tokenAmount,status,pnl\n'
           for (const p of kp.positions) {
