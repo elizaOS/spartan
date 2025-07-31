@@ -42,6 +42,7 @@ export async function interface_users_ByIds(runtime: IAgentRuntime, ids: UUID[])
       console.warn('interface_users_ByIds - user', entityId, 'has no entity, skipping')
     }
   }
+  //console.log('components', components)
   return components
 }
 
@@ -145,6 +146,7 @@ export async function getUseridsByAccountId(runtime: IAgentRuntime, accountIds: 
 // it's a list of accounts now right?
 export async function interface_users_list(runtime: IAgentRuntime, options = {}): Promise<UUID[]> {
   const spartanData = await interface_spartan_get(runtime)
+  //console.log('interface_users_list - got spartanData')
   return spartanData.data.users
 }
 
@@ -156,6 +158,7 @@ export async function interface_users_listVerified(runtime: IAgentRuntime, optio
     console.trace('WHAT ARE YOU DOING?')
     return false
   }
+  // we don't just use interface_users_list because overhead
   const spartanData = await interface_spartan_get(runtime) // get list of userIds
   const emails = await interface_users_ByIds(runtime, spartanData.data.users) // get entities
 
