@@ -1,5 +1,5 @@
 import { IAgentRuntime, getSalt, encryptStringValue, Service, logger } from '@elizaos/core';
-import { interface_users_list, interface_users_listVerified, interface_users_ByIds } from '../interfaces/int_users'
+import { interface_users_list, interface_users_listVerified, interface_users_ByIds, interface_user_update } from '../interfaces/int_users'
 
 export class InterfaceUserService extends Service {
   private isRunning = false;
@@ -26,6 +26,10 @@ export class InterfaceUserService extends Service {
 
   async interface_users_ByIds(entities: UUID[]) {
     return interface_users_ByIds(this.runtime, entities)
+  }
+
+  async interface_user_update(componentData) {
+    return interface_user_update(this.runtime, componentData)
   }
 
   /**
