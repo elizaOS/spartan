@@ -160,6 +160,7 @@ export const checkRegistrationCode: Action = {
           data: {
             metawallets: [],
           },
+          createdAt: Date.now(),
         });
         // not sure how we'd already have accounts, but lets keep it clean
         if (spartanData.data.accounts.indexOf(emailEntityId) === -1) {
@@ -209,6 +210,7 @@ export const checkRegistrationCode: Action = {
     async function updateSpartanData(agentEntityId, spartanData) {
       if (spartanDataNew) {
         // initial spartan set up
+        console.log('creatingComponent')
         await runtime.createComponent({
           id: uuidv4() as UUID,
           agentId: runtime.agentId,
@@ -218,6 +220,7 @@ export const checkRegistrationCode: Action = {
           entityId: agentEntityId,
           type: CONSTANTS.SPARTAN_SERVICE_TYPE,
           data: spartanData.data,
+          createdAt: Date.now(),
         });
       } else {
         // 2nd+ sups
@@ -233,6 +236,7 @@ export const checkRegistrationCode: Action = {
           data: spartanData.data,
         });
       }
+      console.log('spartan updated')
     }
   },
   examples: [

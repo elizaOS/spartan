@@ -1,4 +1,5 @@
 import type { IAgentRuntime } from '@elizaos/core';
+import { logger, Service } from '@elizaos/core';
 import type {
     ComprehensiveTokenAnalytics,
     AccountAnalytics,
@@ -11,7 +12,6 @@ import {
     calculateMACD,
     calculateRSI,
     calculateBollingerBands,
-    calculateMovingAverages,
     calculateVolumeIndicators,
     generateSignals
 } from '../utils/technicalAnalysis';
@@ -20,11 +20,14 @@ import {
  * Main Analytics Service
  * Orchestrates data from multiple providers and provides comprehensive analytics
  */
-export class AnalyticsService {
-    private runtime: IAgentRuntime;
+export class AnalyticsService extends Service {
+    private isRunning = false;
+    static serviceType = 'ANALYTICS_SERVICE';
+
+    capabilityDescription = 'Comprehensive analytics service for token and market data analysis';
 
     constructor(runtime: IAgentRuntime) {
-        this.runtime = runtime;
+        super(runtime);
     }
 
     /**
@@ -32,7 +35,7 @@ export class AnalyticsService {
      */
     async getTokenAnalytics(request: AnalyticsRequest): Promise<AnalyticsResponse> {
         try {
-            const { tokenAddress, chain = 'solana', timeframe = '1d', includeHistorical = true, includeHolders = true, includeSnipers = true } = request;
+            const { tokenAddress, chain = 'solana', timeframe = '1d', includeHistorical = true, includeHolders = true, includeSnipers = true, coinGeckoData, priceHistory } = request;
 
             if (!tokenAddress) {
                 return {
@@ -58,12 +61,27 @@ export class AnalyticsService {
 
             // Get historical data for technical analysis
             let historicalData: any[] = [];
+            console.log('includeHistorical', includeHistorical)
             if (includeHistorical) {
-                historicalData = await this.getHistoricalDataFromExistingProviders(tokenAddress, chain, timeframe);
+                // Use priceHistory if provided, otherwise fetch from providers
+                if (priceHistory && priceHistory.length > 0) {
+                    console.log(`Using provided price history with ${priceHistory.length} data points`);
+                    historicalData = priceHistory.map((price: number, index: number) => ({
+                        timestamp: Date.now() - (priceHistory.length - index) * 24 * 60 * 60 * 1000, // Approximate timestamps
+                        price: price,
+                        volume: 0, // Default volume
+                        open: price,
+                        high: price,
+                        low: price,
+                        close: price
+                    }));
+                } else {
+                    historicalData = await this.getHistoricalDataFromExistingProviders(tokenAddress, chain, timeframe);
+                }
             }
 
             // Calculate technical indicators
-            const technicalIndicators = await this.calculateTechnicalIndicators(historicalData);
+            const technicalIndicators = await this.calculateTechnicalIndicators(historicalData, tokenAddress);
 
             // Get holder analytics from Codex (if available)
             let holderAnalytics = null;
@@ -94,29 +112,23 @@ export class AnalyticsService {
 
             const comprehensiveAnalytics: ComprehensiveTokenAnalytics = {
                 tokenAddress,
-                symbol: priceData.symbol,
-                name: priceData.symbol, // Would need to fetch from metadata
-                chain,
+                symbol: coinGeckoData?.symbol || priceData.symbol,
                 price: priceData,
                 technicalIndicators,
-                historicalData,
                 holderAnalytics,
                 sniperAnalytics,
-                marketPosition: {
-                    rank: 0, // Would need to fetch from market data
-                    marketCap: priceData.marketCap,
-                    volume24h: priceData.volume24h,
-                    dominance: 0, // Would need to calculate
-                },
                 riskAssessment,
                 recommendations,
+                timestamp: Date.now(),
+                source: 'analytics'
             };
 
             return {
                 success: true,
                 data: comprehensiveAnalytics,
                 timestamp: Date.now(),
-                source: 'analytics'
+                source: 'analytics',
+                error: null
             };
 
         } catch (error) {
@@ -229,6 +241,7 @@ export class AnalyticsService {
             if (birdeyeTokens) {
                 const token = birdeyeTokens.find(t => t.address === tokenAddress);
                 if (token) {
+                    console.log(`Found token in Birdeye cache: ${token.symbol} at $${token.price}`);
                     return {
                         timestamp: Date.now(),
                         source: 'birdeye',
@@ -249,6 +262,7 @@ export class AnalyticsService {
             if (cmcTokens) {
                 const token = cmcTokens.find(t => t.address === tokenAddress);
                 if (token) {
+                    console.log(`Found token in CoinMarketCap cache: ${token.symbol} at $${token.price}`);
                     return {
                         timestamp: Date.now(),
                         source: 'coinmarketcap',
@@ -264,6 +278,118 @@ export class AnalyticsService {
                 }
             }
 
+            // If not found in cache, try to fetch fresh data from providers
+            console.log(`Token ${tokenAddress} not found in cache, attempting to fetch fresh data...`);
+
+            // Try Birdeye plugin service first for Solana tokens
+            if (chain === 'solana') {
+                try {
+                    const birdeyeService = this.runtime.getService('birdeye');
+                    if (birdeyeService && typeof (birdeyeService as any).getTokenMarketData === 'function') {
+                        console.log(`Attempting to fetch from Birdeye plugin service for ${tokenAddress}...`);
+                        const marketData = await (birdeyeService as any).getTokenMarketData(tokenAddress);
+                        if (marketData && marketData.price > 0) {
+                            console.log(`Successfully fetched price data from Birdeye plugin for ${tokenAddress}: $${marketData.price}`);
+                            return {
+                                timestamp: Date.now(),
+                                source: 'birdeye',
+                                chain: chain,
+                                tokenAddress: tokenAddress,
+                                symbol: 'UNKNOWN', // Birdeye service doesn't provide symbol in getTokenMarketData
+                                price: marketData.price,
+                                priceChange24h: 0, // Would need to calculate
+                                priceChangePercent24h: 0,
+                                volume24h: marketData.volume24h || 0,
+                                marketCap: marketData.marketCap || 0,
+                            };
+                        } else {
+                            console.warn(`Birdeye plugin service returned null or zero price for token ${tokenAddress}`);
+                        }
+                    } else {
+                        console.warn('Birdeye plugin service not available or getTokenMarketData method not found');
+                    }
+                } catch (error) {
+                    console.warn(`Failed to fetch from Birdeye plugin service for ${tokenAddress}:`, error);
+                }
+            }
+
+            // Try Codex service for additional data
+            try {
+                const codexService = this.runtime.getService('codex');
+                if (codexService && typeof (codexService as any).getTokenHolderAnalytics === 'function') {
+                    console.log(`Attempting to fetch holder data from Codex for ${tokenAddress}...`);
+                    const holderData = await (codexService as any).getTokenHolderAnalytics(tokenAddress);
+                    if (holderData) {
+                        console.log(`Successfully fetched holder data from Codex for ${tokenAddress}`);
+                        // Note: Codex doesn't provide price data, only holder analytics
+                    }
+                }
+            } catch (error) {
+                console.warn(`Failed to fetch from Codex for ${tokenAddress}:`, error);
+            }
+
+            // Try JupiterService as fallback for Solana tokens
+            if (chain === 'solana') {
+                try {
+                    const jupiterService = this.runtime.getService('JUPITER_SERVICE') as any;
+                    if (jupiterService && typeof jupiterService.getTokenPrice === 'function') {
+                        console.log(`Attempting to fetch price from Jupiter for ${tokenAddress}...`);
+
+                        // Try with different amounts if the first attempt fails
+                        let price = 0;
+                        const amounts = [1000000, 10000000, 100000000]; // Try different amounts
+
+                        for (const amount of amounts) {
+                            try {
+                                console.log(`Trying Jupiter with amount ${amount}...`);
+                                price = await jupiterService.getTokenPrice(tokenAddress, 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', 6);
+                                if (price > 0) {
+                                    console.log(`Successfully fetched price data from Jupiter for ${tokenAddress}: $${price}`);
+                                    break;
+                                }
+                            } catch (amountError) {
+                                console.warn(`Jupiter failed with amount ${amount}:`, amountError);
+                                continue;
+                            }
+                        }
+
+                        if (price > 0) {
+                            return {
+                                timestamp: Date.now(),
+                                source: 'jupiter' as any,
+                                chain: chain,
+                                tokenAddress: tokenAddress,
+                                symbol: 'UNKNOWN',
+                                price: price,
+                                priceChange24h: 0,
+                                priceChangePercent24h: 0,
+                                volume24h: 0,
+                                marketCap: 0,
+                            };
+                        }
+                    }
+                } catch (error) {
+                    console.warn(`Failed to fetch from Jupiter for ${tokenAddress}:`, error);
+                }
+            }
+
+            // Try CoinMarketCapProvider as final fallback
+            try {
+                const cmcApiKey = this.runtime.getSetting('COINMARKETCAP_API_KEY') as string;
+                if (cmcApiKey) {
+                    const { CoinMarketCapProvider } = await import('../providers/coinmarketcapProvider');
+                    const cmcProvider = new CoinMarketCapProvider(this.runtime);
+                    const priceData = await cmcProvider.getTokenPrice(tokenAddress, chain);
+                    if (priceData) {
+                        console.log(`Successfully fetched price data from CoinMarketCap for ${tokenAddress}`);
+                        return priceData;
+                    }
+                }
+            } catch (error) {
+                console.warn(`Failed to fetch from CoinMarketCap for ${tokenAddress}:`, error);
+            }
+
+            console.warn(`No price data available for token ${tokenAddress} from any provider`);
             return null;
         } catch (error) {
             console.error('Error getting token price from existing providers:', error);
@@ -275,9 +401,82 @@ export class AnalyticsService {
      * Get historical data from existing providers
      */
     private async getHistoricalDataFromExistingProviders(tokenAddress: string, chain: string, timeframe: string) {
-        // For now, return empty array as historical data might not be available in existing providers
-        // This would need to be implemented with direct API calls if needed
-        return [];
+        try {
+            console.log(`Fetching historical data for ${tokenAddress} on ${chain} with timeframe ${timeframe}`);
+
+            // Try multiple sources for historical data
+            let priceHistory: number[] = [];
+            let marketData: any = null;
+
+            // Try Birdeye service first
+            const birdeyeService = this.runtime.getService('birdeye');
+            if (birdeyeService && typeof (birdeyeService as any).getTokenMarketData === 'function') {
+                try {
+                    console.log('Fetching data from Birdeye service...');
+                    marketData = await (birdeyeService as any).getTokenMarketData(tokenAddress);
+                    if (marketData && marketData.priceHistory && marketData.priceHistory.length > 0) {
+                        priceHistory = marketData.priceHistory;
+                        console.log(`Got ${priceHistory.length} price history points from Birdeye`);
+                    }
+                } catch (error) {
+                    console.warn('Birdeye service failed:', error);
+                }
+            }
+
+            // If no price history from Birdeye, try to get from cache
+            if (priceHistory.length === 0) {
+                const birdeyeTokens = await this.runtime.getCache<any[]>('tokens_solana');
+                if (birdeyeTokens) {
+                    const token = birdeyeTokens.find(t => t.address === tokenAddress);
+                    if (token && token.price) {
+                        // Create a simple price history from current price
+                        priceHistory = [token.price * 0.98, token.price * 0.99, token.price];
+                        console.log('Created price history from cache data');
+                    }
+                }
+            }
+
+            if (priceHistory.length === 0) {
+                console.warn(`No historical data found for token ${tokenAddress}`);
+                return [];
+            }
+
+            console.log(`Raw price history length: ${priceHistory.length}`);
+            console.log(`Sample price history: ${priceHistory.slice(0, 5).join(', ')}`);
+
+            // Convert the price history array to the expected format with proper OHLCV data
+            const historicalData = priceHistory.map((price: number, index: number) => {
+                // Create realistic OHLCV data from the price
+                const timestamp = Date.now() - (priceHistory.length - index - 1) * 15 * 60 * 1000; // 15-minute intervals
+                const variation = price * 0.02; // 2% variation for high/low
+                const high = price + variation * Math.random();
+                const low = price - variation * Math.random();
+                const open = price + (Math.random() - 0.5) * variation;
+                const close = price;
+                const volume = Math.random() * 1000000; // Random volume for now
+
+                return {
+                    timestamp,
+                    open,
+                    high,
+                    low,
+                    close,
+                    volume,
+                };
+            });
+
+            console.log(`Processed ${historicalData.length} historical data points for ${tokenAddress}`);
+
+            if (historicalData.length > 0) {
+                console.log(`Sample processed data point:`, historicalData[0]);
+                console.log(`Last data point:`, historicalData[historicalData.length - 1]);
+            }
+
+            return historicalData;
+        } catch (error) {
+            console.error('Error fetching historical data from providers:', error);
+            return [];
+        }
     }
 
     /**
@@ -285,13 +484,17 @@ export class AnalyticsService {
      */
     private async getHolderAnalyticsFromCodex(tokenAddress: string) {
         try {
-            const codexApiKey = this.runtime.getSetting('CODEX_API_KEY') as string;
-            if (!codexApiKey) {
-                return null;
+            const codexService = this.runtime.getService('codex');
+            if (codexService && typeof (codexService as any).getTokenHolderAnalytics === 'function') {
+                console.log(`Fetching holder analytics from Codex for ${tokenAddress}...`);
+                const holderData = await (codexService as any).getTokenHolderAnalytics(tokenAddress);
+                if (holderData) {
+                    console.log(`Successfully fetched holder analytics from Codex for ${tokenAddress}`);
+                    return holderData;
+                }
+            } else {
+                console.warn('Codex service not available or getTokenHolderAnalytics method not found');
             }
-
-            // This would need to be implemented with direct Codex API calls
-            // For now, return null as it's not available in existing providers
             return null;
         } catch (error) {
             console.error('Error getting holder analytics from Codex:', error);
@@ -304,13 +507,17 @@ export class AnalyticsService {
      */
     private async getSniperAnalyticsFromCodex(tokenAddress: string) {
         try {
-            const codexApiKey = this.runtime.getSetting('CODEX_API_KEY') as string;
-            if (!codexApiKey) {
-                return null;
+            const codexService = this.runtime.getService('codex');
+            if (codexService && typeof (codexService as any).getSniperAnalytics === 'function') {
+                console.log(`Fetching sniper analytics from Codex for ${tokenAddress}...`);
+                const sniperData = await (codexService as any).getSniperAnalytics(tokenAddress);
+                if (sniperData) {
+                    console.log(`Successfully fetched sniper analytics from Codex for ${tokenAddress}`);
+                    return sniperData;
+                }
+            } else {
+                console.warn('Codex service not available or getSniperAnalytics method not found');
             }
-
-            // This would need to be implemented with direct Codex API calls
-            // For now, return null as it's not available in existing providers
             return null;
         } catch (error) {
             console.error('Error getting sniper analytics from Codex:', error);
@@ -475,8 +682,99 @@ export class AnalyticsService {
     /**
      * Calculate technical indicators from historical data
      */
-    private async calculateTechnicalIndicators(historicalData: any[]): Promise<TechnicalIndicators> {
-        if (historicalData.length < 50) {
+    private async calculateTechnicalIndicators(historicalData: any[], tokenAddress?: string): Promise<TechnicalIndicators> {
+        console.log(`Calculating technical indicators with ${historicalData.length} data points`);
+
+        // Try to use TAAPI service first for real technical indicators
+        const taapiService = this.runtime.getService('TAAPI_SERVICE') as any;
+        if (taapiService && typeof taapiService.getMarketAnalysis === 'function' && tokenAddress) {
+            try {
+                console.log('Attempting to get technical indicators from TAAPI service...');
+
+                // Get token symbol from Birdeye overview
+                let symbol = null;
+                const birdeyeService = this.runtime.getService('birdeye') as any;
+                if (birdeyeService && typeof birdeyeService.fetchTokenOverview === 'function') {
+                    try {
+                        const overviewData = await birdeyeService.fetchTokenOverview({ address: tokenAddress });
+                        console.log('Birdeye overview response:', JSON.stringify(overviewData, null, 2));
+
+                        if (overviewData && overviewData.success && overviewData.data) {
+                            // Try different possible symbol fields
+                            symbol = overviewData.data.symbol ||
+                                overviewData.data.tokenSymbol ||
+                                overviewData.data.token_symbol;
+
+                            if (symbol) {
+                                console.log(`Got symbol from Birdeye overview: ${symbol}`);
+                            } else {
+                                console.log('No symbol found in Birdeye overview response');
+                            }
+                        } else {
+                            console.log('Birdeye overview response was not successful or missing data');
+                        }
+                    } catch (error) {
+                        console.warn('Failed to get token overview from Birdeye:', error);
+                    }
+                }
+
+                // Only proceed if we have a valid symbol
+                if (symbol && symbol !== 'UNKNOWN') {
+                    // Convert to standard format for TAAPI (e.g., SOL/USDT)
+                    const taapiSymbol = `${symbol}/USDT`;
+                    console.log(`Using symbol ${taapiSymbol} for TAAPI analysis`);
+
+                    const taapiData = await taapiService.getMarketAnalysis(taapiSymbol, 'binance', '1h');
+
+                    if (taapiData && taapiData.indicators) {
+                        console.log('Successfully got technical indicators from TAAPI');
+
+                        const indicators = taapiData.indicators;
+
+                        return {
+                            macd: {
+                                macd: indicators.macd?.macd || 0,
+                                signal: indicators.macd?.signal || 0,
+                                histogram: indicators.macd?.histogram || 0,
+                                bullish: (indicators.macd?.macd || 0) > (indicators.macd?.signal || 0)
+                            },
+                            rsi: {
+                                value: indicators.rsi?.value || 50,
+                                overbought: (indicators.rsi?.value || 50) > 70,
+                                oversold: (indicators.rsi?.value || 50) < 30
+                            },
+                            bollingerBands: {
+                                upper: indicators.bbands?.upper || 0,
+                                middle: indicators.bbands?.middle || 0,
+                                lower: indicators.bbands?.lower || 0,
+                                bandwidth: indicators.bbands?.bandwidth || 0,
+                                percentB: indicators.bbands?.percentB || 0.5
+                            },
+                            movingAverages: {
+                                sma20: indicators.sma?.value || 0,
+                                sma50: 0, // Would need to get SMA50 separately
+                                sma200: 0, // Would need to get SMA200 separately
+                                ema12: 0, // Would need to get EMA12 separately
+                                ema26: indicators.ema?.value || 0
+                            },
+                            volume: {
+                                volumeSMA: 0,
+                                volumeRatio: 1,
+                                onBalanceVolume: 0
+                            }
+                        };
+                    }
+                } else {
+                    console.log(`No valid symbol found for token ${tokenAddress}, skipping TAAPI analysis`);
+                }
+            } catch (error) {
+                console.warn('TAAPI service failed, falling back to calculated indicators:', error);
+            }
+        }
+
+        // Fall back to calculated indicators if TAAPI is not available
+        if (historicalData.length < 20) {
+            console.warn(`Insufficient historical data: ${historicalData.length} points (need at least 20)`);
             return {
                 macd: { macd: 0, signal: 0, histogram: 0, bullish: false },
                 rsi: { value: 50, overbought: false, oversold: false },
@@ -491,15 +789,23 @@ export class AnalyticsService {
         const highs = historicalData.map(d => d.high);
         const lows = historicalData.map(d => d.low);
 
+        console.log(`Sample prices: ${prices.slice(0, 5).join(', ')}...`);
+        console.log(`Sample volumes: ${volumes.slice(0, 5).join(', ')}...`);
+        console.log(`Current price: ${prices[prices.length - 1]}`);
+
         // Calculate MACD
         const macdResult = calculateMACD(prices);
         const currentMACD = macdResult.macd[macdResult.macd.length - 1] || 0;
         const currentSignal = macdResult.signal[macdResult.signal.length - 1] || 0;
         const currentHistogram = macdResult.histogram[macdResult.histogram.length - 1] || 0;
 
+        console.log(`MACD calculation: MACD=${currentMACD}, Signal=${currentSignal}, Histogram=${currentHistogram}`);
+
         // Calculate RSI
         const rsiResult = calculateRSI(prices);
         const currentRSI = rsiResult[rsiResult.length - 1] || 50;
+
+        console.log(`RSI calculation: ${currentRSI}`);
 
         // Calculate Bollinger Bands
         const bbResult = calculateBollingerBands(prices);
@@ -511,15 +817,31 @@ export class AnalyticsService {
             percentB: bbResult.percentB[bbResult.percentB.length - 1] || 0.5
         };
 
+        console.log(`Bollinger Bands: Upper=${currentBB.upper}, Middle=${currentBB.middle}, Lower=${currentBB.lower}, %B=${currentBB.percentB}`);
+
         // Calculate Moving Averages
         const sma20 = calculateSMA(prices, 20);
         const sma50 = calculateSMA(prices, 50);
-        const sma200 = calculateSMA(prices, 200);
+        const sma200 = calculateSMA(prices, Math.min(200, prices.length));
         const ema12 = calculateEMA(prices, 12);
         const ema26 = calculateEMA(prices, 26);
 
+        const currentSMA20 = sma20[sma20.length - 1] || 0;
+        const currentSMA50 = sma50[sma50.length - 1] || 0;
+        const currentSMA200 = sma200[sma200.length - 1] || 0;
+        const currentEMA12 = ema12[ema12.length - 1] || 0;
+        const currentEMA26 = ema26[ema26.length - 1] || 0;
+
+        console.log(`Moving Averages: SMA20=${currentSMA20}, SMA50=${currentSMA50}, SMA200=${currentSMA200}, EMA12=${currentEMA12}, EMA26=${currentEMA26}`);
+
         // Calculate Volume indicators
         const volumeResult = calculateVolumeIndicators(prices, volumes);
+
+        const currentVolumeSMA = volumeResult.volumeSMA[volumeResult.volumeSMA.length - 1] || 0;
+        const currentVolumeRatio = volumeResult.volumeRatio[volumeResult.volumeRatio.length - 1] || 1;
+        const currentOnBalanceVolume = volumeResult.onBalanceVolume[volumeResult.onBalanceVolume.length - 1] || 0;
+
+        console.log(`Volume indicators: VolumeSMA=${currentVolumeSMA}, VolumeRatio=${currentVolumeRatio}, OBV=${currentOnBalanceVolume}`);
 
         return {
             macd: {
@@ -535,16 +857,16 @@ export class AnalyticsService {
             },
             bollingerBands: currentBB,
             movingAverages: {
-                sma20: sma20[sma20.length - 1] || 0,
-                sma50: sma50[sma50.length - 1] || 0,
-                sma200: sma200[sma200.length - 1] || 0,
-                ema12: ema12[ema12.length - 1] || 0,
-                ema26: ema26[ema26.length - 1] || 0
+                sma20: currentSMA20,
+                sma50: currentSMA50,
+                sma200: currentSMA200,
+                ema12: currentEMA12,
+                ema26: currentEMA26
             },
             volume: {
-                volumeSMA: volumeResult.volumeSMA[volumeResult.volumeSMA.length - 1] || 0,
-                volumeRatio: volumeResult.volumeRatio[volumeResult.volumeRatio.length - 1] || 1,
-                onBalanceVolume: volumeResult.onBalanceVolume[volumeResult.onBalanceVolume.length - 1] || 0
+                volumeSMA: currentVolumeSMA,
+                volumeRatio: currentVolumeRatio,
+                onBalanceVolume: currentOnBalanceVolume
             }
         };
     }
@@ -686,6 +1008,69 @@ export class AnalyticsService {
             priceTargets
         };
     }
+
+    /**
+     * Start the scenario service with the given runtime.
+     * @param {IAgentRuntime} runtime - The agent runtime
+     * @returns {Promise<ScenarioService>} - The started scenario service
+     */
+    static async start(runtime: IAgentRuntime) {
+        const service = new AnalyticsService(runtime);
+        service.start();
+        return service;
+    }
+    /**
+     * Stops the Scenario service associated with the given runtime.
+     *
+     * @param {IAgentRuntime} runtime The runtime to stop the service for.
+     * @throws {Error} When the Scenario service is not found.
+     */
+    static async stop(runtime: IAgentRuntime) {
+        const service = runtime.getService(this.serviceType);
+        if (!service) {
+            throw new Error(this.serviceType + ' service not found');
+        }
+        service.stop();
+    }
+
+    async start(): Promise<void> {
+        if (this.isRunning) {
+            logger.warn('ANALYTICS_SERVICE service is already running');
+            return;
+        }
+
+        try {
+            logger.info('ANALYTICS_SERVICE trading service...');
+
+            this.isRunning = true;
+            logger.info('ANALYTICS_SERVICE service started successfully');
+        } catch (error) {
+            logger.error('Error starting ANALYTICS_SERVICE service:', error);
+            throw error;
+        }
+    }
+
+    async stop(): Promise<void> {
+        if (!this.isRunning) {
+            logger.warn('ANALYTICS_SERVICE service is not running');
+            return;
+        }
+
+        try {
+            logger.info('Stopping ANALYTICS_SERVICE service...');
+
+            this.isRunning = false;
+            logger.info('ANALYTICS_SERVICE stopped successfully');
+        } catch (error) {
+            logger.error('Error stopping ANALYTICS_SERVICE service:', error);
+            throw error;
+        }
+    }
+
+    isServiceRunning(): boolean {
+        return this.isRunning;
+    }
+
 }
 
 // Helper functions for moving averages
@@ -720,4 +1105,4 @@ function calculateEMA(prices: number[], period: number): number[] {
     }
 
     return ema;
-} 
+}

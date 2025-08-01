@@ -330,4 +330,69 @@ export class CoinMarketCapProvider {
             console.error('Failed to cache data:', error);
         }
     }
+
+    /**
+     * Get the complete list of coins from CoinGecko (free API)
+     * This helps with symbol resolution for better token identification
+     */
+    async getCoinsListFromCoinGecko(): Promise<any> {
+        try {
+            const cacheKey = 'coingecko_coins_list_free';
+            const cached = await this.getCachedData(cacheKey);
+            if (cached) return cached;
+
+            console.log('Fetching CoinGecko coins list from free API...');
+
+            const response = await fetch('https://api.coingecko.com/api/v3/coins/list');
+            if (!response.ok) {
+                throw new Error(`CoinGecko coins list API error: ${response.status}`);
+            }
+
+            const data = await response.json();
+            console.log(`Got ${data.length || 0} coins from CoinGecko free API`);
+
+            await this.setCachedData(cacheKey, data, 86400); // 24 hours cache
+            return data;
+        } catch (error) {
+            console.error('Error fetching CoinGecko coins list:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Find coin ID by symbol using CoinGecko coins list
+     */
+    async findCoinIdBySymbol(symbol: string): Promise<string | null> {
+        try {
+            const coinsList = await this.getCoinsListFromCoinGecko();
+            if (!coinsList || !Array.isArray(coinsList)) {
+                return null;
+            }
+
+            // Find exact symbol match (case insensitive)
+            const foundCoin = coinsList.find((coin: any) =>
+                coin.symbol && coin.symbol.toLowerCase() === symbol.toLowerCase()
+            );
+
+            if (foundCoin) {
+                console.log(`Found CoinGecko ID ${foundCoin.id} for symbol ${symbol}`);
+                return foundCoin.id;
+            }
+
+            // Try partial name match if symbol not found
+            const foundByName = coinsList.find((coin: any) =>
+                coin.name && coin.name.toLowerCase().includes(symbol.toLowerCase())
+            );
+
+            if (foundByName) {
+                console.log(`Found CoinGecko ID ${foundByName.id} for name match with ${symbol}`);
+                return foundByName.id;
+            }
+
+            return null;
+        } catch (error) {
+            console.error('Error finding coin ID by symbol:', error);
+            return null;
+        }
+    }
 } 

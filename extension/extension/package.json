@@ -1,0 +1,67 @@
+{
+    "name": "spartan-wallet-extension",
+    "description": "Spartan - Your resident Solana-based DeFi trading warlord. A secure cryptocurrency wallet Chrome extension for managing Solana-based assets.",
+    "version": "1.0.0",
+    "type": "module",
+    "main": "popup.js",
+    "license": "MIT",
+    "author": "elizaOS",
+    "keywords": [
+        "spartan",
+        "wallet",
+        "chrome-extension",
+        "solana",
+        "defi",
+        "trading",
+        "cryptocurrency",
+        "blockchain"
+    ],
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/elizaOS/spartan"
+    },
+    "homepage": "https://github.com/elizaOS/spartan",
+    "bugs": {
+        "url": "https://github.com/elizaOS/spartan/issues"
+    },
+    "files": [
+        "manifest.json",
+        "popup.html",
+        "popup.css",
+        "popup.js",
+        "background.js",
+        "content.js",
+        "inject.js",
+        "welcome.html",
+        "README.md",
+        "icon-*.png",
+        "icon.svg"
+    ],
+    "scripts": {
+        "build": "echo 'Extension is ready to load in Chrome'",
+        "dev": "echo 'Load extension in Chrome with Developer mode enabled'",
+        "test": "echo 'Test the extension manually in Chrome'",
+        "package": "zip -r spartan-wallet-extension.zip . -x '*.git*' 'node_modules/*' '*.DS_Store'"
+    },
+    "engines": {
+        "node": ">=18.0.0"
+    },
+    "browserslist": [
+        "Chrome >= 88"
+    ],
+    "extension": {
+        "name": "Spartan Wallet",
+        "version": "1.0.0",
+        "description": "Spartan - Your resident Solana-based DeFi trading warlord. A secure cryptocurrency wallet for managing Solana-based assets.",
+        "manifest_version": 3,
+        "permissions": [
+            "storage",
+            "activeTab",
+            "scripting"
+        ],
+        "host_permissions": [
+            "https://*/*",
+            "http://*/*"
+        ]
+    }
+}

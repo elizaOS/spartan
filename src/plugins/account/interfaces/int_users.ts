@@ -17,7 +17,7 @@ Component data: {
 // look up by Ids
 export async function interface_users_ByIds(runtime: IAgentRuntime, ids: UUID[]): Promise<Record<UUID, any>> {
   //console.log('interface_users_ByIds', ids)
-  const entities = await runtime.getEntityByIds(ids)
+  const entities = await runtime.getEntitiesByIds(ids)
   //console.log('interface_users_ByIds - entities', entities, 'asked for', ids)
 
   // we should key this, each user can and should have only one COMPONENT_USER_TYPE component
@@ -73,7 +73,7 @@ export async function getUserIdsByPubkeys(runtime: IAgentRuntime, pubkeys): Prom
     }
   }
 
-  const accounts = await runtime.getEntityByIds(Object.values(accountIds))
+  const accounts = await runtime.getEntitiesByIds(Object.values(accountIds))
   const list = {}
   for(const accountId in accounts) {
     const account = accounts[accountId]

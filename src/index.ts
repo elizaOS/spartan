@@ -4,9 +4,11 @@ import type { Character, IAgentRuntime, OnboardingConfig, ProjectAgent } from '@
 import dotenv from 'dotenv';
 
 import { autonomousTraderPlugin } from './plugins/autonomous-trader';
+import { accountRegPlugin } from './plugins/account';
 import { multiwalletPlugin } from './plugins/multiwallet';
 import { traderPlugin } from './plugins/trading';
 import { degenIntelPlugin } from './plugins/degenIntel';
+import { analyticsPlugin } from './plugins/analytics';
 //import { communityInvestorPlugin } from './plugins/communityInvestor';
 import { initCharacter } from './init';
 
@@ -575,6 +577,8 @@ const config: OnboardingConfig = {
 
 export const spartan: ProjectAgent = {
   plugins: [
+    analyticsPlugin,
+    accountRegPlugin,
     autonomousTraderPlugin, // Spartan product and libs/utils
     degenIntelPlugin,  // multichain intel
       multiwalletPlugin, // builds on multichain intel to add custodial wallets

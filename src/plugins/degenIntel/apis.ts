@@ -22,8 +22,9 @@ const __dirname = path.dirname(__filename);
 // from the package.json, find frontend/dist and host it statically
 const frontendDist = path.resolve(__dirname, './');
 
-//const INDEX_PATH       = path.resolve(frontendDist, 'index.html');
-//const INDEX_TEMPLATE   = await fsp.readFile(INDEX_PATH, 'utf8');
+const INDEX_PATH       = path.resolve(frontendDist, 'index.html');
+console.log('INDEX_PATH', INDEX_PATH)
+const INDEX_TEMPLATE   = await fsp.readFile(INDEX_PATH, 'utf8');
 
 function injectBase(html: string, href: string) {
   // Put the tag right after <head …> so the browser sees it first
@@ -208,23 +209,14 @@ export const routes: Route[] = [
   },
   {
     type: 'GET',
-    path: '/new',
-    //public: true,
-    handler: async (req: any, res: any) => {
-      const base = '/api/agents' + req.path.replace(/\/spartan-intel$/, '');
-      //console.log('base', base)
-      res.redirect(base + '/')
-    },
-  },
-  {
-    type: 'GET',
     path: '/new/',
     public: true,
     handler: async (req: any, res: any) => {
-      console.log('path', req.path, 'url', req.url)
+      //console.log('path', req.path, 'url', req.url)
       // path /new/ url /new/
       // .replace(/\/spartan-intel$/, '')
-      const base = '/api/agents/Spartan/plugins/spartan-intel' + req.path;
+      //const base = '/api/agents/Spartan/plugins/spartan-intel' + req.path;
+      const base = req.path
       console.log('base', base)
       try {
         //console.log('frontendDist', frontendDist)
@@ -251,6 +243,17 @@ export const routes: Route[] = [
       //res.sendFile(path.resolve(frontendDist, 'index.html'));
     },
   },
+  {
+    type: 'GET',
+    path: '/new',
+    //public: true,
+    handler: async (req: any, res: any) => {
+      //const base = '/api/agents' + req.path.replace(/\/spartan-intel$/, '');
+      const base = req.path
+      console.log('base', base)
+      res.redirect(base + '/')
+    },
+  },
   // redirector
   {
     type: 'GET',
@@ -258,7 +261,10 @@ export const routes: Route[] = [
     handler: async (req: any, res: any) => {
       //const base = '/api/agents' + req.path.split(/\/new\//, 2)[0]
       //  + req.path;
-      const base = '/api/agents/Spartan/plugins/spartan-intel'
+      //console.log('req.path', req.path) // has addresses in it
+      //const base = '/api/agents/Spartan/plugins/spartan-intel'
+      //
+      const base = req.path.split(/\/new\//, 2)[0]
       console.log('addresses base', base)
       const address = req.path.split(/\/addresses\//, 2)[1];
       console.log('address', address)
@@ -286,7 +292,8 @@ export const routes: Route[] = [
     path: '/new/wallets/*',
     handler: async (req: any, res: any, runtime) => {
       //const base = '/api/agents' + req.path.split(/\/new\//, 2)[0]
-      const base = '/api/agents/Spartan/plugins/spartan-intel' + req.path.split(/\/new\//, 2)[0];
+      //const base = '/api/agents/Spartan/plugins/spartan-intel' + req.path.split(/\/new\//, 2)[0];
+      const base = req.path.split(/\/new\//, 2)[0]
       //console.log('wallets base', base)
       const address = req.path.split(/\/wallets\//, 2)[1];
       //console.log('address', address)
@@ -329,7 +336,8 @@ export const routes: Route[] = [
     type: 'GET',
     path: '/new/json/wallets/*',
     handler: async (req: any, res: any, runtime) => {
-      const base = '/api/agents' + req.path.split(/\/new\//, 2)[0]
+      //const base = '/api/agents' + req.path.split(/\/new\//, 2)[0]
+      const base = req.path.split(/\/new\//, 2)[0]
       //console.log('base', base)
       const address = req.path.split(/\/wallets\//, 2)[1];
       //console.log('address', address)
@@ -420,7 +428,8 @@ export const routes: Route[] = [
     type: 'GET',
     path: '/new/json/tokens/*',
     handler: async (req: any, res: any, runtime) => {
-      const base = '/api/agents' + req.path.split(/\/new\//, 2)[0]
+      //const base = '/api/agents' + req.path.split(/\/new\//, 2)[0]
+      const base = req.path.split(/\/new\//, 2)[0]
       //console.log('base', base)
       const address = req.path.split(/\/tokens\//, 2)[1];
       //console.log('address', address)
@@ -489,7 +498,7 @@ export const routes: Route[] = [
     type: 'GET',
     path: '/new/images/*',
     handler: async (req: any, res: any) => {
-      const frontendDist = path.resolve(__dirname, '../src/investmentManager/plugins/degen-intel/frontend_new');
+      const frontendDist = path.resolve(__dirname, '../src/plugins/degenIntel/frontend_new');
       //console.log('js frontendDist', frontendDist)
       //console.log('js uri', req.path.split('/new/')[1])
       const assetPath = frontendDist + '/' + req.path.split('/new/')[1]
@@ -505,7 +514,7 @@ export const routes: Route[] = [
     type: 'GET',
     path: '/new/js/*',
     handler: async (req: any, res: any) => {
-      const frontendDist = path.resolve(__dirname, '../src/investmentManager/plugins/degen-intel/frontend_new');
+      const frontendDist = path.resolve(__dirname, '../src/plugins/degenIntel/frontend_new');
       //console.log('js frontendDist', frontendDist)
       //console.log('js uri', req.path.split('/new/')[1])
       const assetPath = frontendDist + '/' + req.path.split('/new/')[1]
@@ -517,6 +526,7 @@ export const routes: Route[] = [
       }
     },
   },
+  // generic page handler
   {
     type: 'GET',
     path: '/new/*',
@@ -525,7 +535,7 @@ export const routes: Route[] = [
       // we want it to be /new/
       const base = '/api/agents' + req.path.replace(/\/degen-intel$/, '') + '/..';
       console.log('base', base)
-      const frontendDist = path.resolve(__dirname, '../src/investmentManager/plugins/degen-intel/frontend_new');
+      const frontendDist = path.resolve(__dirname, '../src/plugins/degenIntel/frontend_new');
       console.log('page frontendDist', frontendDist)
       console.log('page uri', req.path.split('/new/')[1])
       const assetPath = frontendDist + '/templates/' + req.path.split('/new/')[1]
@@ -552,8 +562,10 @@ export const routes: Route[] = [
     type: 'GET',
     path: '/',
     handler: async (req: any, res: any) => {
-      //console.log('path', req.path, 'url', req.url)
-      const base = '/api/agents' + req.path.replace(/\/degen-intel$/, '');
+      console.log('path', req.path, 'url', req.url)
+      //  '/api/agents' +
+      // .replace(/\/degen-intel$/, '');
+      const base = req.path
       try {
         const html = injectBase(INDEX_TEMPLATE, base);
         res.type('html').send(html);
