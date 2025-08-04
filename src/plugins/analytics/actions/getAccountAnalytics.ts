@@ -1,55 +1,130 @@
-import type { Action, IAgentRuntime, Memory, State, ActionResult } from '@elizaos/core';
+import type { Action, IAgentRuntime, Memory, State, ActionResult, ActionExample, HandlerCallback } from '@elizaos/core';
 import { AnalyticsService } from '../services/analyticsService';
-import { getAccountFromMessage } from '../../autonomous-trader/utils';
+import { getAccountFromMessage, getWalletsFromText } from '../../autonomous-trader/utils';
 import type { AccountAnalytics } from '../interfaces/types';
+
+/**
+ * Check if user has visual output enabled
+ */
+async function isVisualOutputEnabled(runtime: IAgentRuntime, message: Memory): Promise<boolean> {
+    try {
+        const account = await getAccountFromMessage(runtime, message);
+        return account?.visualOutput === true;
+    } catch (error) {
+        console.warn('Error checking visual output setting:', error);
+        return true; // Default to visual output enabled
+    }
+}
 
 /**
  * Get account analytics action
  */
-export const getAccountAnalytics: Action = {
+export default {
     name: 'GET_ACCOUNT_ANALYTICS',
     description: 'Get comprehensive analytics for a wallet account including portfolio performance, risk metrics, and trading history',
-    parameters: {
-        type: 'object',
-        properties: {
-            walletAddress: {
-                type: 'string',
-                description: 'The wallet address to analyze (optional, will use current user if not provided)'
+    similes: ['account analytics', 'portfolio analysis', 'wallet analytics', 'account performance'],
+    examples: [
+        [
+            {
+                name: '{{name1}}',
+                content: {
+                    text: 'Show me my account analytics',
+                },
             },
-            chain: {
-                type: 'string',
-                description: 'The blockchain chain (solana, ethereum, base)',
-                enum: ['solana', 'ethereum', 'base'],
-                default: 'solana'
-            }
-        }
-    },
+            {
+                name: '{{name2}}',
+                content: {
+                    text: "I'll analyze your account performance for you",
+                    actions: ['GET_ACCOUNT_ANALYTICS'],
+                },
+            },
+        ],
+        [
+            {
+                name: '{{name1}}',
+                content: {
+                    text: 'What is my portfolio performance?',
+                },
+            },
+            {
+                name: '{{name2}}',
+                content: {
+                    text: "Let me check your portfolio analytics",
+                    actions: ['GET_ACCOUNT_ANALYTICS'],
+                },
+            },
+        ],
+        [
+            {
+                name: '{{name1}}',
+                content: {
+                    text: 'Analyze my wallet 0x1234567890abcdef',
+                },
+            },
+            {
+                name: '{{name2}}',
+                content: {
+                    text: "I'll analyze that wallet address for you",
+                    actions: ['GET_ACCOUNT_ANALYTICS'],
+                },
+            },
+        ],
+    ] as ActionExample[][],
     validate: async (runtime: IAgentRuntime, message: Memory, state?: State): Promise<boolean> => {
         // Always allow this action to be executed
         return true;
     },
-    handler: async (runtime: IAgentRuntime, message: Memory, state?: State, options?: { [key: string]: unknown }): Promise<ActionResult> => {
+    handler: async (
+        runtime: IAgentRuntime,
+        message: Memory,
+        state?: State,
+        _options?: { [key: string]: unknown },
+        callback?: HandlerCallback,
+        responses: Memory[] = []
+    ): Promise<ActionResult | void | undefined> => {
         try {
-            let { walletAddress, chain = 'solana' } = options as any || {};
+            let { walletAddress, chain = 'solana' } = _options as any || {};
 
-            // If no wallet address provided, get from current user
+            // If no wallet address provided, try to extract from message text
             if (!walletAddress) {
-                const account = await getAccountFromMessage(runtime, message);
-                if (!account) {
-                    return {
-                        success: false,
-                        error: 'No account found for current user',
-                        data: {
-                            thought: 'No account found for current user',
-                            response: '❌ No account found for this user. Please provide a wallet address or ensure you are registered.'
+                const wallets = await getWalletsFromText(runtime, message);
+                if (wallets.length > 0) {
+                    walletAddress = wallets[0];
+                } else {
+                    // Fallback to current user's account
+                    const account = await getAccountFromMessage(runtime, message);
+                    if (!account) {
+                        const errorResponse = '❌ No account found for this user. Please provide a wallet address or ensure you are registered.';
+                        if (callback) {
+                            callback({
+                                text: errorResponse,
+                                attachments: [],
+                                source: 'auto',
+                                channelType: 'text',
+                                inReplyTo: message.id
+                            });
                         }
-                    };
+                        return;
+                    }
+                    walletAddress = account.walletAddress;
                 }
-                walletAddress = account.walletAddress;
             }
 
-            // Initialize analytics service
-            const analyticsService = new AnalyticsService(runtime);
+            // Get the registered analytics service instead of creating a new instance
+            const analyticsService = runtime.getService('ANALYTICS_SERVICE') as AnalyticsService;
+            if (!analyticsService) {
+                const errorResponse = '❌ Analytics service not available. Please ensure the analytics plugin is properly configured.';
+                if (callback) {
+                    callback({
+                        text: errorResponse,
+                        attachments: [],
+                        source: 'auto',
+                        channelType: 'text',
+                        inReplyTo: message.id
+                    });
+                }
+                return;
+            }
 
             const request = {
                 walletAddress,
@@ -59,41 +134,52 @@ export const getAccountAnalytics: Action = {
             const response = await analyticsService.getAccountAnalytics(request);
 
             if (!response.success) {
-                return {
-                    success: false,
-                    error: response.error,
-                    data: {
-                        thought: `Failed to get account analytics: ${response.error}`,
-                        response: `❌ Error analyzing account ${walletAddress}: ${response.error}`
-                    }
-                };
+                const errorResponse = `❌ Error analyzing account ${walletAddress}: ${response.error}`;
+                if (callback) {
+                    callback({
+                        text: errorResponse,
+                        attachments: [],
+                        source: 'auto',
+                        channelType: 'text',
+                        inReplyTo: message.id
+                    });
+                }
+                return;
             }
 
             // Type guard to ensure we have AccountAnalytics
             if (!response.data || typeof response.data !== 'object' || !('totalValue' in response.data)) {
-                return {
-                    success: false,
-                    error: 'Invalid account analytics data received',
-                    data: {
-                        thought: 'Invalid account analytics data received',
-                        response: '❌ Error: Invalid account analytics data received'
-                    }
-                };
+                const errorResponse = '❌ Error: Invalid account analytics data received';
+                if (callback) {
+                    callback({
+                        text: errorResponse,
+                        attachments: [],
+                        source: 'auto',
+                        channelType: 'text',
+                        inReplyTo: message.id
+                    });
+                }
+                return;
             }
 
             const accountData = response.data as AccountAnalytics;
 
-            // Format comprehensive response
-            let responseText = `📊 ACCOUNT ANALYTICS: ${walletAddress.substring(0, 8)}...\n\n`;
+            // Check if visual output is enabled
+            const visualOutput = await isVisualOutputEnabled(runtime, message);
+
+            // Format response based on visual output preference
+            let responseText = visualOutput
+                ? `📊 ACCOUNT ANALYTICS: ${walletAddress.substring(0, 8)}...\n\n`
+                : `Account Analytics: ${walletAddress.substring(0, 8)}...\n\n`;
 
             // Portfolio Overview
-            responseText += `💰 PORTFOLIO OVERVIEW:\n`;
+            responseText += visualOutput ? `💰 PORTFOLIO OVERVIEW:\n` : `Portfolio Overview:\n`;
             responseText += `• Total Value: $${accountData.totalValue.toLocaleString()}\n`;
             responseText += `• 24h Change: ${accountData.totalValueChangePercent24h >= 0 ? '+' : ''}${accountData.totalValueChangePercent24h.toFixed(2)}%\n`;
             responseText += `• Total PnL: ${accountData.performance.totalPnLPercent >= 0 ? '+' : ''}${accountData.performance.totalPnLPercent.toFixed(2)}%\n\n`;
 
             // Performance Metrics
-            responseText += `📈 PERFORMANCE METRICS:\n`;
+            responseText += visualOutput ? `📈 PERFORMANCE METRICS:\n` : `Performance Metrics:\n`;
             responseText += `• Best Performer: ${accountData.performance.bestPerformer}\n`;
             responseText += `• Worst Performer: ${accountData.performance.worstPerformer}\n`;
             responseText += `• Sharpe Ratio: ${accountData.performance.riskMetrics.sharpeRatio.toFixed(2)}\n`;
@@ -101,7 +187,7 @@ export const getAccountAnalytics: Action = {
             responseText += `• Volatility: ${accountData.performance.riskMetrics.volatility.toFixed(2)}%\n\n`;
 
             // Trading History
-            responseText += `🔄 TRADING HISTORY:\n`;
+            responseText += visualOutput ? `🔄 TRADING HISTORY:\n` : `Trading History:\n`;
             responseText += `• Total Trades: ${accountData.tradingHistory.totalTrades}\n`;
             responseText += `• Win Rate: ${accountData.tradingHistory.winRate.toFixed(1)}%\n`;
             responseText += `• Winning Trades: ${accountData.tradingHistory.winningTrades}\n`;
@@ -109,7 +195,7 @@ export const getAccountAnalytics: Action = {
             responseText += `• Average Trade Size: $${accountData.tradingHistory.averageTradeSize.toLocaleString()}\n\n`;
 
             // Top Holdings
-            responseText += `🎯 TOP HOLDINGS:\n`;
+            responseText += visualOutput ? `🎯 TOP HOLDINGS:\n` : `Top Holdings:\n`;
             const sortedPortfolio = accountData.portfolio
                 .sort((a, b) => b.value - a.value)
                 .slice(0, 10);
@@ -122,7 +208,7 @@ export const getAccountAnalytics: Action = {
             responseText += '\n';
 
             // Risk Assessment
-            responseText += `⚠️ RISK ASSESSMENT:\n`;
+            responseText += visualOutput ? `⚠️ RISK ASSESSMENT:\n` : `Risk Assessment:\n`;
             const sharpe = accountData.performance.riskMetrics.sharpeRatio;
             const drawdown = accountData.performance.riskMetrics.maxDrawdown;
             const volatility = accountData.performance.riskMetrics.volatility;
@@ -139,7 +225,7 @@ export const getAccountAnalytics: Action = {
             responseText += `• Largest Position: ${sortedPortfolio[0]?.allocation.toFixed(1)}% (${sortedPortfolio[0]?.symbol})\n\n`;
 
             // Recommendations
-            responseText += `💡 RECOMMENDATIONS:\n`;
+            responseText += visualOutput ? `💡 RECOMMENDATIONS:\n` : `Recommendations:\n`;
             if (riskLevel === 'HIGH') {
                 responseText += `• Consider reducing position sizes\n`;
                 responseText += `• Diversify into more stable assets\n`;
@@ -156,24 +242,41 @@ export const getAccountAnalytics: Action = {
                 responseText += `• Improve trading strategy (low win rate)\n`;
             }
 
+            if (callback) {
+                callback({
+                    text: responseText,
+                    attachments: [],
+                    source: 'auto',
+                    channelType: 'text',
+                    inReplyTo: message.id
+                });
+            }
+
             return {
                 success: true,
+                text: responseText,
                 data: {
-                    thought: `Successfully analyzed account ${walletAddress} with comprehensive portfolio analytics. The account shows ${accountData.performance.totalPnLPercent >= 0 ? 'positive' : 'negative'} performance with ${riskLevel.toLowerCase()} risk level.`,
-                    response: responseText
+                    walletAddress,
+                    analytics: accountData
                 }
             };
 
         } catch (error) {
             console.error('Error in getAccountAnalytics action:', error);
+            const errorResponse = `❌ Error analyzing account: ${error instanceof Error ? error.message : 'Unknown error'}`;
+            if (callback) {
+                callback({
+                    text: errorResponse,
+                    attachments: [],
+                    source: 'auto',
+                    channelType: 'text',
+                    inReplyTo: message.id
+                });
+            }
             return {
                 success: false,
-                error: error instanceof Error ? error.message : 'Unknown error',
-                data: {
-                    thought: `Error occurred while analyzing account: ${error}`,
-                    response: `❌ Error analyzing account: ${error instanceof Error ? error.message : 'Unknown error'}`
-                }
+                error: error instanceof Error ? error.message : 'Unknown error'
             };
         }
     }
-}; 
+} as Action; 

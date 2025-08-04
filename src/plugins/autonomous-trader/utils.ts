@@ -55,9 +55,10 @@ export async function getDataFromMessage(runtime, message) {
   }
   const intUserService = runtime.getService('AUTONOMOUS_TRADER_INTERFACE_USERS') as any;
   const components = await intUserService.interface_users_ByIds([entityId])
+  const component = components[entityId]
   //console.debug('autotrade::getDataFromMessage - user components', components)
   // .componentId
-  return components[entityId]
+  return component
 }
 
 // they have a verified email
@@ -125,6 +126,7 @@ console.log('MULTIWALLET_SWAP sourceResult', sourceResult);
 // is a wallet required? , required = 0
 // max wallets? 1, 2 for transfer
 // we return an array of what?
+// RENAME: to getAddressFromText
 export async function getWalletsFromText(runtime, message) {
   // what about partial?
   // only works in the source context...

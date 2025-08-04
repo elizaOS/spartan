@@ -13,6 +13,7 @@ import type {
 export class BirdeyeProvider {
     private runtime: IAgentRuntime;
     private apiKey: string;
+    private readonly API_BASE_URL = 'https://public-api.birdeye.so';
 
     constructor(runtime: IAgentRuntime) {
         this.runtime = runtime;
@@ -32,6 +33,8 @@ export class BirdeyeProvider {
             const cached = await this.getCachedData(cacheKey);
             if (cached) return cached;
 
+            console.log(`Fetching price for token ${tokenAddress} from Birdeye API...`);
+
             const options = {
                 method: 'GET',
                 headers: {
@@ -41,36 +44,70 @@ export class BirdeyeProvider {
                 },
             };
 
-            const response = await fetch(
-                `https://public-api.birdeye.so/v1/token/price?address=${tokenAddress}`,
-                options
-            );
+            // Try the main price endpoint first
+            let url = `${this.API_BASE_URL}/defi/price?address=${tokenAddress}`;
+            console.log(`Making request to: ${url}`);
 
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+            let response = await fetch(url, options);
+
+            // If the main endpoint fails, try the token overview endpoint
+            if (!response.ok || response.status === 404) {
+                console.log(`Main price endpoint failed, trying token overview endpoint...`);
+                url = `${this.API_BASE_URL}/defi/token_overview?address=${tokenAddress}`;
+                console.log(`Making request to: ${url}`);
+                response = await fetch(url, options);
             }
 
-            const data = await response.json();
-            const tokenData = data?.data;
+            console.log(`Birdeye API response status: ${response.status}`);
 
-            if (!tokenData) {
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error(`Birdeye API error response: ${errorText}`);
+                throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
+            }
+
+            // Check if response has content
+            const responseText = await response.text();
+            console.log(`Birdeye API raw response: ${responseText}`);
+
+            if (!responseText || responseText.trim() === '') {
+                console.warn(`Birdeye API returned empty response for token ${tokenAddress}`);
                 return null;
             }
 
+            let data;
+            try {
+                data = JSON.parse(responseText);
+                console.log(`Birdeye API response data:`, JSON.stringify(data, null, 2));
+            } catch (parseError) {
+                console.error(`Failed to parse Birdeye API response as JSON: ${responseText}`);
+                return null;
+            }
+
+            let tokenData = data?.data;
+
+            if (!tokenData) {
+                console.warn(`No token data found in Birdeye response for ${tokenAddress}`);
+                return null;
+            }
+
+            // Handle different response formats from price vs overview endpoints
             const priceData: TokenPriceData = {
                 timestamp: Date.now(),
                 source: 'birdeye',
                 chain: chain,
                 tokenAddress: tokenAddress,
-                symbol: tokenData.symbol || 'UNKNOWN',
-                price: tokenData.value || 0,
+                symbol: tokenData.symbol || tokenData.name || 'UNKNOWN',
+                price: tokenData.value || tokenData.price || 0,
                 priceChange24h: tokenData.priceChange24h || 0,
-                priceChangePercent24h: tokenData.priceChangePercent24h || 0,
-                volume24h: tokenData.volume24h || 0,
-                marketCap: tokenData.marketCap || 0,
-                circulatingSupply: tokenData.circulatingSupply,
-                totalSupply: tokenData.totalSupply,
+                priceChangePercent24h: tokenData.priceChangePercent24h || tokenData.priceChangePercent || 0,
+                volume24h: tokenData.volume24h || tokenData.volume || 0,
+                marketCap: tokenData.marketCap || tokenData.marketcap || 0,
+                circulatingSupply: tokenData.circulatingSupply || tokenData.circulating_supply,
+                totalSupply: tokenData.totalSupply || tokenData.total_supply,
             };
+
+            console.log(`Successfully parsed price data: $${priceData.price} for ${tokenData.symbol}`);
 
             await this.setCachedData(cacheKey, priceData, 60); // 1 minute cache
             return priceData;
@@ -81,7 +118,7 @@ export class BirdeyeProvider {
     }
 
     /**
-     * Get historical price data from Birdeye
+     * Get historical price data from Birdeye using the correct endpoint
      */
     async getHistoricalData(
         tokenAddress: string,
@@ -104,27 +141,37 @@ export class BirdeyeProvider {
 
             // Convert timeframe to Birdeye format
             const interval = this.convertTimeframeToInterval(timeframe);
-            const limit = this.getDataPointsForTimeframe(timeframe);
 
-            const response = await fetch(
-                `https://public-api.birdeye.so/v1/token/price_history?address=${tokenAddress}&interval=${interval}&limit=${limit}`,
-                options
-            );
+            // Use the correct historical price endpoint
+            const url = `${this.API_BASE_URL}/defi/history_price?address=${tokenAddress}&address_type=token&type=${interval}`;
+            console.log(`Fetching historical data from: ${url}`);
+
+            const response = await fetch(url, options);
 
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                const errorText = await response.text();
+                console.error(`Birdeye historical API error: ${errorText}`);
+                throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
             }
 
             const data = await response.json();
-            const historyData = data?.data?.items || [];
+            console.log(`Historical data response:`, JSON.stringify(data, null, 2));
+
+            if (!data.success || !data.data || !data.data.items) {
+                console.warn(`No historical data found for token ${tokenAddress}`);
+                return [];
+            }
+
+            const historyData = data.data.items;
+            console.log(`Found ${historyData.length} historical data points`);
 
             const historicalData: HistoricalPriceData[] = historyData.map((item: any) => ({
-                timestamp: item.unixTime * 1000,
-                open: item.open || 0,
-                high: item.high || 0,
-                low: item.low || 0,
-                close: item.close || 0,
-                volume: item.volume || 0,
+                timestamp: item.unixTime ? item.unixTime * 1000 : Date.now(),
+                open: item.o || item.open || item.value || 0,
+                high: item.h || item.high || item.value || 0,
+                low: item.l || item.low || item.value || 0,
+                close: item.c || item.close || item.value || 0,
+                volume: item.v || item.volume || 0,
             }));
 
             await this.setCachedData(cacheKey, historicalData, 300); // 5 minutes cache
@@ -132,6 +179,72 @@ export class BirdeyeProvider {
         } catch (error) {
             console.error('Error fetching historical data from Birdeye:', error);
             return [];
+        }
+    }
+
+    /**
+     * Get OHLCV data from Birdeye for better technical analysis
+     */
+    async getOHLCVData(
+        tokenAddress: string,
+        chain: string = 'solana',
+        timeframe: string = '1d'
+    ): Promise<HistoricalPriceData[]> {
+        try {
+            const cacheKey = `birdeye_ohlcv_${tokenAddress}_${timeframe}`;
+            const cached = await this.getCachedData(cacheKey);
+            if (cached) return cached;
+
+            const options = {
+                method: 'GET',
+                headers: {
+                    accept: 'application/json',
+                    'x-chain': chain,
+                    'X-API-KEY': this.apiKey,
+                },
+            };
+
+            // Convert timeframe to Birdeye format
+            const interval = this.convertTimeframeToInterval(timeframe);
+
+            // Use the OHLCV endpoint for better candlestick data
+            const url = `${this.API_BASE_URL}/defi/ohlcv?address=${tokenAddress}&type=${interval}`;
+            console.log(`Fetching OHLCV data from: ${url}`);
+
+            const response = await fetch(url, options);
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error(`Birdeye OHLCV API error: ${errorText}`);
+                throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
+            }
+
+            const data = await response.json();
+            console.log(`OHLCV data response:`, JSON.stringify(data, null, 2));
+
+            if (!data.success || !data.data || !data.data.items) {
+                console.warn(`No OHLCV data found for token ${tokenAddress}, falling back to historical price data`);
+                return this.getHistoricalData(tokenAddress, chain, timeframe);
+            }
+
+            const ohlcvData = data.data.items;
+            console.log(`Found ${ohlcvData.length} OHLCV data points`);
+
+            const historicalData: HistoricalPriceData[] = ohlcvData.map((item: any) => ({
+                timestamp: item.unixTime ? item.unixTime * 1000 : Date.now(),
+                open: item.o || 0,
+                high: item.h || 0,
+                low: item.l || 0,
+                close: item.c || 0,
+                volume: item.v || 0,
+            }));
+
+            await this.setCachedData(cacheKey, historicalData, 300); // 5 minutes cache
+            return historicalData;
+        } catch (error) {
+            console.error('Error fetching OHLCV data from Birdeye:', error);
+            // Fall back to historical price data
+            return this.getHistoricalData(tokenAddress, chain, timeframe);
         }
     }
 
@@ -155,7 +268,7 @@ export class BirdeyeProvider {
 
             // Get trending tokens
             const trendingResponse = await fetch(
-                'https://public-api.birdeye.so/defi/token_trending?sort_by=rank&sort_type=asc&offset=0&limit=20',
+                `${this.API_BASE_URL}/defi/token_trending?sort_by=rank&sort_type=asc&offset=0&limit=20`,
                 options
             );
 
@@ -168,12 +281,12 @@ export class BirdeyeProvider {
 
             // Get top gainers and losers
             const gainersResponse = await fetch(
-                'https://public-api.birdeye.so/defi/token_trending?sort_by=priceChangePercent24h&sort_type=desc&offset=0&limit=10',
+                `${this.API_BASE_URL}/defi/token_trending?sort_by=priceChangePercent24h&sort_type=desc&offset=0&limit=10`,
                 options
             );
 
             const losersResponse = await fetch(
-                'https://public-api.birdeye.so/defi/token_trending?sort_by=priceChangePercent24h&sort_type=asc&offset=0&limit=10',
+                `${this.API_BASE_URL}/defi/token_trending?sort_by=priceChangePercent24h&sort_type=asc&offset=0&limit=10`,
                 options
             );
 
@@ -261,7 +374,7 @@ export class BirdeyeProvider {
 
             // Get wallet portfolio
             const portfolioResponse = await fetch(
-                `https://public-api.birdeye.so/v1/wallet/token_list?wallet=${walletAddress}`,
+                `${this.API_BASE_URL}/v1/wallet/token_list?wallet=${walletAddress}`,
                 options
             );
 
@@ -274,7 +387,7 @@ export class BirdeyeProvider {
 
             // Get wallet value
             const valueResponse = await fetch(
-                `https://public-api.birdeye.so/v1/wallet/portfolio?wallet=${walletAddress}`,
+                `${this.API_BASE_URL}/v1/wallet/portfolio?wallet=${walletAddress}`,
                 options
             );
 
@@ -329,12 +442,22 @@ export class BirdeyeProvider {
      */
     private convertTimeframeToInterval(timeframe: string): string {
         switch (timeframe) {
-            case '1h': return '1h';
-            case '4h': return '4h';
-            case '1d': return '1d';
-            case '1w': return '1w';
             case '1m': return '1m';
-            default: return '1d';
+            case '3m': return '3m';
+            case '5m': return '5m';
+            case '15m': return '15m';
+            case '30m': return '30m';
+            case '1h': return '1H';
+            case '2h': return '2H';
+            case '4h': return '4H';
+            case '6h': return '6H';
+            case '8h': return '8H';
+            case '12h': return '12H';
+            case '1d': return '1D';
+            case '3d': return '3D';
+            case '1w': return '1W';
+            case '1m': return '1M';
+            default: return '1D';
         }
     }
 
@@ -373,4 +496,4 @@ export class BirdeyeProvider {
             console.error('Failed to cache data:', error);
         }
     }
-} 
+}

@@ -179,33 +179,10 @@ export interface SniperAnalytics {
 export interface ComprehensiveTokenAnalytics {
     tokenAddress: string;
     symbol: string;
-    name: string;
-    chain: string;
-
-    // Price data
     price: TokenPriceData;
-
-    // Technical analysis
     technicalIndicators: TechnicalIndicators;
-
-    // Historical data
-    historicalData: HistoricalPriceData[];
-
-    // Holder analytics (Codex)
-    holderAnalytics?: TokenHolderAnalytics;
-
-    // Sniper analytics (Codex)
-    sniperAnalytics?: SniperAnalytics;
-
-    // Market position
-    marketPosition: {
-        rank: number;
-        marketCap: number;
-        volume24h: number;
-        dominance: number;
-    };
-
-    // Risk assessment
+    holderAnalytics?: any;
+    sniperAnalytics?: any;
     riskAssessment: {
         volatility: number;
         liquidity: number;
@@ -213,8 +190,6 @@ export interface ComprehensiveTokenAnalytics {
         technicalRisk: string;
         overallRisk: 'low' | 'moderate' | 'high';
     };
-
-    // Recommendations
     recommendations: {
         action: 'buy' | 'sell' | 'hold' | 'accumulate';
         confidence: number;
@@ -225,6 +200,8 @@ export interface ComprehensiveTokenAnalytics {
             longTerm: number;
         };
     };
+    timestamp: number;
+    source: string;
 }
 
 /**
@@ -239,6 +216,8 @@ export interface AnalyticsRequest {
     includeHistorical?: boolean;
     includeHolders?: boolean;
     includeSnipers?: boolean;
+    coinGeckoData?: any; // CoinGecko data for better symbol resolution
+    priceHistory?: number[]; // Price history data for technical analysis
 }
 
 /**

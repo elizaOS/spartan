@@ -5,6 +5,7 @@
 /generatedImages
 .pglite
 elizadb/*
+.elizadb-test/*
 .eliza/*
 bun.lock
 node_modules/
