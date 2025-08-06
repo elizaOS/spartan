@@ -194,7 +194,7 @@
 
 <body>
     <div class="welcome-container">
-        <div class="logo">P</div>
+        <div class="logo">S</div>
 
         <h1>Welcome to Spartan Wallet</h1>
         <p class="subtitle">
@@ -261,23 +261,41 @@
     </div>
 
     <script>
-        function createWallet() {
-            // In a real implementation, this would:
-            // 1. Generate a new keypair
-            // 2. Show the seed phrase to the user
-            // 3. Ask them to confirm they've saved it
-            // 4. Set up the wallet
+        const API_BASE_URL = 'http://localhost:2096';
 
-            alert('Create wallet functionality coming soon!');
+        async function createWallet() {
+            try {
+                // For now, redirect to the main extension
+                window.location.href = 'popup.html';
+            } catch (error) {
+                console.error('Error creating wallet:', error);
+                alert('Create wallet functionality coming soon!');
+            }
         }
 
-        function importWallet() {
-            // In a real implementation, this would:
-            // 1. Show a form to enter seed phrase or private key
-            // 2. Validate the input
-            // 3. Import the wallet
+        async function importWallet() {
+            try {
+                // For now, redirect to the main extension
+                window.location.href = 'popup.html';
+            } catch (error) {
+                console.error('Error importing wallet:', error);
+                alert('Import wallet functionality coming soon!');
+            }
+        }
 
-            alert('Import wallet functionality coming soon!');
+        async function checkApiStatus() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/spartan-defi/status`);
+                const data = await response.json();
+
+                if (data.success) {
+                    console.log('Spartan DeFi API is running:', data.data);
+                } else {
+                    console.warn('API status check failed');
+                }
+            } catch (error) {
+                console.error('API status check failed:', error);
+            }
         }
 
         function openTerms() {
@@ -287,6 +305,9 @@
         function openPrivacy() {
             window.open('https://github.com/elizaOS/spartan', '_blank');
         }
+
+        // Check API status on load
+        checkApiStatus();
 
         // Close welcome page after 30 seconds
         setTimeout(() => {
