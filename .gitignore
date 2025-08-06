@@ -16,3 +16,4 @@ models/*
 
 dist/*
 elizadb/*
+.turbo
