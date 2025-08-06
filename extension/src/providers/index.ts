@@ -1,1 +1,1 @@
-export { meetingProvider } from "./meetingProvider";
+export { defiProvider } from "./defiProvider";
