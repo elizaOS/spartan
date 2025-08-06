@@ -1,95 +1,153 @@
 import { z } from "zod";
 
 // Configuration schema
-export const googleMeetConfigSchema = z.object({
-  TRANSCRIPTION_LANGUAGE: z.string().default("en"),
-  REPORT_OUTPUT_DIR: z.string().default("./meeting-reports"),
-  ENABLE_REAL_TIME_TRANSCRIPTION: z.union([z.boolean(), z.string()]).transform(val => 
-    typeof val === 'string' ? val === 'true' : val
-  ).default(true),
-  AUDIO_CHUNK_DURATION_MS: z.union([z.number(), z.string()]).transform(val => 
-    typeof val === 'string' ? parseInt(val, 10) : val
-  ).default(30000), // 30 seconds chunks for Whisper
+export const spartanDefiConfigSchema = z.object({
+  SOLANA_RPC_URL: z.string().url().default("https://api.mainnet-beta.solana.com"),
+  JUPITER_API_URL: z.string().url().default("https://quote-api.jup.ag/v6"),
+  BIRDEYE_API_KEY: z.string().optional(),
+  SPARTAN_CHAT_MODEL: z.string().default("gpt-4"),
 });
 
-export type GoogleMeetConfig = z.infer<typeof googleMeetConfigSchema>;
+export type SpartanDefiConfig = z.infer<typeof spartanDefiConfigSchema>;
 
-// Meeting types
-export interface Meeting {
-  id: string;
-  url: string;
-  title?: string;
-  startTime: Date;
-  endTime?: Date;
-  participants: Participant[];
-  transcripts: Transcript[];
-  status: MeetingStatus;
-}
-
-export interface Participant {
-  id: string;
+// Token types
+export interface Token {
+  mint: string;
+  symbol: string;
   name: string;
-  joinTime: Date;
-  leaveTime?: Date;
-  isSpeaking: boolean;
+  decimals: number;
+  logoURI?: string;
+  price?: number;
+  priceChange24h?: number;
+  volume24h?: number;
+  marketCap?: number;
 }
 
-export interface Transcript {
-  id: string;
-  speakerName: string;
-  speakerId: string;
-  text: string;
+export interface TokenBalance {
+  mint: string;
+  symbol: string;
+  name: string;
+  balance: string;
+  decimals: number;
+  uiAmount: number;
+  valueUsd?: number;
+}
+
+export interface WalletBalances {
+  solBalance: number;
+  tokens: TokenBalance[];
+  totalValueUsd?: number;
+}
+
+// Swap types
+export interface SwapQuote {
+  inputMint: string;
+  outputMint: string;
+  amount: string;
+  otherAmountThreshold: string;
+  swapMode: string;
+  slippageBps: number;
+  platformFee?: {
+    feeBps: number;
+    feeAccounts: Record<string, string>;
+  };
+  priceImpactPct: number;
+  routePlan: any[];
+  contextSlot: number;
+  timeTaken: number;
+}
+
+export interface SwapParams {
+  inputMint: string;
+  outputMint: string;
+  amount: number;
+  slippageBps?: number;
+  walletAddress: string;
+}
+
+export interface SwapResult {
+  signature: string;
+  success: boolean;
+  error?: string;
+  inputAmount: number;
+  outputAmount: number;
+  priceImpact: number;
+}
+
+// Spartan Chat types
+export interface SpartanChatMessage {
+  role: "user" | "assistant" | "system";
+  content: string;
   timestamp: Date;
+}
+
+export interface SpartanChatContext {
+  walletBalances?: WalletBalances;
+  recentTransactions?: any[];
+  marketData?: any;
+  tradingHistory?: any[];
+}
+
+export interface SpartanChatResponse {
+  message: string;
+  suggestions?: string[];
+  data?: any;
   confidence: number;
-  startTime?: number; // Start time in seconds
-  endTime?: number;   // End time in seconds
 }
 
-export type MeetingStatus = "waiting" | "joined" | "active" | "ended" | "error";
-
-// Audio streaming types
-export interface AudioChunk {
-  data: Buffer;
-  timestamp: Date;
-  speakerId?: string;
+// Market data types
+export interface MarketData {
+  token: string;
+  price: number;
+  priceChange24h: number;
+  volume24h: number;
+  marketCap: number;
+  circulatingSupply: number;
+  totalSupply: number;
 }
 
-// Report types
-export interface MeetingReport {
-  meetingId: string;
-  title: string;
-  date: Date;
-  duration: number; // in minutes
-  participants: string[];
-  summary: string;
-  keyPoints: string[];
-  actionItems: ActionItem[];
-  fullTranscript: Transcript[];
-}
-
-export interface ActionItem {
+// Transaction types
+export interface Transaction {
+  signature: string;
+  blockTime: number;
+  slot: number;
+  success: boolean;
+  fee: number;
+  type: "swap" | "transfer" | "stake" | "unstake" | "other";
   description: string;
-  assignee?: string;
-  dueDate?: Date;
-  priority: "low" | "medium" | "high";
+  amount?: number;
+  token?: string;
 }
 
 // Service state
-export interface ExtensionMeetServiceState {
-  currentMeeting?: Meeting;
-  isRecording: boolean;
-  isConnected: boolean;
-  activeClients: number;
+export interface SpartanDefiServiceState {
+  connectedWallets: string[];
+  activeQuotes: Map<string, SwapQuote>;
+  chatHistory: SpartanChatMessage[];
+  marketDataCache: Map<string, MarketData>;
 }
 
 // Action parameters
-export interface JoinMeetingParams {
-  meetingUrl: string;
-  displayName?: string;
+export interface GetTokenBalanceParams {
+  walletAddress: string;
+  tokenMint: string;
 }
 
-export interface GenerateReportParams {
-  meetingId: string;
-  includeSummary?: boolean;
-  includeActionItems?: boolean;
+export interface GetWalletBalancesParams {
+  walletAddress: string;
+  includePrices?: boolean;
+}
+
+export interface SwapTokensParams {
+  inputMint: string;
+  outputMint: string;
+  amount: number;
+  slippageBps?: number;
+  walletAddress: string;
+}
+
+export interface ChatWithSpartanParams {
+  message: string;
+  context?: any;
+  userId?: string;
 }
