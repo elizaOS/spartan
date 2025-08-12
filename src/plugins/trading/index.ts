@@ -13,6 +13,7 @@ import openPositionAction from "./actions/act_open_position";
 // Providers
 import { analyticsProvider } from "./providers/analytics";
 import { positionProvider } from "./providers/position";
+import { marketProvider } from "./providers/market";
 
 // Strategies
 import { llmStrategy } from './strategies/strategy_llm';
@@ -26,7 +27,11 @@ export const traderPlugin: Plugin = {
   name: 'trader',
   description: 'Agent trading plugin',
   evaluators: [],
-  providers: [positionProvider, analyticsProvider],
+  providers: [
+    positionProvider,
+    //analyticsProvider,
+    marketProvider,
+  ],
   actions: [
     setStrategy, changeStrategy,
     //actionPositionList,
