@@ -40,6 +40,7 @@ export const accountProvider: Provider = {
                 accountStr += `Verified Wallet: ${filteredAccount.holderCheck}\n`
                 // check value
             }
+            accountStr += `Notifications: ${filteredAccount.notifications}\n`
 
             // needs to be moved to an extension or something...
             /*
