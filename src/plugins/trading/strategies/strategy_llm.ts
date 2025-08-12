@@ -148,7 +148,11 @@ export async function llmStrategy(runtime: IAgentRuntime) {
     // update our cache?
 
     // temp hack
-    await generateBuySignal(runtime, service, hndl);
+    try {
+      await generateBuySignal(runtime, service, hndl);
+    } catch (e) {
+      console.log('generateBuySignal err', e)
+    }
     console.log('interested_trending - generateBuySignal done')
   });
   // sentiment update
@@ -376,7 +380,7 @@ async function pickToken(runtime, prompt, retries = 3) {
   await runtime.createMemory(marketMemory, "trendingConditions", true); // 3rd parameter means unique
 
   const picked_nothing = parseBooleanFromText(response.picked_nothing)
-  if (!picked_nothing) {
+  if (picked_nothing) {
     // all good
     return false;
   }
@@ -489,6 +493,7 @@ async function generateBuySignal(runtime, strategyService, hndl, retries = gener
     */
     return false
   }
+  //console.debug('strat_llm:generateBuySignal: have response')
 
   /*
   await this.runtime.ensureConnection({
@@ -542,9 +547,12 @@ async function generateBuySignal(runtime, strategyService, hndl, retries = gener
   await runtime.createMemory(memory, "picks", true); // 3rd parameter means unique
 
   const fid = runtime.getSetting('FARCASTER_FID')
-  const fcWorldId = createUniqueUuid(runtime, fid.toString());
-  const fcRoomId = createUniqueUuid(runtime, `${fid}-home`);
+  if (fid) {
+    const fcWorldId = createUniqueUuid(runtime, fid.toString());
+    const fcRoomId = createUniqueUuid(runtime, `${fid}-home`);
+  }
 
+  //console.debug('stored pick, checking price')
 
   // if looks good, get token(s) info (birdeye?) (infoService)
   const infoService = await acquireService(runtime, 'TRADER_DATAPROVIDER', 'llm trading info');
