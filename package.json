@@ -52,6 +52,7 @@
     "@jup-ag/api": "^6.0.0",
     "@langchain/core": "^0.3.57",
     "@langchain/textsplitters": "^0.1.0",
+    "@meteora-ag/dlmm": "latest",
     "@radix-ui/react-slot": "^1.1.1",
     "@radix-ui/react-tabs": "^1.1.2",
     "@solana/kit": "^2.1.1",

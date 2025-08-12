@@ -266,6 +266,7 @@ export async function interface_account_create(runtime: IAgentRuntime, message: 
     entityId,
     type: CONSTANTS.COMPONENT_ACCOUNT_TYPE,
     data: account,
+    createdAt: Date.now(),
   });
 }
 
@@ -308,6 +309,7 @@ export async function interface_account_update(runtime: IAgentRuntime, component
     type: CONSTANTS.COMPONENT_ACCOUNT_TYPE,
     data: component.data,
     agentId: runtime.agentId,
+    createdAt: Date.now(),
   });
   //console.log('interface_account_update - updateComponent result', res)
   return true

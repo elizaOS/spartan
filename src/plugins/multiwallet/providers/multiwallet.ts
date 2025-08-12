@@ -63,14 +63,19 @@ export const multiwalletProvider: Provider = {
     if (isDM) {
       // give private data about your wallets
       const account = await getAccountFromMessage(runtime, message)
+      console.log('account', account)
       const solanaWallets: any[] = []
       const solanaPositions: any[] = []
-      for (const mw of account.metawallets) {
-        const kp = mw.keypairs.solana
-        if (kp) {
-          //console.log('kp', kp)
-          solanaWallets.push({ ...kp, strategy: mw.strategy })
+      if (account.metawallets) {
+        for (const mw of account.metawallets) {
+          const kp = mw.keypairs.solana
+          if (kp) {
+            //console.log('kp', kp)
+            solanaWallets.push({ ...kp, strategy: mw.strategy })
+          }
         }
+      } else {
+        // no wallets yet
       }
 
       // gather balance information for each of their wallets

@@ -25,6 +25,16 @@ import {
   validateAuthToken
 } from './utils';
 
+// Import route handlers
+import { rt_chatWithSpartanAI, rt_createSession, rt_sendSessionMessage, rt_getSessionMessages, rt_deleteSession } from './routes/rt_chatWithSpartanAI';
+import { rt_getSwapQuoteFromServices } from './routes/rt_getSwapQuoteFromServices';
+import { rt_getTokenBalanceFromServices } from './routes/rt_getTokenBalanceFromServices';
+import { rt_getTokenInfo } from './routes/rt_getTokenInfo';
+import { rt_getWalletBalancesFromServices } from './routes/rt_getWalletBalancesFromServices';
+import { rt_requestEmailVerification } from './routes/rt_requestEmailVerification';
+import { rt_validateAuthToken } from './routes/rt_validateAuthToken';
+import { rt_verifyEmailToken } from './routes/rt_verifyEmailToken';
+
 const connection = new Connection('https://api.mainnet-beta.solana.com');
 
 // Define the equivalent of __dirname for ES modules
@@ -872,458 +882,19 @@ export const routes: Route[] = [
         endpoints: [
           'GET /spartan-defi/balances/:walletAddress',
           'GET /spartan-defi/token/:walletAddress/:tokenMint',
-          'POST /spartan-defi/swap/quote',
-          'POST /spartan-defi/swap/execute',
+          'GET /spartan-defi/token/:tokenMint',
+          'GET /spartan-defi/status',
           'POST /spartan-defi/chat',
           'POST /spartan-defi/sessions',
           'POST /spartan-defi/sessions/:sessionId/messages',
           'GET /spartan-defi/sessions/:sessionId/messages',
           'DELETE /spartan-defi/sessions/:sessionId',
-          'GET /spartan-defi/market-data',
-          'GET /spartan-defi/portfolio',
-          'GET /spartan-defi/transactions',
-          'GET /spartan-defi/status',
           'POST /spartan-defi/validate-account',
           'POST /spartan-defi/request-email-verification',
           'GET /spartan-defi/verify-email-token',
           'POST /spartan-defi/verify-email-token',
         ]
       });
-    },
-  },
-  {
-    type: 'GET',
-    path: '/spartan-defi/balances/:walletAddress',
-    handler: async (req: any, res: any, runtime: IAgentRuntime) => {
-      try {
-        const { walletAddress } = req.params;
-        const includePrices = req.query.prices !== 'false';
-
-        const solanaService = runtime.getService('chain_solana');
-        if (!solanaService) {
-          return res.status(500).json({ error: 'Solana service not available' });
-        }
-
-        const balances = await getWalletBalancesFromServices(runtime, walletAddress, includePrices);
-
-        res.json({
-          success: true,
-          data: balances,
-          timestamp: new Date().toISOString(),
-        });
-      } catch (error) {
-        console.error('Error getting wallet balances:', error);
-        res.status(500).json({
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        });
-      }
-    },
-  },
-  {
-    type: 'GET',
-    path: '/spartan-defi/token/:walletAddress/:tokenMint',
-    handler: async (req: any, res: any, runtime: IAgentRuntime) => {
-      try {
-        const { walletAddress, tokenMint } = req.params;
-
-        const solanaService = runtime.getService('chain_solana');
-        if (!solanaService) {
-          return res.status(500).json({ error: 'Solana service not available' });
-        }
-
-        const balance = await getTokenBalanceFromServices(runtime, walletAddress, tokenMint);
-
-        if (!balance) {
-          return res.status(404).json({
-            success: false,
-            error: 'Token not found in wallet'
-          });
-        }
-
-        res.json({
-          success: true,
-          data: balance,
-          timestamp: new Date().toISOString(),
-        });
-      } catch (error) {
-        console.error('Error getting token balance:', error);
-        res.status(500).json({
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        });
-      }
-    },
-  },
-  {
-    type: 'POST',
-    path: '/spartan-defi/swap/quote',
-    handler: async (req: any, res: any, runtime: IAgentRuntime) => {
-      try {
-        const { inputMint, outputMint, amount, slippageBps = 100 } = req.body;
-
-        if (!inputMint || !outputMint || !amount) {
-          return res.status(400).json({
-            success: false,
-            error: 'Missing required parameters: inputMint, outputMint, amount'
-          });
-        }
-
-        const quote = await getSwapQuoteFromServices(runtime, {
-          inputMint,
-          outputMint,
-          amount: parseFloat(amount),
-          slippageBps: parseInt(slippageBps),
-          walletAddress: req.body.walletAddress || "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
-        });
-
-        if (!quote) {
-          return res.status(400).json({
-            success: false,
-            error: 'Failed to get swap quote'
-          });
-        }
-
-        res.json({
-          success: true,
-          data: quote,
-          timestamp: new Date().toISOString(),
-        });
-      } catch (error) {
-        console.error('Error getting swap quote:', error);
-        res.status(500).json({
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        });
-      }
-    },
-  },
-  {
-    type: 'POST',
-    path: '/spartan-defi/swap/execute',
-    handler: async (req: any, res: any, runtime: IAgentRuntime) => {
-      try {
-        const { quote, walletAddress } = req.body;
-
-        if (!quote || !walletAddress) {
-          return res.status(400).json({
-            success: false,
-            error: 'Missing required parameters: quote, walletAddress'
-          });
-        }
-
-        // For now, just return the quote as executed (simulation)
-        const result = {
-          signature: "simulated_signature_" + Date.now(),
-          success: true,
-          inputAmount: parseFloat(quote.amount),
-          outputAmount: parseFloat(quote.otherAmountThreshold),
-          priceImpact: quote.priceImpactPct,
-        };
-
-        res.json({
-          success: result.success,
-          data: result,
-          timestamp: new Date().toISOString(),
-        });
-      } catch (error) {
-        console.error('Error executing swap:', error);
-        res.status(500).json({
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        });
-      }
-    },
-  },
-  {
-    type: 'POST',
-    path: '/spartan-defi/chat',
-    handler: async (req: any, res: any, runtime: IAgentRuntime) => {
-      try {
-        const { message, context, userId } = req.body;
-
-        if (!message) {
-          return res.status(400).json({
-            success: false,
-            error: 'Missing required parameter: message'
-          });
-        }
-
-        // Add user ID to context if provided
-        const chatContext = context || {};
-        if (userId) {
-          chatContext.userId = userId;
-        }
-
-        const response = await chatWithSpartanAI(runtime, message, chatContext);
-
-        res.json({
-          success: true,
-          data: response,
-          timestamp: new Date().toISOString(),
-        });
-      } catch (error) {
-        console.error('Error chatting with Spartan:', error);
-        res.status(500).json({
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        });
-      }
-    },
-  },
-  {
-    type: 'POST',
-    path: '/spartan-defi/sessions',
-    handler: async (req: any, res: any, runtime: IAgentRuntime) => {
-      try {
-        const { userId, metadata } = req.body;
-
-        if (!userId) {
-          return res.status(400).json({
-            success: false,
-            error: 'Missing required parameter: userId'
-          });
-        }
-
-        // Create session using Sessions API
-        const response = await fetch(`${runtime.getSetting('API_BASE_URL') || 'http://localhost:3000'}/api/messaging/sessions`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            agentId: runtime.agentId,
-            userId,
-            metadata: {
-              platform: 'spartan',
-              username: userId,
-              ...metadata,
-            }
-          })
-        });
-
-        if (!response.ok) {
-          throw new Error(`Failed to create session: ${response.statusText}`);
-        }
-
-        const { sessionId } = await response.json();
-
-        res.json({
-          success: true,
-          data: { sessionId },
-          timestamp: new Date().toISOString(),
-        });
-      } catch (error) {
-        console.error('Error creating session:', error);
-        res.status(500).json({
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        });
-      }
-    },
-  },
-  {
-    type: 'POST',
-    path: '/spartan-defi/sessions/:sessionId/messages',
-    handler: async (req: any, res: any, runtime: IAgentRuntime) => {
-      try {
-        const { sessionId } = req.params;
-        const { content, metadata } = req.body;
-
-        if (!content) {
-          return res.status(400).json({
-            success: false,
-            error: 'Missing required parameter: content'
-          });
-        }
-
-        // Send message to session using Sessions API
-        const response = await fetch(
-          `${runtime.getSetting('API_BASE_URL') || 'http://localhost:3000'}/api/messaging/sessions/${sessionId}/messages`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              content,
-              metadata: {
-                userTimezone: 'UTC',
-                context: 'defi',
-                ...metadata,
-              }
-            })
-          }
-        );
-
-        if (!response.ok) {
-          throw new Error(`Failed to send message: ${response.statusText}`);
-        }
-
-        const messageResponse = await response.json();
-
-        res.json({
-          success: true,
-          data: messageResponse,
-          timestamp: new Date().toISOString(),
-        });
-      } catch (error) {
-        console.error('Error sending session message:', error);
-        res.status(500).json({
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        });
-      }
-    },
-  },
-  {
-    type: 'GET',
-    path: '/spartan-defi/sessions/:sessionId/messages',
-    handler: async (req: any, res: any, runtime: IAgentRuntime) => {
-      try {
-        const { sessionId } = req.params;
-        const { limit = 20, before, after } = req.query;
-
-        // Build query parameters
-        const queryParams = new URLSearchParams();
-        if (limit) queryParams.append('limit', limit.toString());
-        if (before) queryParams.append('before', before);
-        if (after) queryParams.append('after', after);
-
-        // Get message history using Sessions API
-        const response = await fetch(
-          `${runtime.getSetting('API_BASE_URL') || 'http://localhost:3000'}/api/messaging/sessions/${sessionId}/messages?${queryParams}`,
-          {
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/json',
-            }
-          }
-        );
-
-        if (!response.ok) {
-          throw new Error(`Failed to get messages: ${response.statusText}`);
-        }
-
-        const messagesResponse = await response.json();
-
-        res.json({
-          success: true,
-          data: messagesResponse,
-          timestamp: new Date().toISOString(),
-        });
-      } catch (error) {
-        console.error('Error getting session messages:', error);
-        res.status(500).json({
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        });
-      }
-    },
-  },
-  {
-    type: 'DELETE',
-    path: '/spartan-defi/sessions/:sessionId',
-    handler: async (req: any, res: any, runtime: IAgentRuntime) => {
-      try {
-        const { sessionId } = req.params;
-
-        // End session using Sessions API
-        const response = await fetch(
-          `${runtime.getSetting('API_BASE_URL') || 'http://localhost:3000'}/api/messaging/sessions/${sessionId}`,
-          {
-            method: 'DELETE',
-            headers: {
-              'Content-Type': 'application/json',
-            }
-          }
-        );
-
-        if (!response.ok) {
-          throw new Error(`Failed to end session: ${response.statusText}`);
-        }
-
-        res.json({
-          success: true,
-          data: { message: 'Session ended successfully' },
-          timestamp: new Date().toISOString(),
-        });
-      } catch (error) {
-        console.error('Error ending session:', error);
-        res.status(500).json({
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        });
-      }
-    },
-  },
-  {
-    type: 'GET',
-    path: '/spartan-defi/market-data',
-    handler: async (req: any, res: any, runtime: IAgentRuntime) => {
-      try {
-        const cachedTokens = await runtime.getCache('tokens_solana') || [];
-
-        res.json({
-          success: true,
-          data: {
-            cachedTokens: cachedTokens.length,
-            marketData: cachedTokens.slice(0, 20), // Return top 20 tokens
-            timestamp: new Date().toISOString(),
-          },
-        });
-      } catch (error) {
-        console.error('Error getting market data:', error);
-        res.status(500).json({
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        });
-      }
-    },
-  },
-  {
-    type: 'GET',
-    path: '/spartan-defi/portfolio',
-    handler: async (req: any, res: any, runtime: IAgentRuntime) => {
-      try {
-        const portfolioData = await runtime.getCache('portfolio');
-
-        res.json({
-          success: true,
-          data: portfolioData || { data: null },
-          timestamp: new Date().toISOString(),
-        });
-      } catch (error) {
-        console.error('Error getting portfolio:', error);
-        res.status(500).json({
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        });
-      }
-    },
-  },
-  {
-    type: 'GET',
-    path: '/spartan-defi/transactions',
-    handler: async (req: any, res: any, runtime: IAgentRuntime) => {
-      try {
-        const transactionHistory = await runtime.getCache('transaction_history') || [];
-
-        res.json({
-          success: true,
-          data: {
-            transactions: transactionHistory.slice(0, 50), // Return last 50 transactions
-            count: transactionHistory.length,
-            timestamp: new Date().toISOString(),
-          },
-        });
-      } catch (error) {
-        console.error('Error getting transactions:', error);
-        res.status(500).json({
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        });
-      }
     },
   },
   {
@@ -1368,325 +939,64 @@ export const routes: Route[] = [
     },
   },
   {
+    type: 'GET',
+    path: '/spartan-defi/balances/:walletAddress',
+    handler: rt_getWalletBalancesFromServices,
+  },
+  {
+    type: 'GET',
+    path: '/spartan-defi/token/:walletAddress/:tokenMint',
+    handler: rt_getTokenBalanceFromServices,
+  },
+  {
+    type: 'GET',
+    path: '/spartan-defi/token/:tokenMint',
+    handler: rt_getTokenInfo,
+  },
+  {
+    type: 'POST',
+    path: '/spartan-defi/swap/quote',
+    handler: rt_getSwapQuoteFromServices,
+  },
+  {
+    type: 'POST',
+    path: '/spartan-defi/chat',
+    handler: rt_chatWithSpartanAI,
+  },
+  {
+    type: 'POST',
+    path: '/spartan-defi/sessions',
+    handler: rt_createSession,
+  },
+  {
+    type: 'POST',
+    path: '/spartan-defi/sessions/:sessionId/messages',
+    handler: rt_sendSessionMessage,
+  },
+  {
+    type: 'GET',
+    path: '/spartan-defi/sessions/:sessionId/messages',
+    handler: rt_getSessionMessages,
+  },
+  {
+    type: 'DELETE',
+    path: '/spartan-defi/sessions/:sessionId',
+    handler: rt_deleteSession,
+  },
+  {
     type: 'POST',
     path: '/spartan-defi/validate-account',
-    handler: async (req: any, res: any, runtime: IAgentRuntime) => {
-      try {
-        const { walletAddress, email } = req.body;
-
-        if (!walletAddress && !email) {
-          return res.status(400).json({
-            success: false,
-            error: 'Missing required parameter: walletAddress or email'
-          });
-        }
-
-        let isValid = false;
-        let accountData = null;
-
-        if (email) {
-          // Check if auth token is provided for email validation
-          const authHeader = req.headers.authorization;
-          if (authHeader && authHeader.startsWith('Bearer ')) {
-            const authToken = authHeader.substring(7);
-            const authValidation = await validateAuthToken(runtime, email, authToken);
-
-            if (authValidation.valid) {
-              isValid = true;
-
-              // Get user's associated wallets
-              const emailEntityId = createUniqueUuid(runtime, email);
-              const intAccountService = runtime.getService('AUTONOMOUS_TRADER_INTERFACE_ACCOUNTS') as any;
-              let wallets = [];
-
-              if (intAccountService) {
-                try {
-                  const components = await intAccountService.interface_accounts_ByIds([emailEntityId]);
-                  const component = components[emailEntityId];
-
-                  if (component && component.metawallets) {
-                    console.log('component.metawallets', component.metawallets)
-                    /*
-                    wallets = component.metawallets?.keypairs.map((wallet: any) => ({
-                      address: wallet.publicKey,
-                      name: wallet.name || `Wallet ${wallet.publicKey?.slice(0, 8)}...`,
-                      type: wallet.type || 'solana',
-                      verified: wallet.verified || true
-                    }));
-                    */
-                    // for each metawallets
-                    for(const mw of component.metawallets) {
-                      // get a wallet for each chain
-                      for(const chain in mw.keypairs) {
-                        const kp = mw.keypairs[chain]
-                        console.log(chain, kp)
-                        wallets.push({
-                          address: kp.publicKey,
-                          name: kp.publicKey.slice(0, 8) + '...',
-                          type: chain,
-                          verified: true, // this really isn't a thing
-                        })
-                      }
-                    }
-                    console.log('wallets', wallets)
-                  }
-                } catch (error) {
-                  console.error('Error fetching user wallets:', error);
-                }
-              }
-
-              accountData = {
-                type: 'email',
-                address: email,
-                verified: true,
-                registrationDate: new Date().toISOString(),
-                wallets: wallets
-              };
-            } else {
-              return res.status(401).json({
-                success: false,
-                error: 'INVALID_AUTH_TOKEN',
-                message: authValidation.error || 'Invalid authentication token'
-              });
-            }
-          } else {
-            // Fallback to existing user registration check
-            const emailEntityId = createUniqueUuid(runtime, email);
-            const intUserService = runtime.getService('AUTONOMOUS_TRADER_INTERFACE_USERS') as any;
-
-            if (intUserService) {
-              const components = await intUserService.interface_users_ByIds([emailEntityId]);
-              const component = components[emailEntityId];
-
-              if (component && component.verified) {
-                isValid = true;
-                accountData = {
-                  type: 'email',
-                  address: email,
-                  verified: component.verified,
-                  registrationDate: component.createdAt,
-                };
-              }
-            }
-          }
-        } else if (walletAddress) {
-          // Validate by wallet address (check if wallet exists on Solana)
-          const solanaService = runtime.getService('chain_solana');
-          if (solanaService) {
-            try {
-              const accountType = await solanaService.getAddressType(walletAddress);
-              if (accountType === 'Wallet') {
-                isValid = true;
-                accountData = {
-                  type: 'wallet',
-                  address: walletAddress,
-                  verified: true,
-                  registrationDate: new Date().toISOString(),
-                };
-              }
-            } catch (error) {
-              console.error('Error validating wallet address:', error);
-            }
-          }
-        }
-
-        res.json({
-          success: true,
-          data: {
-            isValid,
-            account: accountData,
-            timestamp: new Date().toISOString(),
-          },
-        });
-      } catch (error) {
-        console.error('Error validating account:', error);
-        res.status(500).json({
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        });
-      }
-    },
+    handler: rt_validateAuthToken,
   },
   {
     type: 'POST',
     path: '/spartan-defi/request-email-verification',
-    handler: async (req: any, res: any, runtime: IAgentRuntime) => {
-      try {
-        const { email } = req.body;
-
-        if (!email) {
-          return res.status(400).json({
-            success: false,
-            error: 'Missing required parameter: email'
-          });
-        }
-
-        // Verify user registration status
-        const registrationStatus = await verifyUserRegistration(runtime, email);
-
-        if (!registrationStatus.isRegistered) {
-          return res.status(404).json({
-            success: false,
-            error: 'EMAIL_NOT_REGISTERED',
-            message: 'Email address is not registered with Spartan DeFi'
-          });
-        }
-
-        // Create or update verification token
-        const tokenResult = await createOrUpdateVerificationToken(
-          runtime,
-          email,
-          registrationStatus.userEntityId!
-        );
-
-        if (!tokenResult.success) {
-          return res.status(500).json({
-            success: false,
-            error: 'FAILED_TO_SEND_TOKEN',
-            message: tokenResult.error || 'Failed to send verification token'
-          });
-        }
-
-        res.json({
-          success: true,
-          data: {
-            message: 'Verification token sent successfully',
-            email,
-            verified: registrationStatus.verified,
-            timestamp: new Date().toISOString(),
-          },
-        });
-      } catch (error) {
-        console.error('Error requesting email verification:', error);
-        res.status(500).json({
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        });
-      }
-    },
+    handler: rt_requestEmailVerification,
   },
-  /*
-  {
-    type: 'GET',
-    path: '/spartan-defi/verify-email-token',
-    handler: async (req: any, res: any, runtime: IAgentRuntime) => {
-      try {
-        const { email, token } = req.query;
-
-        if (!email || !token) {
-          return res.status(400).json({
-            success: false,
-            error: 'Missing required parameters: email and token',
-            method: req.method,
-            hasQuery: !!req.query,
-            queryKeys: req.query ? Object.keys(req.query) : []
-          });
-        }
-
-        // Verify the email token
-        const verificationResult = await verifyEmailToken(runtime, email, token);
-
-        if (!verificationResult.success) {
-          return res.status(400).json({
-            success: false,
-            error: 'INVALID_TOKEN',
-            message: verificationResult.error || 'Invalid verification token'
-          });
-        }
-
-        res.json({
-          success: true,
-          data: {
-            message: 'Email verified successfully',
-            email,
-            authToken: verificationResult.authToken,
-            timestamp: new Date().toISOString(),
-          },
-        });
-      } catch (error) {
-        console.error('Error verifying email token:', error);
-        res.status(500).json({
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        });
-      }
-    },
-  },
-  */
   {
     type: 'POST',
     path: '/spartan-defi/verify-email-token',
-    handler: async (req: any, res: any, runtime: IAgentRuntime) => {
-      try {
-        // Set CORS headers for cross-origin requests
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
-        // Log the request details for debugging
-        console.log('POST /spartan-defi/verify-email-token - Request details:');
-        console.log('Method:', req.method);
-        console.log('Body:', req.body);
-        console.log('Query:', req.query);
-        console.log('Headers:', req.headers);
-        console.log('Content-Type:', req.headers['content-type']);
-
-        // Handle OPTIONS preflight request
-        if (req.method === 'OPTIONS') {
-          res.status(200).end();
-          return;
-        }
-
-        // Try to get parameters from both body and query
-        let email = req.body?.email || req.query?.email;
-        let token = req.body?.token || req.query?.token;
-
-        console.log('Extracted email:', email);
-        console.log('Extracted token:', token);
-
-        if (!email || !token) {
-          return res.status(400).json({
-            success: false,
-            error: 'Missing required parameters: email and token',
-            method: req.method,
-            hasBody: !!req.body,
-            hasQuery: !!req.query,
-            bodyKeys: req.body ? Object.keys(req.body) : [],
-            queryKeys: req.query ? Object.keys(req.query) : [],
-            body: req.body,
-            query: req.query,
-            contentType: req.headers['content-type']
-          });
-        }
-
-        // Verify the email token
-        const verificationResult = await verifyEmailToken(runtime, email, token);
-
-        if (!verificationResult.success) {
-          return res.status(400).json({
-            success: false,
-            error: 'INVALID_TOKEN',
-            message: verificationResult.error || 'Invalid verification token'
-          });
-        }
-
-        res.json({
-          success: true,
-          data: {
-            message: 'Email verified successfully',
-            email,
-            authToken: verificationResult.authToken,
-            timestamp: new Date().toISOString(),
-          },
-        });
-      } catch (error) {
-        console.error('Error verifying email token:', error);
-        res.status(500).json({
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        });
-      }
-    },
+    handler: rt_verifyEmailToken,
   },
 ];
 

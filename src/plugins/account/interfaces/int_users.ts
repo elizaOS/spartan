@@ -206,6 +206,7 @@ export async function interface_user_update(runtime: IAgentRuntime, componentDat
     type: CONSTANTS.COMPONENT_USER_TYPE,
     data: componentData,
     agentId: runtime.agentId,
+    createdAt: Date.now(),
   });
   // seems to be undefined
   //console.log('interface_user_update - updateComponent result', res)

@@ -234,6 +234,7 @@ export const checkRegistrationCode: Action = {
           //entityId: entityId,
           //type: CONSTANTS.SPARTAN_SERVICE_TYPE,
           data: spartanData.data,
+          createdAt: Date.now(),
         });
       }
       console.log('spartan updated')

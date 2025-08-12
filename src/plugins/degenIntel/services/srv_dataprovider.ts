@@ -141,14 +141,14 @@ export class TradeDataProviderService extends Service {
     const ca2Positions = []
     const solanaWallets = {}
     let openPositions = 0
-    for(const p of positions) {
+    for (const p of positions) {
       const ca = p.position.token
 
       // COULD_NOT_FIND_ANY_ROUTE
       if (ca === '84ea5vxsJuf98CRNuVuZYDPjoY4HNjTTCcYY65urxW4V'
-          || ca === '6P8EmVEfAicPdyFLpS5GHBeh87EMCk6pRHDDcQFjJXNS'
-          || ca === 'METAewgxyPbgwsseH8T16a39CQ5VyVxZi9zXiDPY18m'
-          || ca === '9ETrUMXSoVUXzATaBEyg5P6jX4jv69m76pC8B6uFzE1R'
+        || ca === '6P8EmVEfAicPdyFLpS5GHBeh87EMCk6pRHDDcQFjJXNS'
+        || ca === 'METAewgxyPbgwsseH8T16a39CQ5VyVxZi9zXiDPY18m'
+        || ca === '9ETrUMXSoVUXzATaBEyg5P6jX4jv69m76pC8B6uFzE1R'
       ) {
         continue
       }
@@ -206,14 +206,14 @@ export class TradeDataProviderService extends Service {
     }
 
     // we're going to be tracking less tokens than the number of wallets we have
-    for(const ca of tokens) {
+    for (const ca of tokens) {
       const mintObj = new PublicKey(ca)
       const decimals = await this.solanaService.getDecimal(mintObj)
       const tokenBalances = await this.solanaService.getTokenBalanceForWallets(mintObj, Object.keys(solanaWallets))
       //console.log(ca, 'tokenBalances', tokenBalances)
       // adjust positions accordingly to balances
       const positions = ca2Positions[ca]
-      for(const idx in positions) {
+      for (const idx in positions) {
         const p = positions[idx]
         // find wallet
         const wa = p.position.publicKey
@@ -399,7 +399,7 @@ export class TradeDataProviderService extends Service {
           await this.walletIntService.notifyWallet(pubKey, result.signature)
 
         }
-      } catch(e) {
+      } catch (e) {
         console.error('failure to close position', e)
         // is it because of balance?!?
         // retry?
@@ -408,9 +408,9 @@ export class TradeDataProviderService extends Service {
     }
 
     // this type of monitoring should be refactored out
-    for(const r of results) { // for each look up service (rn just BE)
+    for (const r of results) { // for each look up service (rn just BE)
       //console.log('r', r)
-      for(const ca of tokens) {
+      for (const ca of tokens) {
         //console.log('ca', ca)
         const td = r[ca]
         if (!td) {
@@ -433,7 +433,7 @@ export class TradeDataProviderService extends Service {
 
         // do these checks in the background
         new Promise(async (resolve) => {
-          for(const ud of ca2Positions[ca]) {
+          for (const ud of ca2Positions[ca]) {
             //console.log('ud', ud)
             if (!ud) continue
             const p = ud.position
@@ -468,12 +468,12 @@ export class TradeDataProviderService extends Service {
               await closePosition(ud, 'loss')
               continue
             } else
-            if (td.priceUsd >= p.exitConditions.targetPrice) {
-              // win
-              console.log('KICK ASS')
-              await closePosition(ud, 'win')
-              continue
-            }
+              if (td.priceUsd >= p.exitConditions.targetPrice) {
+                // win
+                console.log('KICK ASS')
+                await closePosition(ud, 'win')
+                continue
+              }
 
             //console.log('pLiq min', minLiq.toLocaleString(), 'cur', curLiq.toLocaleString())
             if (curLiq < minLiq) {
@@ -603,16 +603,16 @@ export class TradeDataProviderService extends Service {
     //console.log('dataProvider - getTokenInfo for token', chain, address);
     if (!token) {
     */
-      // not cache, go fetch realtime
-      //console.log('dataProvider::getTokenInfo - MISS')
-      const services = this.forEachReg('lookupService')
-      // this is also heavily cached
-      const results = await Promise.all(services.map(service => service.lookupToken(chain.toLowerCase(), address)))
-      //console.log('dataprovider - results', results)
+    // not cache, go fetch realtime
+    //console.log('dataProvider::getTokenInfo - MISS')
+    const services = this.forEachReg('lookupService')
+    // this is also heavily cached
+    const results = await Promise.all(services.map(service => service.lookupToken(chain.toLowerCase(), address)))
+    //console.log('dataprovider - results', results)
 
-      // how to convert results into token better?
-      token = results[0] // reduce
-      //await this.runtime.setCache<IToken>(`token_${chain}_${address}`, token);
+    // how to convert results into token better?
+    token = results[0] // reduce
+    //await this.runtime.setCache<IToken>(`token_${chain}_${address}`, token);
     //}
     // needs to include liquidity, 24h volume, suspicous atts
     return token;
@@ -697,7 +697,7 @@ export class TradeDataProviderService extends Service {
       // we're looking for initial funding event mainly here...
       pubKeys.forEach(async pk => {
         // need to pass a handler
-        await this.solanaService.subscribeToAccount(pk, async (accountAddress, accountInfo, context) => {
+        //await this.solanaService.subscribeToAccount(pk, async (accountAddress, accountInfo, context) => {
           // where's the pubkey
           //console.log('sub', accountAddress, 'Account updated:', accountInfo);
           /*
@@ -720,12 +720,13 @@ export class TradeDataProviderService extends Service {
             }
           */
           //console.log('sub', accountAddress, 'Slot:', context.slot); // like block
-
+        /*
           const msg = accountAddress + ' $SOL balance change: ' + (accountInfo.lamports / 1e9).toFixed(4)
 
           // resolve pubkey to something
           await this.walletIntService.notifyWallet(accountAddress, msg)
         })
+        */
       })
 
       logger.info('Trading info service started successfully');

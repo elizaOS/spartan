@@ -9,6 +9,7 @@ import { multiwalletPlugin } from './plugins/multiwallet';
 import { traderPlugin } from './plugins/trading';
 import { degenIntelPlugin } from './plugins/degenIntel';
 import { analyticsPlugin } from './plugins/analytics';
+import { meteoraPlugin } from './plugins/liquiditypools/meteora';
 //import { communityInvestorPlugin } from './plugins/communityInvestor';
 import { initCharacter } from './init';
 
@@ -581,8 +582,9 @@ export const spartan: ProjectAgent = {
     accountRegPlugin,
     autonomousTraderPlugin, // Spartan product and libs/utils
     degenIntelPlugin,  // multichain intel
-      multiwalletPlugin, // builds on multichain intel to add custodial wallets
-        traderPlugin,      // builds on custodial wallets to add trading
+    multiwalletPlugin, // builds on multichain intel to add custodial wallets
+    traderPlugin,      // builds on custodial wallets to add trading
+    meteoraPlugin,     // Meteora liquidity pool management
   ],
   character,
   init: async (runtime: IAgentRuntime) => await initCharacter({ runtime, config }),

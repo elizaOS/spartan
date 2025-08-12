@@ -119,12 +119,12 @@ export async function verifyUserRegistration(runtime: IAgentRuntime, email: stri
 export async function createOrUpdateVerificationToken(
   runtime: IAgentRuntime,
   email: string,
-  userEntityId: string
+  accountEntityId: string
 ): Promise<{ success: boolean; token?: string; error?: string }> {
   try {
     console.log('createOrUpdateVerificationToken called with:');
     console.log('Email:', email);
-    console.log('UserEntityId:', userEntityId);
+    console.log('accountEntityId:', accountEntityId);
 
     const token = generateVerificationToken();
     console.log('Generated token:', token);
@@ -139,7 +139,8 @@ export async function createOrUpdateVerificationToken(
     const tokenData = {
       token,
       email,
-      userEntityId,
+      //userEntityId,
+      accountEntityId,
       expiry: tokenExpiry,
       createdAt: Date.now()
     };
