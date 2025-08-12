@@ -1,5 +1,5 @@
 import { IAgentRuntime, getSalt, encryptStringValue, Service, logger } from '@elizaos/core';
-import { getWalletByUserEntityIds, getWalletsByPubkey, getSpartanWallets, getMetaWallets } from '../interfaces/int_wallets';
+import { getWalletByUserEntityIds, getSpartanWallets, getMetaWallets } from '../interfaces/int_wallets';
 import { acquireService, accountMockComponent, walletContainsMinimum } from '../../autonomous-trader/utils';
 
 export class InterfaceWalletService extends Service {
@@ -106,10 +106,13 @@ export class InterfaceWalletService extends Service {
   }
   */
 
+  // deprecated
+  /*
   async getWalletsByPubkey(pubKey: string) {
     const metawallets = await getWalletsByPubkey(this.runtime, pubKey)
     return metawallets
   }
+  */
 
   async getAccountsByPubkey(pubKey: string) {
     const res = await this.intAccountService.getAccountIdsByPubkey_engine([pubKey])
