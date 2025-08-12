@@ -58,9 +58,12 @@ export const userMetawalletList: Action = {
       wStr += '  None'
     }
 
-    function flushString() {
-      const output = takeItPrivate(runtime, message, wStr)
-      callback(output)
+    async function flushString() {
+      if (wStr.trim().length) {
+        console.log('trying to send', wStr)
+        const output = takeItPrivate(runtime, message, wStr)
+        await callback(output)
+      }
       wStr = ''
     }
 
@@ -74,11 +77,11 @@ export const userMetawalletList: Action = {
         const kp = mw.keypairs[c]
         //console.log('c', c, 'kp', kp)
         wStr += '    Chain: ' + c + ' Address:' + "\n"
-        flushString(wStr)
+        await flushString(wStr)
         // a pause might be goodhere
         await new Promise(resolve => setTimeout(resolve, 100))
         wStr += kp.publicKey + "\n"
-        flushString(wStr)
+        await flushString(wStr)
       }
       if (!Object.values(mw.keypairs).length) {
         // no keypairs?
@@ -86,7 +89,7 @@ export const userMetawalletList: Action = {
       }
       wStr += '\n\n'
     }
-    flushString(wStr)
+    await flushString(wStr)
 
     //const output = takeItPrivate(runtime, message, wStr)
     //callback(output)
