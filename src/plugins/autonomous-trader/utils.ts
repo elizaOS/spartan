@@ -76,12 +76,12 @@ export async function getDataFromMessage(runtime, message) {
       // we need componentId
       if (intUserService) {
         // don't need to await it
-        intUserService.interface_user_update(component)
+        // we should because it seems to lead to like 8 writes
+        await intUserService.interface_user_update(component)
       }
     }
   }
   return component
-
 }
 
 // they have a verified email
@@ -149,6 +149,7 @@ console.log('MULTIWALLET_SWAP sourceResult', sourceResult);
 // is a wallet required? , required = 0
 // max wallets? 1, 2 for transfer
 // we return an array of what?
+// RENAME: to getAddressFromText
 export async function getWalletsFromText(runtime, message) {
   // what about partial?
   // only works in the source context...
@@ -314,6 +315,7 @@ export function takeItPrivate2(runtime, message, reply, callback): Content {
     for (const c of chunks) {
       console.log('discord split chunk', c.length)
       if (c) {
+        console.log('sending', c)
         const responseContent = {
           text: c,
           channelType: 'DM',
@@ -370,7 +372,9 @@ export async function parseTokenAccounts(heldTokens) {
 }
 
 export async function walletContainsMinimum(runtime, pubKey, ca, amount) {
-  console.log('walletContainsMinimum')
+  // usually validate on getting shapes for setstrategy
+  //console.trace('walletContainsMinimum')
+  console.log('walletContainsMinimum', pubKey)
   try {
     const solanaService = runtime.getService('chain_solana') as any;
     const pubKeyObj = new PublicKey(pubKey)
