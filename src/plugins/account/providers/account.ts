@@ -33,13 +33,16 @@ export const accountProvider: Provider = {
             const filteredAccount = dateFilter ? applyDateFilterToAccount(account, dateFilter) : account;
 
             accountStr += `=== ACCOUNT DETAILS ===\n`
-            accountStr += `Account Entity ID: ${filteredAccount.accountEntityId}\n`
-            //accountStr += `Email: ${account.address || 'Not verified'}\n`
-            //accountStr += `Verified: ${account.verified ? 'Yes' : 'No'}\n`
+            // we probably shouldn't expose this
+            //accountStr += `Account Entity ID: ${filteredAccount.accountEntityId}\n`
+            // email address? through user
             if (filteredAccount.holderCheck) {
                 accountStr += `Verified Wallet: ${filteredAccount.holderCheck}\n`
                 // check value
             }
+
+            // needs to be moved to an extension or something...
+            /*
             accountStr += `Total Metawallets: ${filteredAccount.metawallets?.length || 0}\n\n`
 
             // Add date filter info if applied
@@ -118,6 +121,7 @@ export const accountProvider: Provider = {
                     accountStr += `\n`
                 }
             }
+            */
         } else {
             accountStr = 'Account details are only available in private messages.'
         }
