@@ -16,17 +16,48 @@ export async function getMetaWallets(runtime: IAgentRuntime): Promise<any[] | fa
   //interface_accounts_list is available
   const intUserService = await acquireService(runtime, 'AUTONOMOUS_TRADER_INTERFACE_USERS', 'wallet interface')
   //console.log('Have intUserService')
+
+  // shouldn't this be verified list?
+  // getWalletByUserEntityIds_engine doesn't the verification call, it calls interface_users_listVerified infact
   const users = await intUserService.interface_users_list()
-  //console.log('getMetaWallets - users', users.length)
+  //const map = await intUserService.interface_users_listVerified()
+  //const users = map.
+  console.log('getMetaWallets - users', users.length)
   const mws = []
 
   const res = await getWalletByUserEntityIds_engine(runtime, users)
   //console.log('getMetaWallets - res', res)
 
-  // this is really weird, because multiple users to an account and multiple wallets to an account
+  // a list of accounts
+  // accountIds Object.values(res.accountIds)
+  // accountIds Object.keys(res.accountWallets)
 
+  // there can be two users with the same account/wallet
+  // accountId is the only unique id for MWs
+  for(const accountId in res.accountWallets) {
+    const accountMws = res.accountWallets[accountId]
+    // ok what user is this?
+    const userIds = res.accountId2userIds[accountId]
+    //console.log(accountId, userIds, 'have', accountMws)
+    const names = []
+    for(const userEntityId of userIds) {
+      const email = res.userEntityData[userEntityId]
+      for(const n of email.names) {
+        if (names.indexOf(n) === -1) {
+          names.push(n)
+        }
+      }
+    }
+    for(const amw of accountMws) {
+      mws.push({...amw, entitiesId: userIds, names })
+    }
+  }
+
+  // this is really weird, because multiple users to an account and multiple wallets to an account
+  /*
   // userWallets is weird
   for(const userEntityId in res.userWallets) {
+    // no way to get accountID from res.userWallets
     const userMws = res.userWallets[userEntityId]
     //console.log('getMetaWallets - userEntityId', userEntityId, 'userMws', userMws.length)
     if (userMws) {
@@ -38,6 +69,8 @@ export async function getMetaWallets(runtime: IAgentRuntime): Promise<any[] | fa
       }
     }
   }
+  */
+
   /*
   const emails = await interface_users_ByIds(runtime, users)
   for(const entityId in emails) {
@@ -61,10 +94,16 @@ export async function getMetaWallets(runtime: IAgentRuntime): Promise<any[] | fa
   return mws
 }
 
+// I don't think anything is using this
+// deactivating because it looks unfinished
+/*
 export async function getWalletsByPubkey(runtime: IAgentRuntime, pubkeys: string[]): Promise<Record<string, any>> {
   const metaWallets = await getMetaWallets(runtime)
   const list = {}
   for(const mw of metaWallets) {
+    // mw.keypairs.publicKey
+    // WHAT? where's the chain
+    console.log('getWalletsByPubkey', mw.keypairs.publicKey) // guessing this is always undefined
     if (pubkeys.includes(mw.keypairs.publicKey)) {
       if (list[mw.keypairs.publicKey]) {
         console.log('getWalletsByPubkey stomping key', mw.keypairs.publicKey, 'old value', list[mw.keypairs.publicKey], 'with', mw)
@@ -74,6 +113,7 @@ export async function getWalletsByPubkey(runtime: IAgentRuntime, pubkeys: string
   }
   return list
 }
+*/
 
 // filter by chain or strategy
 export async function getSpartanWallets(runtime: IAgentRuntime, options = {}): Promise<any[]> {
@@ -116,8 +156,9 @@ export async function getWalletByUserEntityIds_engine(
   //console.log('Got users')
   const map = await intUserService.interface_users_listVerified()
   //console.log('Got verified list', map)
+  // maybe rename to userId2accountId
   const accounts = map.userId2accountId
-  const accountIds = map.userId2accountId
+  const accountIds = map.userId2accountId // don't Object.value here for return
   //console.log('accountIds', accountIds)
   const accountWallets = await getMetaWalletsByEmailEntityIds(runtime, Object.values(accountIds))
   //console.log('getWalletByUserEntityIds_engine - accountWallets', accountWallets)
@@ -138,7 +179,7 @@ export async function getWalletByUserEntityIds_engine(
   }
   // userEntityData is wrong
   return {
-    userWallets, accountIds, userEntityData: map.emails
+    userWallets, accountIds, userEntityData: map.emails, accountWallets, accountId2userIds: map.accountId2userIds,
   }
 }
 
