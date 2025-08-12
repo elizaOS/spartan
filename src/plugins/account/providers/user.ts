@@ -8,7 +8,7 @@ import { parseDateFilterFromMessage, applyDateFilterToAccount, formatDateFilterT
  */
 export const userProvider: Provider = {
     name: 'USER_DETAILS',
-    description: 'User registration information like email address and if theyre verified and ready to use services',
+    description: 'User registration information like email address and if they\'re verified and ready to use services',
     dynamic: true,
     get: async (runtime: IAgentRuntime, message: Memory, state: State) => {
         console.log('USER_DETAILS')
