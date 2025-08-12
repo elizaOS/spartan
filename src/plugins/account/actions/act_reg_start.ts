@@ -154,7 +154,9 @@ sve:validate message {
           code: regCode,
           verified: false,
         },
+        createdAt: Date.now(),
       });
+      //console.log('saved, now sending email')
 
       await sendVerifyEmail(emailAddr, regCode)
       //responses.length = 0 // just clear them all
