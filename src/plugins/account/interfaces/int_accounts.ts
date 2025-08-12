@@ -13,7 +13,7 @@ import CONSTANTS from '../../autonomous-trader/constants'
 // look up by Ids
 export async function interface_accounts_ByIds(runtime: IAgentRuntime, ids: UUID[]): Promise<Record<UUID, any>> {
   //console.log('interface_accounts_ByIds', ids)
-  const entities = await runtime.getEntityByIds(ids)
+  const entities = await runtime.getEntitiesByIds(ids)
   //console.log('interface_accounts_ByIds - entities', entities, 'asked for', ids)
 
   // we should key this, each account can and should have only one COMPONENT_ACCOUNT_TYPE component
@@ -141,7 +141,7 @@ export async function getAccountIdsByPubkeys(runtime: IAgentRuntime, pubkeys: st
       //console.log('getWalletByUserEntityIds_engine - waiting on verification', entityId, email)
     }
   }
-  const accounts = await runtime.getEntityByIds(Object.values(accountIds))
+  const accounts = await runtime.getEntitiesByIds(Object.values(accountIds))
   //const accountComponents = interface_accounts_ByIds(runtime, Object.values(accountIds))
   const list = {}
   // accountId is just 0, wtf...
@@ -191,7 +191,7 @@ export async function getAccountIdsByPubkey_engine(runtime: IAgentRuntime, pubke
     return false
   }
 
-  const accounts = await runtime.getEntityByIds(Object.values(map.userId2accountId))
+  const accounts = await runtime.getEntitiesByIds(Object.values(map.userId2accountId))
   const list = {}
   const account2Component = {}
   // accountId is just 0, wtf...
