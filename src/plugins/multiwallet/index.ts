@@ -35,8 +35,10 @@ export const multiwalletPlugin: Plugin = {
   evaluators: [],
   providers: [multiwalletProvider, walletProvider, tokenProvider],
   actions: [
-    walletCreate, walletImportAction, userMetawalletDelete,
-    userMetawalletXfer, userMetawalletSwap, userMetawalletSweep, userMetawalletSwapAll,
+    walletCreate, walletImportAction,
+    // userMetawalletDelete, // need a confirmation or something
+    userMetawalletXfer, userMetawalletSwap, userMetawalletSweep,
+    // userMetawalletSwapAll, // need a confirmation or something
     userMetawalletList, // keep this enabled for the special formatting
     //userMetawalletBalance,
     //actionPositionList,
