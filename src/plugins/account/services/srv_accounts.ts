@@ -93,7 +93,7 @@ export class InterfaceAccountService extends Service {
     //console.log('need to notify', userIds, userComponents)
 
     // reget it all again
-    const entities = await this.runtime.getEntityByIds(userIds)
+    const entities = await this.runtime.getEntitiesByIds(userIds)
     console.log('sending', Object.keys(entities).length, 'notifications')
     //for(const userId of userIds) {
     for(const e of entities) {
