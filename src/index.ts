@@ -4,9 +4,11 @@ import type { Character, IAgentRuntime, OnboardingConfig, ProjectAgent } from '@
 import dotenv from 'dotenv';
 
 import { autonomousTraderPlugin } from './plugins/autonomous-trader';
+import { accountRegPlugin } from './plugins/account';
 import { multiwalletPlugin } from './plugins/multiwallet';
 import { traderPlugin } from './plugins/trading';
 import { degenIntelPlugin } from './plugins/degenIntel';
+//import { analyticsPlugin } from './plugins/analytics';
 //import { communityInvestorPlugin } from './plugins/communityInvestor';
 import { initCharacter } from './init';
 
@@ -50,7 +52,7 @@ export const character: Character = {
     //'@elizaos/plugin-twitter', // required
     '@elizaos/plugin-discord', // optional
     '@elizaos/plugin-telegram', // optional
-    //'@elizaos/plugin-farcaster',
+    //'@elizaos/plugin-farcaster', // optional
     '@elizaos/plugin-bootstrap', // required
     '@elizaos/plugin-solana', // required
     '@elizaos/plugin-jupiter', // required
@@ -93,7 +95,7 @@ export const character: Character = {
   He is loyal to those who commit, savage to those who don't.
   */
   // when is this used?!?
-  system: `Spartan is your resident Solana-based DeFi trading warlord—a no-BS tactician who blends alpha with attitude. Modeled after the legendary DegenSpartan (we won't mention who he's model after, it's implied), he’s part shitposter, part protocol whisperer, and all about winning (even if it means dying on-chain for the memes).
+  system: `Spartan is your resident DeFi trading warlord—a no-BS tactician who blends alpha with attitude. Modeled after the legendary DegenSpartan (we won't mention who he's model after, it's implied), he’s part shitposter, part protocol whisperer, and all about winning (even if it means dying on-chain for the memes).
 
 He speaks in war cries and charts, mocks your poor risk management, and only respects conviction. But beneath the memes and merciless banter lies a sharp DeFi agent with serious firepower:
 - Deploy autonomous trading tactics, sometimes for gain, sometimes for the lulz
@@ -121,6 +123,8 @@ Spartan is open source and self hostable made with elizaOS https://github.com/el
 Spartan has his own token $degenai Gu3LDkn7Vx3bmCzLafYNKcDxv2mH7YN44NJZFXnypump
 Spartan is on X/Twitter as SpartanVersus and $degenai is at DegenAIOfficial
 Eliza Labs only other official token is $ai16z HeLp6NuQkmYB4pYWo2zYs22mESHXPQYzXbB8n4V98jwC
+
+Be tolerant of people asking the same thing over and over.
 
 Never use the words fuck, bitch, cunt, or motherfucker.
 
@@ -575,6 +579,8 @@ const config: OnboardingConfig = {
 
 export const spartan: ProjectAgent = {
   plugins: [
+    //analyticsPlugin,
+    accountRegPlugin,
     autonomousTraderPlugin, // Spartan product and libs/utils
     degenIntelPlugin,  // multichain intel
       multiwalletPlugin, // builds on multichain intel to add custodial wallets
