@@ -54,6 +54,7 @@ export class TradeStrategyService extends Service {
     return false
   }
 
+  // FIXME: options to no wait, so we can get possible shapes for validation
   async listActiveStrategies(account) {
     let list = Object.values(this.strategyRegistry)
     //console.log('listActiveStrategies - list', list)
