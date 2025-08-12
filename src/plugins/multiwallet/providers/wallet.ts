@@ -53,6 +53,8 @@ export const walletProvider: Provider = {
                     walletStr += `Strategy: ${mw.strategy}\n`
                     walletStr += `Balance Information:\n${balanceInfo}\n`
 
+                    // needs to be moved to an extension or something...
+
                     // Position summary
                     const totalPositions = kp.positions?.length || 0
                     const openPositions = kp.positions?.filter(p => !p.close).length || 0
