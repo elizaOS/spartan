@@ -35,6 +35,7 @@ export class TradeDataProviderService extends Service {
           console.log(asking, 'Acquired', serviceType, 'service...');
         }
       }
+      resolve()
     })
 
     const serviceType2 = 'AUTONOMOUS_TRADER_INTERFACE_WALLETS'
@@ -49,6 +50,7 @@ export class TradeDataProviderService extends Service {
           console.log(asking, 'Acquired', serviceType2, 'service...');
         }
       }
+      resolve()
     })
 
     // not really used
@@ -64,6 +66,7 @@ export class TradeDataProviderService extends Service {
           console.log(asking, 'Acquired', serviceType5, 'service...');
         }
       }
+      resolve()
     })
 
     // should be available by now, since it's in the same plugin
@@ -80,6 +83,7 @@ export class TradeDataProviderService extends Service {
           console.log(asking, 'Acquired', serviceType3, 'service...');
         }
       }
+      resolve()
     })
 
     // const solanaService = this.runtime.getService('chain_solana') as any;
@@ -95,6 +99,7 @@ export class TradeDataProviderService extends Service {
           console.log(asking, 'Acquired', serviceType4, 'service...');
         }
       }
+      resolve()
     })
 
     this.events = new Map();
@@ -294,6 +299,11 @@ export class TradeDataProviderService extends Service {
       const walletTokens = await this.solanaService.getTokenAccountsByKeypair(pubKeyObj)
       //console.log('looking for', p.token)
       //console.log('walletTokens', walletTokens.map(t => t.pubkey.toString()))
+
+      // FIXME: do we bother to reclaim the solana if it's less than the fees to?
+
+      // hold off on wins if the win amount is less than tx fees (or 1 cent?)
+
       const tokenSolanaInfo = walletTokens.find(wt => wt.account.data.parsed.info.mint === p.token)
       if (!tokenSolanaInfo) {
         //console.log('looking for', p.token)
@@ -478,8 +488,8 @@ export class TradeDataProviderService extends Service {
             //console.log('pLiq min', minLiq.toLocaleString(), 'cur', curLiq.toLocaleString())
             if (curLiq < minLiq) {
               console.log('liqiduity too low')
-              // if purchase price is greater than current price
-              const type = p.tokenPriceUsd > td.priceUsd ? 'loss_liq' : 'win_liq'
+              // if current price is less than what we paid for it, it's a loss
+              const type = td.priceUsd < p.tokenPriceUsd ? 'loss_liq' : 'win_liq'
               if (type === 'loss') {
                 console.log('I has a sad')
               } else {
@@ -491,8 +501,8 @@ export class TradeDataProviderService extends Service {
 
             if (curVol24h < minVol) {
               console.log('24h volume too low')
-              // if purchase price is greater than current price
-              const type = p.tokenPriceUsd > td.priceUsd ? 'loss_vol' : 'win_vol'
+              // if current price is less than what we paid for it, it's a loss
+              const type = td.priceUsd < p.tokenPriceUsd ? 'loss_vol' : 'win_vol'
               if (type === 'loss') {
                 console.log('I has a sad')
               } else {
@@ -643,40 +653,8 @@ export class TradeDataProviderService extends Service {
     service.stop();
   }
 
-  async start(): Promise<void> {
-    if (this.isRunning) {
-      logger.warn('Trading info service is already running');
-      return;
-    }
-    console.log('TRADER_DATAPROVIDER starting');
-
-    // maybe we don't need to do this under the first registers
-    this.timer = setInterval(
-      () => {
-        console.log('TRADER_DATAPROVIDER Updating Trending')
-        this.updateTrending();
-      },
-      10 * 60 * 1000
-    );
-
-    // separate timer for sell signal
-    this.checkPosTimer = setInterval(
-      () => {
-        console.log('TRADER_DATAPROVIDER Checking positions')
-        this.checkPositions();
-      },
-      10 * 60 * 1000
-    );
-
-    // immediate is actually too soon
-    setTimeout(async () => {
-      await this.updateTrending()
-      this.checkPositions();
-    }, 15 * 1000) //was 30s
-
+  async doSubs() {
     try {
-      logger.info('Starting info trading service...');
-      this.isRunning = true;
 
       /*
       const accountIds = await this.accountIntService.list_all()
@@ -753,6 +731,47 @@ export class TradeDataProviderService extends Service {
       logger.error('Error starting trading info service:', error);
       throw error;
     }
+  }
+
+  async start(): Promise<void> {
+    if (this.isRunning) {
+      logger.warn('Trading info service is already running');
+      return;
+    }
+    console.log('TRADER_DATAPROVIDER starting');
+
+    // can't start until we have all the services available
+
+    // maybe we don't need to do this under the first registers
+    this.timer = setInterval(
+      () => {
+        console.log('TRADER_DATAPROVIDER Updating Trending')
+        this.updateTrending();
+      },
+      10 * 60 * 1000
+    );
+
+    // separate timer for sell signal
+    this.checkPosTimer = setInterval(
+      () => {
+        console.log('TRADER_DATAPROVIDER Checking positions')
+        this.checkPositions();
+      },
+      10 * 60 * 1000
+    );
+
+    // immediate is actually too soon
+    setTimeout(async () => {
+      await this.updateTrending()
+      this.checkPositions();
+    }, 15 * 1000) //was 30s
+
+    logger.info('Starting info trading service...');
+    this.isRunning = true;
+
+    setTimeout(async () => {
+      this.doSubs()
+    }, 4 * 1000) // wait for 4 seconds for service aquisition
   }
 
   async stop(): Promise<void> {
