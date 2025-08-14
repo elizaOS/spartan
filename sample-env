@@ -1,0 +1,112 @@
+# Spartan – Example Environment Variables
+#
+# Placement:
+# - This project typically loads environment variables from a monorepo root via a relative path.
+# - For this repository, copy this file to `.env` at the repo root.
+#
+# Conventions:
+# - Do not commit real secrets. Copy this file to `.env` and fill in values locally.
+# - Keys marked "optional" enable extra features if provided.
+
+
+# =========================
+# General / Runtime
+# =========================
+#NODE_ENV=development
+
+
+# =========================
+# AI Providers (optional)
+# =========================
+OPENAI_API_KEY=
+ANTHROPIC_API_KEY=
+GROQ_API_KEY=
+# Optional model overrides for GROQ
+#GROQ_LARGE_MODEL=meta-llama/llama-4-maverick-17b-128e-instruct
+#GROQ_SMALL_MODEL=meta-llama/llama-4-scout-17b-16e-instruct
+
+# Optional Farcaster (only used if you enable related features)
+#FARCASTER_FID=
+
+
+# =========================
+# Social / Bots
+# =========================
+# Discord bot credentials (used in `src/index.ts`)
+INVESTMENT_MANAGER_DISCORD_APPLICATION_ID=
+INVESTMENT_MANAGER_DISCORD_API_TOKEN=
+
+# Telegram bot credentials (used in `src/index.ts`)
+INVESTMENT_MANAGER_TELEGRAM_BOT_TOKEN=
+# Some tooling expects the generic name. Map it if useful:
+#TELEGRAM_BOT_TOKEN=${INVESTMENT_MANAGER_TELEGRAM_BOT_TOKEN}
+# Optional: channel to post recommendations/updates
+#TELEGRAM_CHANNEL_ID=
+
+# Twitter (optional; posting disabled unless configured)
+#INVESTMENT_MANAGER_TWITTER_EMAIL=
+#INVESTMENT_MANAGER_TWITTER_USERNAME=
+#INVESTMENT_MANAGER_TWITTER_PASSWORD=
+#INVESTMENT_MANAGER_TWITTER_ENABLE_POST_GENERATION=false
+
+
+# =========================
+# DeFi / Data Providers
+# =========================
+# Solana & multi-chain market data
+BIRDEYE_API_KEY=
+COINMARKETCAP_API_KEY=
+COINGECKO_API_KEY=
+MORALIS_API_KEY=
+CODEX_API_KEY=
+
+# Trading/execution providers (optional)
+JUPITER_API_KEY=
+ZEROEX_API_KEY=
+
+# Solana RPC provider (choose one of the following approaches)
+# 1) Provide a full RPC URL (e.g., Helius/QuickNode/Alchemy)
+SOLANA_RPC_URL=
+# 2) Generic RPC key used by some utilities (falls back to a default if unset)
+RPC_URL=
+
+# Public/private key for the agent’s Solana wallet
+SOLANA_PUBLIC_KEY=
+SOLANA_PRIVATE_KEY=
+
+# EVM chain RPC (used for Base in AutofunTrader config)
+EVM_PROVIDER_URL=
+
+
+# =========================
+# Webhooks / Notifications (optional)
+# =========================
+# Used by AutofunTrader buy/sell signal handlers
+TRADER_BUY_KUMA=
+TRADER_SELL_KUMA=
+
+
+# =========================
+# Email (SMTP) – for account registration verification emails
+# =========================
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_USERNAME=
+SMTP_PASSWORD=
+SMTP_FROM=
+
+
+# =========================
+# Database (optional; depends on which Eliza plugins you enable)
+# =========================
+# If using a single URL-style connection string:
+#DATABASE_URL=
+#POSTGRES_URL=
+#MYSQL_URL=
+
+
+# =========================
+# Frontend (Vite) – DegenIntel UI
+# =========================
+# Backend API base URL that the frontend will call
+VITE_API_URL=
