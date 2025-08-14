@@ -9,6 +9,7 @@
     "access": "public"
   },
   "scripts": {
+    "preinstall": "npm config set legacy-peer-deps true",
     "start": "bun ../cli/dist/index.js start",
     "build": "vite build & tsup",
     "build-frontend": "vite build",
@@ -59,6 +60,7 @@
     "@types/body-parser": "1.19.5",
     "@types/cors": "2.8.17",
     "@types/express": "5.0.0",
+    "form-data": "4.0.2",
     "bignumber.js": "^9.1.2",
     "bn.js": "^5.2.1",
     "bs58": "6.0.0",
