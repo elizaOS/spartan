@@ -8,6 +8,9 @@
   "publishConfig": {
     "access": "public"
   },
+  "engines": {
+    "node": ">=23.0.0"
+  },
   "scripts": {
     "preinstall": "npm i -g bun && bun install",
     "start": "elizaos start",
