@@ -1,0 +1,7 @@
+[phases.setup]
+nixPkgs = ["nodejs_22", "python3"]
+
+[variables]
+NPM_CONFIG_LEGACY_PEER_DEPS = "false"
+YOUTUBE_DL_SKIP_PYTHON_CHECK = "1"
+

@@ -9,7 +9,7 @@
     "access": "public"
   },
   "engines": {
-    "node": "23"
+    "node": ">=22"
   },
   "scripts": {
     "preinstall": "npm i -g bun && bun install",
@@ -36,7 +36,7 @@
     "@elizaos/cli": "^1.4.2",
     "@elizaos/core": "latest",
     "@elizaos/plugin-anthropic": "latest",
-    "@elizaos/plugin-birdeye": "latest",
+    "@elizaos/plugin-birdeye": "1.0.2",
     "@elizaos/plugin-bootstrap": "latest",
     "@elizaos/plugin-coingecko": "latest",
     "@elizaos/plugin-coinmarketcap": "1.0.1",
@@ -73,7 +73,7 @@
     "cors": "2.8.5",
     "ejs": "^3.1.10",
     "express": "4.21.1",
-    "form-data": "4.0.2",
+    "form-data": "4.0.1",
     "lucide-react": "^0.473.0",
     "minipass": "7.1.2",
     "moment": "^2.30.1",
