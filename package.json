@@ -9,7 +9,7 @@
     "access": "public"
   },
   "engines": {
-    "node": ">=23.0.0"
+    "node": "23"
   },
   "scripts": {
     "preinstall": "npm i -g bun && bun install",
