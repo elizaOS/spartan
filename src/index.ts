@@ -50,8 +50,8 @@ export const character: Character = {
     //...(process.env.OPENAI_API_KEY ? ['@elizaos/plugin-openai'] : []),
     //...(!process.env.OPENAI_API_KEY ? ['@elizaos/plugin-local-ai'] : []),
     //'@elizaos/plugin-twitter', // required
-    '@elizaos/plugin-discord', // optional
-    '@elizaos/plugin-telegram', // optional
+    // '@elizaos/plugin-discord', // optional
+    // '@elizaos/plugin-telegram', // optional
     //'@elizaos/plugin-farcaster', // optional
     '@elizaos/plugin-bootstrap', // required
     '@elizaos/plugin-solana', // required
