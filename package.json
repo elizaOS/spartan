@@ -9,7 +9,7 @@
     "access": "public"
   },
   "scripts": {
-    "preinstall": "npm i -g bun",
+    "preinstall": "npm i -g bun && bun install",
     "start": "elizaos start",
     "build": "vite build & tsup",
     "build-frontend": "vite build",
