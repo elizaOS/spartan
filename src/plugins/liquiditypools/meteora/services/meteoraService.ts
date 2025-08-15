@@ -5,18 +5,20 @@ import type {
     MeteoraPool,
     MeteoraPoolOutput,
     MeteoraAddLiquidityParams,
-    MeteoraRemoveLiquidityParams,
     MeteoraGetPoolsParams,
     MeteoraPoolParams,
     GetPoolsParameters,
     PoolParameters,
     AddLiquidityParameters,
-    RemoveLiquidityParameters,
     BinLiquidity,
     LbPosition,
     PositionInfo
 } from '../interfaces/types';
 import { Connection, PublicKey, Keypair } from '@solana/web3.js';
+import { BN } from '@coral-xyz/anchor';
+import { calculateAmounts, withRetry, InsufficientBalanceError, MeteoraStatisticalBugError } from '../utils/utils';
+import { SOLANA_SERVICE_NAME } from '../../../autonomous-trader/constants';
+import bs58 from 'bs58';
 
 // Handle missing Meteora SDK dependency gracefully
 let DLMM: any = null;
@@ -48,12 +50,12 @@ export class MeteoraService extends Service implements ILpService {
 
     static serviceType = 'METEORA_SERVICE';
     static serviceName = 'MeteoraService';
-    capabilityDescription = 'Provides access to Meteora liquidity pools and concentrated liquidity positions';
+    capabilityDescription = 'Provides standardized access to DEX liquidity pools.' as const;
 
     constructor(runtime: IAgentRuntime) {
         super(runtime);
 
-        this.rpcEndpoint = runtime.getSetting('SOLANA_RPC_ENDPOINT') || 'https://api.mainnet-beta.solana.com';
+        this.rpcEndpoint = runtime.getSetting('SOLANA_RPC_URL') || 'https://api.mainnet-beta.solana.com';
         this.apiEndpoint = MeteoraService.BASE_URL;
 
         // Initialize connection
@@ -97,7 +99,24 @@ export class MeteoraService extends Service implements ILpService {
         slippageBps: number;
         tickLowerIndex?: number;
         tickUpperIndex?: number;
+        tokenASymbol?: string;
+        tokenBSymbol?: string;
     }): Promise<TransactionResult & { lpTokensReceived?: TokenBalance }> {
+        // Extract wallet public key and keypair from userVault (same as addMeteoraLiquidity.ts)
+        const walletPublicKey = params.userVault?.publicKey;
+        const walletKeypair = params.userVault?.keypair;
+
+        if (!walletPublicKey) {
+            throw new Error('No wallet public key provided in userVault');
+        }
+        if (!walletKeypair) {
+            throw new Error('No wallet keypair provided in userVault');
+        }
+
+        logger.log(`Using wallet public key from account: ${walletPublicKey}`);
+        console.log(`Using wallet public key from account: ${walletPublicKey}`);
+        logger.log(`Using wallet keypair from account: ${walletKeypair.publicKey?.toString()}`);
+        console.log(`Using wallet keypair from account: ${walletKeypair.publicKey?.toString()}`);
         try {
             logger.log(`Adding liquidity to Meteora pool: ${params.poolId}`);
 
@@ -105,12 +124,27 @@ export class MeteoraService extends Service implements ILpService {
                 throw new Error('Meteora SDK not available');
             }
 
-            const signature = await this.addLiquidityToPool({
-                amount: params.tokenAAmountLamports,
-                amountB: params.tokenBAmountLamports || '0',
-                poolAddress: params.poolId,
-                rangeInterval: 10
-            });
+            logger.log(`Adding liquidity with amounts: tokenA=${params.tokenAAmountLamports} (${params.tokenASymbol}), tokenB=${params.tokenBAmountLamports || '0'} (${params.tokenBSymbol})`);
+
+            // Ensure we have both amounts
+            const tokenAAmount = params.tokenAAmountLamports || '0';
+            const tokenBAmount = params.tokenBAmountLamports || '0';
+
+            logger.log(`Passing to innerAddLiquidity: poolId=${params.poolId}, amount=${tokenAAmount}, amountB=${tokenBAmount}`);
+
+            // Pass the token amounts with their corresponding token information
+            const signature = await this.innerAddLiquidity(
+                params.poolId,
+                tokenAAmount,
+                tokenBAmount,
+                10, // default range interval
+                tokenAAmount,
+                tokenBAmount,
+                params.tokenASymbol,
+                params.tokenBSymbol,
+                walletPublicKey,
+                walletKeypair
+            );
 
             return {
                 success: true,
@@ -134,7 +168,28 @@ export class MeteoraService extends Service implements ILpService {
         poolId: string;
         lpTokenAmountLamports: string;
         slippageBps: number;
+        tokenAAmount?: string;
+        tokenBAmount?: string;
+        tokenASymbol?: string;
+        tokenBSymbol?: string;
+        isRemoveByTokenAmounts?: boolean;
     }): Promise<TransactionResult & { tokensReceived?: TokenBalance[] }> {
+        // Extract wallet public key and keypair from userVault (same as addLiquidity)
+        const walletPublicKey = params.userVault?.publicKey;
+        const walletKeypair = params.userVault?.keypair;
+
+        if (!walletPublicKey) {
+            throw new Error('No wallet public key provided in userVault');
+        }
+        if (!walletKeypair) {
+            throw new Error('No wallet keypair provided in userVault');
+        }
+
+        logger.log(`Using wallet public key from account: ${walletPublicKey}`);
+        console.log(`Using wallet public key from account: ${walletPublicKey}`);
+        logger.log(`Using wallet keypair from account: ${walletKeypair.publicKey?.toString()}`);
+        console.log(`Using wallet keypair from account: ${walletKeypair.publicKey?.toString()}`);
+
         try {
             logger.log(`Removing liquidity from Meteora pool: ${params.poolId}`);
 
@@ -142,37 +197,28 @@ export class MeteoraService extends Service implements ILpService {
                 throw new Error('Meteora SDK not available');
             }
 
-            // Use the real removeLiquidity implementation
-            const result = await this.removeLiquidityFromPool({
-                poolAddress: params.poolId,
-                shouldClosePosition: true
-            });
+            // Use the real removeLiquidity implementation with proper wallet handling
+            const result = await this.innerRemoveLiquidity(
+                params.poolId,
+                params.lpTokenAmountLamports,
+                params.slippageBps,
+                walletPublicKey,
+                walletKeypair,
+                params.tokenAAmount,
+                params.tokenBAmount,
+                params.tokenASymbol,
+                params.tokenBSymbol,
+                params.isRemoveByTokenAmounts
+            );
 
             return {
                 success: true,
-                transactionId: `meteora-remove-${Date.now()}`,
+                transactionId: result.transactionId,
                 data: {
                     poolAddress: params.poolId,
                     liquidityRemoved: params.lpTokenAmountLamports
                 },
-                tokensReceived: [
-                    {
-                        address: 'token-x',
-                        balance: result.liquidityRemoved[0].toString(),
-                        symbol: 'TOKEN-X',
-                        uiAmount: result.liquidityRemoved[0],
-                        decimals: 6,
-                        name: 'Token X'
-                    },
-                    {
-                        address: 'token-y',
-                        balance: result.liquidityRemoved[1].toString(),
-                        symbol: 'TOKEN-Y',
-                        uiAmount: result.liquidityRemoved[1],
-                        decimals: 6,
-                        name: 'Token Y'
-                    }
-                ]
+                tokensReceived: result.tokensReceived
             };
         } catch (error) {
             logger.error('Error removing liquidity from Meteora pool:', error);
@@ -380,106 +426,750 @@ export class MeteoraService extends Service implements ILpService {
     }
 
     /**
-     * Add liquidity to a Meteora pool - Real implementation from Edwin
+     * Helper method for adding liquidity to a Meteora pool
+     * @returns Transaction signature
      */
-    async addLiquidityToPool(params: AddLiquidityParameters): Promise<string> {
-        const { amount, amountB, poolAddress, rangeInterval = 10 } = params;
+    private async innerAddLiquidity(
+        poolAddress: string,
+        amount: string,
+        amountB: string,
+        rangeInterval: number = 10,
+        tokenAAmount?: string,
+        tokenBAmount?: string,
+        tokenASymbol?: string,
+        tokenBSymbol?: string,
+        walletPublicKey?: string,
+        walletKeypair?: any
+    ): Promise<string> {
+        logger.log(`innerAddLiquidity called with: poolAddress=${poolAddress}, amount=${amount}, amountB=${amountB}`);
 
-        logger.info(`Adding liquidity to Meteora pool ${poolAddress} with ${amount} and ${amountB}`);
+        // Use the provided wallet public key and keypair from account
+        let keypair: any;
+        let publicKey: PublicKey;
 
-        if (!amount || !amountB || !poolAddress) {
-            throw new Error('Amount A, Amount B, and pool address are required');
+        if (walletPublicKey && walletKeypair) {
+            // Use the provided wallet public key and keypair from account
+            publicKey = new PublicKey(walletPublicKey);
+
+            // Log the keypair structure to understand what we're working with
+            logger.debug(`Keypair structure: ${JSON.stringify({
+                hasPublicKey: !!walletKeypair.publicKey,
+                publicKeyType: typeof walletKeypair.publicKey,
+                publicKeyValue: walletKeypair.publicKey?.toString(),
+                hasPrivateKey: !!walletKeypair.privateKey,
+                privateKeyType: typeof walletKeypair.privateKey,
+                privateKeyValue: walletKeypair.privateKey,
+                hasSecretKey: !!walletKeypair.secretKey,
+                secretKeyType: typeof walletKeypair.secretKey,
+                secretKeyLength: walletKeypair.secretKey?.length,
+                hasSign: typeof walletKeypair.sign,
+                hasSignTransaction: typeof walletKeypair.signTransaction,
+                constructor: walletKeypair.constructor?.name,
+                keys: Object.keys(walletKeypair)
+            })}`);
+
+            // The keypair from account might not be a proper Solana Keypair object
+            // We need to convert it to a proper Keypair for signing
+            let properKeypair: any;
+
+            if (walletKeypair.secretKey) {
+                // If it has secretKey, we can create a proper Keypair
+                try {
+                    const { Keypair } = await import('@solana/web3.js');
+                    properKeypair = Keypair.fromSecretKey(walletKeypair.secretKey);
+                    logger.debug('Created proper Keypair from secretKey');
+                } catch (error) {
+                    logger.error('Failed to create Keypair from secretKey:', error);
+                    throw new Error('Invalid secretKey format in account keypair');
+                }
+            } else if (walletKeypair.privateKey) {
+                // Alternative: try privateKey
+                try {
+                    const { Keypair } = await import('@solana/web3.js');
+                    const secretKey = bs58.decode(walletKeypair.privateKey);
+                    properKeypair = Keypair.fromSecretKey(secretKey);
+                    logger.debug('Created proper Keypair from privateKey');
+                } catch (error) {
+                    logger.error('Failed to create Keypair from privateKey:', error);
+                    throw new Error('Invalid privateKey format in account keypair');
+                }
+            } else {
+                // If no secret key available, we need to get it from the Solana service
+                logger.debug('No secret key in account keypair, getting from Solana service...');
+                const solanaService = this.runtime.getService(SOLANA_SERVICE_NAME) as any;
+                if (!solanaService) {
+                    throw new Error('Solana service not available');
+                }
+                properKeypair = await solanaService.getWalletKeypair();
+                if (!properKeypair) {
+                    throw new Error('Failed to get keypair from Solana service');
+                }
+                // Validate it matches the expected public key
+                if (properKeypair.publicKey.toString() !== walletPublicKey) {
+                    throw new Error(`Solana service keypair mismatch: expected ${walletPublicKey}, got ${properKeypair.publicKey.toString()}`);
+                }
+            }
+
+            keypair = properKeypair;
+
+            logger.log(`Using provided wallet public key from account: ${walletPublicKey}`);
+            logger.log(`Using converted keypair: ${keypair.publicKey?.toString()}`);
+
+            // Validate the converted keypair has required methods
+            /*
+            if (typeof keypair.sign !== 'function') {
+                throw new Error('Converted keypair does not have sign method - invalid keypair structure');
+            }
+            if (typeof keypair.signTransaction !== 'function') {
+                throw new Error('Converted keypair does not have signTransaction method - invalid keypair structure');
+            }
+            */
+
+            // Validate keypair matches the provided public key
+            if (keypair.publicKey.toString() !== walletPublicKey) {
+                throw new Error(`Keypair mismatch: expected ${walletPublicKey}, got ${keypair.publicKey.toString()}`);
+            }
+        } else {
+            throw new Error('No wallet public key or keypair provided - cannot proceed');
         }
 
-        if (!DLMM) {
-            throw new Error('Meteora SDK not available');
-        }
-
+        const connection = this.connection;
+        // Validate pool address format
         try {
-            // Create pool instance
-            const dlmmPool = await DLMM.create(this.connection, new PublicKey(poolAddress));
+            new PublicKey(poolAddress);
+        } catch (error) {
+            throw new Error(`Invalid pool address format: ${poolAddress}. Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
 
-            // Get active bin for range calculation
-            const activeBin = await dlmmPool.getActiveBin();
-            const minBinId = activeBin.binId - rangeInterval;
-            const maxBinId = activeBin.binId + rangeInterval;
+        const dlmmPool = await withRetry(
+            async () => DLMM.create(connection, new PublicKey(poolAddress)),
+            'Meteora create pool'
+        );
 
-            // Create new position keypair
-            const newPositionKeypair = Keypair.generate();
-            const positionPubKey = newPositionKeypair.publicKey;
+        // Get pool token information to map amounts correctly
+        const tokenXAddress = dlmmPool.tokenX.publicKey.toString();
+        const tokenYAddress = dlmmPool.tokenY.publicKey.toString();
 
-            // Initialize position and add liquidity
-            const tx = await dlmmPool.initializePositionAndAddLiquidityByStrategy({
+        logger.log(`Pool token order: tokenX=${tokenXAddress}, tokenY=${tokenYAddress}`);
+
+        // Map the user's intended amounts to the correct pool token order
+        // We need to determine which token is which based on the pool's token order
+        // and map the amounts accordingly
+
+        let tokenXAmount: string;
+        let tokenYAmount: string;
+
+        // Get token symbols for the pool tokens
+        const tokenXSymbol = await this.getTokenSymbol(tokenXAddress);
+        const tokenYSymbol = await this.getTokenSymbol(tokenYAddress);
+
+        logger.log(`Pool token symbols: tokenX=${tokenXSymbol}, tokenY=${tokenYSymbol}`);
+        logger.log(`User token symbols: tokenA=${tokenASymbol}, tokenB=${tokenBSymbol}`);
+
+        // Map amounts based on token symbols
+        if (tokenASymbol && tokenBSymbol) {
+            if (tokenASymbol === tokenXSymbol && tokenBSymbol === tokenYSymbol) {
+                // Direct mapping: tokenA -> tokenX, tokenB -> tokenY
+                tokenXAmount = amount;
+                tokenYAmount = amountB;
+                logger.log(`Direct mapping: tokenA(${tokenASymbol}) -> tokenX(${tokenXSymbol}), tokenB(${tokenBSymbol}) -> tokenY(${tokenYSymbol})`);
+            } else if (tokenASymbol === tokenYSymbol && tokenBSymbol === tokenXSymbol) {
+                // Swapped mapping: tokenA -> tokenY, tokenB -> tokenX
+                tokenXAmount = amountB;
+                tokenYAmount = amount;
+                logger.log(`Swapped mapping: tokenA(${tokenASymbol}) -> tokenY(${tokenYSymbol}), tokenB(${tokenBSymbol}) -> tokenX(${tokenXSymbol})`);
+            } else {
+                // Fallback: assume direct mapping
+                tokenXAmount = amount;
+                tokenYAmount = amountB;
+                logger.log(`Fallback mapping: assuming direct order`);
+            }
+        } else {
+            // No token symbols provided, fallback to original amounts
+            tokenXAmount = amount;
+            tokenYAmount = amountB;
+            logger.log(`No token symbols provided, using original amounts`);
+        }
+
+        logger.log(`Final mapped amounts: tokenX=${tokenXAmount}, tokenY=${tokenYAmount}`);
+
+        const tokenXBalance = await this.getTokenBalance(tokenXAddress, walletPublicKey);
+        const tokenYBalance = await this.getTokenBalance(tokenYAddress, walletPublicKey);
+
+        // Get token decimals for proper conversion
+        const tokenXDecimals = tokenXAddress === 'So11111111111111111111111111111111111111112' ? 9 : 6; // SOL has 9, USDC has 6
+        const tokenYDecimals = tokenYAddress === 'So11111111111111111111111111111111111111112' ? 9 : 6; // SOL has 9, USDC has 6
+
+        // Convert balances to lamports for comparison with required amounts
+        const tokenXBalanceLamports = tokenXBalance * Math.pow(10, tokenXDecimals);
+        const tokenYBalanceLamports = tokenYBalance * Math.pow(10, tokenYDecimals);
+
+        logger.log(`Token X (${tokenXAddress}) balance: ${tokenXBalance} -> ${tokenXBalanceLamports} lamports, required: ${tokenXAmount}`);
+        logger.log(`Token Y (${tokenYAddress}) balance: ${tokenYBalance} -> ${tokenYBalanceLamports} lamports, required: ${tokenYAmount}`);
+
+        // Additional debug info for SOL handling
+        if (tokenXAddress === 'So11111111111111111111111111111111111111112' || tokenYAddress === 'So11111111111111111111111111111111111111112') {
+            const nativeSOLBalance = await this.connection.getBalance(publicKey);
+            const nativeSOLBalanceSOL = nativeSOLBalance / Math.pow(10, 9);
+            logger.log(`Native SOL balance: ${nativeSOLBalanceSOL} SOL (${nativeSOLBalance} lamports)`);
+
+            // Check if user has enough native SOL to wrap for the required amount
+            const requiredSOLAmount = (tokenXAddress === 'So11111111111111111111111111111111111111112' ? Number(tokenXAmount) : Number(tokenYAmount)) / Math.pow(10, 9);
+            if (nativeSOLBalanceSOL >= requiredSOLAmount) {
+                logger.log(`✅ User has enough native SOL (${nativeSOLBalanceSOL}) to wrap for required amount (${requiredSOLAmount})`);
+            } else {
+                logger.log(`❌ User needs ${requiredSOLAmount} SOL but only has ${nativeSOLBalanceSOL} native SOL`);
+            }
+        }
+
+        // Check if we have enough of each token
+        if (tokenXBalanceLamports < Number(tokenXAmount)) {
+            const requiredAmount = Number(tokenXAmount) / Math.pow(10, tokenXDecimals);
+            const availableAmount = tokenXBalanceLamports / Math.pow(10, tokenXDecimals);
+
+            let errorMessage = `Insufficient balance for token ${tokenXAddress}. Required: ${requiredAmount}, Available: ${availableAmount}`;
+
+            // Add helpful suggestion for SOL
+            if (tokenXAddress === 'So11111111111111111111111111111111111111112') {
+                const nativeSOLBalance = await this.connection.getBalance(publicKey);
+                const nativeSOLBalanceSOL = nativeSOLBalance / Math.pow(10, 9);
+                const requiredSOLAmount = Number(tokenXAmount) / Math.pow(10, 9);
+
+                if (nativeSOLBalanceSOL >= requiredSOLAmount) {
+                    errorMessage += `\n\n💡 **SOL Balance Issue:** You have ${nativeSOLBalanceSOL} native SOL but need ${requiredSOLAmount} wrapped SOL. You need to wrap your native SOL first.`;
+                    errorMessage += '\n\n**To wrap SOL:** Use a DEX like Jupiter or Raydium to swap native SOL for wrapped SOL (So11111111111111111111111111111111111111112).';
+                } else {
+                    errorMessage += `\n\n💡 **SOL Balance Issue:** You need ${requiredSOLAmount} SOL but only have ${nativeSOLBalanceSOL} native SOL.`;
+                }
+            }
+
+            throw new InsufficientBalanceError(Number(tokenXAmount), tokenXBalanceLamports, tokenXAddress);
+        }
+        if (tokenYBalanceLamports < Number(tokenYAmount)) {
+            const requiredAmount = Number(tokenYAmount) / Math.pow(10, tokenYDecimals);
+            const availableAmount = tokenYBalanceLamports / Math.pow(10, tokenYDecimals);
+
+            let errorMessage = `Insufficient balance for token ${tokenYAddress}. Required: ${requiredAmount}, Available: ${availableAmount}`;
+
+            // Add helpful suggestion for SOL
+            if (tokenYAddress === 'So11111111111111111111111111111111111111112') {
+                const nativeSOLBalance = await this.connection.getBalance(publicKey);
+                const nativeSOLBalanceSOL = nativeSOLBalance / Math.pow(10, 9);
+                const requiredSOLAmount = Number(tokenYAmount) / Math.pow(10, 9);
+
+                if (nativeSOLBalanceSOL >= requiredSOLAmount) {
+                    errorMessage += `\n\n💡 **SOL Balance Issue:** You have ${nativeSOLBalanceSOL} native SOL but need ${requiredSOLAmount} wrapped SOL. You need to wrap your native SOL first.`;
+                    errorMessage += '\n\n**To wrap SOL:** Use a DEX like Jupiter or Raydium to swap native SOL for wrapped SOL (So11111111111111111111111111111111111111112).';
+                } else {
+                    errorMessage += `\n\n💡 **SOL Balance Issue:** You need ${requiredSOLAmount} SOL but only have ${nativeSOLBalanceSOL} native SOL.`;
+                }
+            }
+
+            throw new InsufficientBalanceError(Number(tokenYAmount), tokenYBalanceLamports, tokenYAddress);
+        }
+
+        // Wrap the position check in retry logic
+        const positionInfo = await withRetry(
+            async () => dlmmPool.getPositionsByUserAndLbPair(keypair.publicKey),
+            'Meteora get user positions'
+        );
+        const existingPosition = positionInfo?.userPositions?.[0];
+
+        const activeBin = await withRetry(async () => dlmmPool.getActiveBin(), 'Meteora get active bin');
+        const activeBinPricePerToken = dlmmPool.fromPricePerLamport(Number(activeBin.price));
+
+        // Convert lamports back to token units for calculateAmounts function
+        const tokenXAmountInTokens = (Number(tokenXAmount) / Math.pow(10, tokenXDecimals)).toString();
+        const tokenYAmountInTokens = (Number(tokenYAmount) / Math.pow(10, tokenYDecimals)).toString();
+
+        logger.log(`Converting amounts for calculateAmounts: tokenX=${tokenXAmountInTokens} (from ${tokenXAmount} lamports), tokenY=${tokenYAmountInTokens} (from ${tokenYAmount} lamports)`);
+
+        const [totalXAmount, totalYAmount]: [BN, BN] = await calculateAmounts(
+            tokenXAmountInTokens,
+            tokenYAmountInTokens,
+            activeBinPricePerToken,
+            dlmmPool
+        );
+        if (totalXAmount.isZero() && totalYAmount.isZero()) {
+            throw new TypeError('Total liquidity trying to add is 0');
+        }
+        logger.debug(`Adding liquidity with Total X amount: ${totalXAmount}, Total Y amount: ${totalYAmount}`);
+
+        let tx;
+        let positionPubKey: PublicKey;
+        const signers: Keypair[] = [];
+
+        if (existingPosition) {
+            logger.debug(`Adding liquidity to existing position`);
+            // Get min and max bin ids from the existing position
+            const binData = existingPosition.positionData.positionBinData;
+            const minBinId = Math.min(...binData.map(bin => bin.binId));
+            const maxBinId = Math.max(...binData.map(bin => bin.binId));
+            positionPubKey = existingPosition.publicKey;
+            // Add liquidity to the existing position
+            await dlmmPool.refetchStates();
+
+            tx = await dlmmPool.addLiquidityByStrategy({
                 positionPubKey: positionPubKey,
-                user: new PublicKey('mock-user-key'), // Would be actual user key
-                totalXAmount: new BN(amount),
-                totalYAmount: new BN(amountB),
+                user: keypair.publicKey,
+                totalXAmount,
+                totalYAmount,
                 strategy: {
                     maxBinId,
                     minBinId,
                     strategyType: StrategyType.Spot,
                 },
             });
+        } else {
+            // Create new position
+            logger.debug(`Opening new position`);
+            const minBinId = activeBin.binId - rangeInterval;
+            const maxBinId = activeBin.binId + rangeInterval;
 
-            // For now, return mock signature since we don't have wallet integration
-            return `mock-tx-${Date.now()}`;
-        } catch (error) {
-            logger.error('Error adding liquidity to pool:', error);
-            throw error;
+            // Create a new keypair for the position
+            const newPositionKeypair = Keypair.generate();
+            positionPubKey = newPositionKeypair.publicKey;
+            signers.push(newPositionKeypair);
+
+            await dlmmPool.refetchStates();
+            console.log('refetchStates', newPositionKeypair)
+
+            // Add a short delay to avoid hitting rate limits
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
+            // Use try-catch to handle compute unit estimation failures gracefully
+            // Add simple retry logic for rate limiting (429 errors)
+            let retryCount = 0;
+            const maxRetries = 3;
+            let _lastError: unknown;
+
+            while (retryCount <= maxRetries) {
+                try {
+                    console.log('start tx')
+                    tx = await dlmmPool.initializePositionAndAddLiquidityByStrategy({
+                        positionPubKey: positionPubKey,
+                        user: keypair.publicKey,
+                        totalXAmount,
+                        totalYAmount,
+                        strategy: {
+                            maxBinId,
+                            minBinId,
+                            strategyType: StrategyType.Spot,
+                        },
+                    });
+                    console.log('end tx')
+                    break; // Success, exit retry loop
+                } catch (error: unknown) {
+                    _lastError = error;
+
+                    // Log the actual error for debugging
+                    logger.debug('Error in initializePositionAndAddLiquidityByStrategy:', error);
+
+                    // Check if it's a rate limiting error
+                    const errorMessage = error instanceof Error ? error.message : String(error);
+                    const isRateLimit =
+                        errorMessage.includes('429') ||
+                        errorMessage.includes('Request failed with status code 429') ||
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        (error as any)?.response?.status === 429;
+
+                    if (isRateLimit && retryCount < maxRetries) {
+                        retryCount++;
+                        logger.warn(`Rate limited, retrying in 3 seconds (attempt ${retryCount}/${maxRetries})`);
+                        await new Promise(resolve => setTimeout(resolve, 3000));
+                        continue;
+                    }
+
+                    // If not a rate limiting error or out of retries, throw the error
+                    throw error;
+                }
+            }
+            console.log('done')
+
+            // Ensure tx is defined
+            if (!tx) {
+                throw new Error('Failed to create transaction after retries');
+            }
         }
+
+        // Debug logging before sending transaction
+        const signersToUse = signers || [];
+
+        // Validate keypair before signing
+        if (!keypair) {
+            throw new Error('Keypair is undefined - cannot sign transaction');
+        }
+        if (!keypair.publicKey) {
+            throw new Error('Keypair publicKey is undefined - cannot sign transaction');
+        }
+
+        logger.debug(`Main signer (keypair): ${keypair.publicKey.toString()}`);
+
+        if (signersToUse.length > 0) {
+            logger.debug(`Sending transaction with ${signersToUse.length} additional signers:`);
+            signersToUse.forEach((signer, index) => {
+                if (!signer) {
+                    throw new Error(`Signer ${index} is undefined`);
+                }
+                if (!signer.publicKey) {
+                    throw new Error(`Signer ${index} publicKey is undefined`);
+                }
+                logger.debug(`  Signer ${index}: ${signer.publicKey.toString()}`);
+            });
+        } else {
+            logger.debug('Sending transaction with no additional signers');
+        }
+
+        // Ensure keypair is valid before creating allSigners array
+        if (!keypair) {
+            throw new Error('Keypair is undefined - cannot create signers array');
+        }
+        if (!keypair.publicKey) {
+            throw new Error('Keypair publicKey is undefined - cannot create signers array');
+        }
+
+        logger.debug(`Main keypair public key: ${keypair.publicKey.toString()}`);
+        logger.debug(`Keypair type: ${keypair.constructor.name}`);
+        logger.debug(`Keypair has sign method: ${typeof keypair.sign === 'function'}`);
+        logger.debug(`Keypair has signTransaction method: ${typeof keypair.signTransaction === 'function'}`);
+
+        // Sign the transaction with all signers
+        console.log('signersToUse', signersToUse)
+        const allSigners = [keypair, ...signersToUse];
+        logger.debug(`Total signers: ${allSigners.length}`);
+
+        // Validate each signer individually before signing
+        logger.debug('Validating all signers before signing:');
+        allSigners.forEach((signer, index) => {
+            if (!signer) {
+                throw new Error(`Signer ${index} is undefined`);
+            }
+            if (!signer.publicKey) {
+                throw new Error(`Signer ${index} publicKey is undefined`);
+            }
+            if (typeof signer.publicKey.toString !== 'function') {
+                throw new Error(`Signer ${index} publicKey.toString is not a function`);
+            }
+            logger.debug(`  Signer ${index}: ${signer.publicKey.toString()} - Valid`);
+        });
+
+        // Validate transaction before signing
+        if (!tx) {
+            throw new Error('Transaction is undefined - cannot sign');
+        }
+
+        // Validate transaction has required methods
+        if (typeof tx.sign !== 'function') {
+            throw new Error('Transaction does not have sign method - invalid transaction structure');
+        }
+        if (typeof tx.serialize !== 'function') {
+            throw new Error('Transaction does not have serialize method - invalid transaction structure');
+        }
+
+        // Log transaction details
+        logger.debug(`Transaction fee payer: ${tx.feePayer?.toString()}`);
+        logger.debug(`Transaction recent blockhash: ${tx.recentBlockhash}`);
+        logger.debug(`Transaction type: ${tx.constructor.name}`);
+        logger.debug(`Transaction has sign method: ${typeof tx.sign === 'function'}`);
+        logger.debug(`Transaction has serialize method: ${typeof tx.serialize === 'function'}`);
+
+        try {
+            logger.debug('Starting transaction signing...');
+            console.log('allSigners', allSigners)
+            tx.sign(...allSigners);
+            logger.debug('Transaction signed successfully');
+        } catch (signError) {
+            logger.error('Error signing transaction:', signError);
+            logger.error('Signers that were being used:', allSigners.map((s, i) => ({
+                index: i,
+                hasSigner: !!s,
+                hasPublicKey: !!s?.publicKey,
+                publicKeyType: typeof s?.publicKey,
+                publicKeyValue: s?.publicKey?.toString()
+            })));
+            throw new Error(`Failed to sign transaction: ${signError instanceof Error ? signError.message : 'Unknown error'}`);
+        }
+
+        console.log('start send')
+
+        // Send the transaction
+        const signature = await connection.sendRawTransaction(tx.serialize(), {
+            skipPreflight: true,
+            maxRetries: 5,
+            preflightCommitment: 'processed',
+        });
+
+        console.log('sent')
+
+        // Wait for transaction confirmation
+        const { value: confirmation } = await connection.confirmTransaction(signature, 'confirmed');
+
+        console.log('confirmed')
+
+        if (confirmation.err) {
+            throw new Error(`Transaction failed: Signature: ${signature}, Error: ${confirmation.err.toString()}`);
+        }
+        logger.info(`Transaction successful: ${signature}`);
+
+        // Store the position address in our logs for reference
+        logger.info(`Position public key: ${positionPubKey.toString()}`);
+
+        // Just return the transaction signature
+        return signature;
     }
 
     /**
-     * Remove liquidity from a Meteora pool - Real implementation from Edwin
+     * Helper method for removing liquidity from a Meteora pool
+     * @returns Transaction result with signature and tokens received
      */
-    async removeLiquidityFromPool(params: RemoveLiquidityParameters): Promise<{ liquidityRemoved: [number, number]; feesClaimed: [number, number] }> {
-        const { poolAddress, positionAddress, shouldClosePosition = true } = params;
+    private async innerRemoveLiquidity(
+        poolAddress: string,
+        lpTokenAmountLamports: string,
+        slippageBps: number,
+        walletPublicKey?: string,
+        walletKeypair?: any,
+        tokenAAmount?: string,
+        tokenBAmount?: string,
+        tokenASymbol?: string,
+        tokenBSymbol?: string,
+        isRemoveByTokenAmounts?: boolean
+    ): Promise<{ transactionId: string; tokensReceived?: TokenBalance[] }> {
+        logger.log(`innerRemoveLiquidity called with: poolAddress=${poolAddress}, lpTokenAmount=${lpTokenAmountLamports}, isRemoveByTokenAmounts=${isRemoveByTokenAmounts}, tokenAAmount=${tokenAAmount}, tokenBAmount=${tokenBAmount}`);
 
-        if (!poolAddress) {
-            throw new Error('Pool address is required for Meteora liquidity removal');
-        }
+        // Use the provided wallet public key and keypair from account
+        let keypair: any;
+        let publicKey: PublicKey;
 
-        if (!DLMM) {
-            throw new Error('Meteora SDK not available');
-        }
+        if (walletPublicKey && walletKeypair) {
+            // Use the provided wallet public key and keypair from account
+            publicKey = new PublicKey(walletPublicKey);
 
-        try {
-            const dlmmPool = await DLMM.create(this.connection, new PublicKey(poolAddress));
+            // Log the keypair structure to understand what we're working with
+            logger.debug(`Keypair structure: ${JSON.stringify({
+                hasPublicKey: !!walletKeypair.publicKey,
+                publicKeyType: typeof walletKeypair.publicKey,
+                publicKeyValue: walletKeypair.publicKey?.toString(),
+                hasPrivateKey: !!walletKeypair.privateKey,
+                privateKeyType: typeof walletKeypair.privateKey,
+                privateKeyValue: walletKeypair.privateKey,
+                hasSecretKey: !!walletKeypair.secretKey,
+                secretKeyType: typeof walletKeypair.secretKey,
+                secretKeyLength: walletKeypair.secretKey?.length,
+                hasSign: typeof walletKeypair.sign,
+                hasSignTransaction: typeof walletKeypair.signTransaction,
+                constructor: walletKeypair.constructor?.name,
+                keys: Object.keys(walletKeypair)
+            })}`);
 
-            let position: any;
-            if (!positionAddress) {
-                const positionInfo = await dlmmPool.getPositionsByUserAndLbPair(new PublicKey('mock-user-key'));
-                if (!positionInfo?.userPositions || positionInfo.userPositions.length === 0) {
-                    throw new Error('No positions found in this pool');
+            // The keypair from account might not be a proper Solana Keypair object
+            // We need to convert it to a proper Keypair for signing
+            let properKeypair: any;
+
+            if (walletKeypair.secretKey) {
+                // If it has secretKey, we can create a proper Keypair
+                try {
+                    const { Keypair } = await import('@solana/web3.js');
+                    properKeypair = Keypair.fromSecretKey(walletKeypair.secretKey);
+                    logger.debug('Created proper Keypair from secretKey');
+                } catch (error) {
+                    logger.error('Failed to create Keypair from secretKey:', error);
+                    throw new Error('Invalid secretKey format in account keypair');
                 }
-                position = positionInfo.userPositions[0];
+            } else if (walletKeypair.privateKey) {
+                // Alternative: try privateKey
+                try {
+                    const { Keypair } = await import('@solana/web3.js');
+                    const secretKey = bs58.decode(walletKeypair.privateKey);
+                    properKeypair = Keypair.fromSecretKey(secretKey);
+                    logger.debug('Created proper Keypair from privateKey');
+                } catch (error) {
+                    logger.error('Failed to create Keypair from privateKey:', error);
+                    throw new Error('Invalid privateKey format in account keypair');
+                }
             } else {
-                position = await dlmmPool.getPosition(new PublicKey(positionAddress));
+                // If no secret key available, we need to get it from the Solana service
+                logger.debug('No secret key in account keypair, getting from Solana service...');
+                const solanaService = this.runtime.getService(SOLANA_SERVICE_NAME) as any;
+                if (!solanaService) {
+                    throw new Error('Solana service not available');
+                }
+                properKeypair = await solanaService.getWalletKeypair();
+                if (!properKeypair) {
+                    throw new Error('Failed to get keypair from Solana service');
+                }
+                // Validate it matches the expected public key
+                if (properKeypair.publicKey.toString() !== walletPublicKey) {
+                    throw new Error(`Solana service keypair mismatch: expected ${walletPublicKey}, got ${properKeypair.publicKey.toString()}`);
+                }
             }
 
-            const binData = position.positionData.positionBinData;
-            const binIdsToRemove = binData.map((bin: any) => bin.binId);
+            keypair = properKeypair;
 
-            // Remove 100% of liquidity
-            const removeLiquidityTx = await dlmmPool.removeLiquidity({
-                position: position.publicKey,
-                user: new PublicKey('mock-user-key'),
-                fromBinId: Math.min(...binIdsToRemove),
-                toBinId: Math.max(...binIdsToRemove),
-                bps: new BN(100 * 100), // 100%
-                shouldClaimAndClose: shouldClosePosition,
+            logger.log(`Using provided wallet public key from account: ${walletPublicKey}`);
+            logger.log(`Using converted keypair: ${keypair.publicKey?.toString()}`);
+
+            // Validate keypair matches the provided public key
+            if (keypair.publicKey.toString() !== walletPublicKey) {
+                throw new Error(`Keypair mismatch: expected ${walletPublicKey}, got ${keypair.publicKey.toString()}`);
+            }
+        } else {
+            throw new Error('No wallet public key or keypair provided - cannot proceed');
+        }
+
+        const connection = this.connection;
+
+        // Validate pool address format
+        try {
+            new PublicKey(poolAddress);
+        } catch (error) {
+            throw new Error(`Invalid pool address format: ${poolAddress}. Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+
+        const dlmmPool = await withRetry(
+            async () => DLMM.create(connection, new PublicKey(poolAddress)),
+            'Meteora create pool'
+        );
+
+        // Get user positions
+        const positionInfo = await withRetry(
+            async () => dlmmPool.getPositionsByUserAndLbPair(keypair.publicKey),
+            'Meteora get user positions'
+        );
+
+        const userPositions = positionInfo?.userPositions;
+        if (!userPositions || userPositions.length === 0) {
+            throw new Error('No positions found in this pool');
+        }
+
+        // Get the first position (can be expanded in the future)
+        const position = userPositions[0];
+
+        // Get pool token information
+        const tokenXAddress = dlmmPool.tokenX.publicKey.toString();
+        const tokenYAddress = dlmmPool.tokenY.publicKey.toString();
+
+        // Get token symbols for better response formatting
+        const tokenXSymbol = await this.getTokenSymbol(tokenXAddress);
+        const tokenYSymbol = await this.getTokenSymbol(tokenYAddress);
+
+        logger.log(`Pool tokens: tokenX=${tokenXSymbol}(${tokenXAddress}), tokenY=${tokenYSymbol}(${tokenYAddress})`);
+
+        // Determine removal strategy
+        const isRemoveAll = lpTokenAmountLamports === '0';
+        let bpsToRemove: BN;
+        let shouldClosePosition: boolean;
+
+        if (isRemoveAll) {
+            logger.log('Removing all liquidity from position');
+            bpsToRemove = new BN(100 * 100); // 100%
+            shouldClosePosition = true;
+        } else if (isRemoveByTokenAmounts && (tokenAAmount || tokenBAmount)) {
+            logger.log(`Removing liquidity to get specific token amounts: tokenA=${tokenAAmount} (${tokenASymbol}), tokenB=${tokenBAmount} (${tokenBSymbol})`);
+            // For now, we'll remove a percentage based on the requested amounts
+            // This is a simplified approach - in a real implementation, you'd calculate the exact LP tokens needed
+            bpsToRemove = new BN(50 * 100); // 50% as a starting point
+            shouldClosePosition = false;
+        } else {
+            logger.log(`Removing ${lpTokenAmountLamports} lamports of liquidity`);
+            // Calculate percentage based on LP token amount vs total position
+            const totalLpTokens = position.positionData.totalXAmount.add(position.positionData.totalYAmount);
+            const percentage = (Number(lpTokenAmountLamports) / totalLpTokens.toNumber()) * 100;
+            bpsToRemove = new BN(Math.min(percentage * 100, 100 * 100)); // Cap at 100%
+            shouldClosePosition = percentage >= 100;
+        }
+
+        // Get bin data from position
+        const binData = position.positionData.positionBinData;
+        const binIdsToRemove = binData.map(bin => bin.binId);
+
+        // Remove liquidity transaction
+        const removeLiquidityTx = await dlmmPool.removeLiquidity({
+            position: position.publicKey,
+            user: keypair.publicKey,
+            fromBinId: Math.min(...binIdsToRemove),
+            toBinId: Math.max(...binIdsToRemove),
+            bps: bpsToRemove,
+            shouldClaimAndClose: shouldClosePosition,
+        });
+
+        // Handle multiple transactions if needed
+        const txArray = Array.isArray(removeLiquidityTx) ? removeLiquidityTx : [removeLiquidityTx];
+        let transactionId = '';
+        const tokensReceived: TokenBalance[] = [];
+
+        // Process transactions
+        for (const tx of txArray) {
+            // Sign the transaction
+            tx.sign([keypair]);
+
+            // Send the transaction
+            const signature = await connection.sendRawTransaction(tx.serialize(), {
+                skipPreflight: true,
+                maxRetries: 3,
             });
 
-            // Return mock result since we don't have full wallet integration
-            return {
-                liquidityRemoved: [100, 1000],
-                feesClaimed: [10, 100]
-            };
-        } catch (error) {
-            logger.error('Error removing liquidity from pool:', error);
-            throw error;
+            await connection.confirmTransaction(signature, 'confirmed');
+            logger.info(`Remove liquidity transaction successful: ${signature}`);
+
+            transactionId = signature;
+
+            // Extract balance changes from transaction
+            const balanceChanges = await this.extractBalanceChanges(connection, signature, tokenXAddress, tokenYAddress);
+
+            // Add tokens received to the result
+            if (balanceChanges.liquidityRemoved[0] > 0) {
+                tokensReceived.push({
+                    address: tokenXAddress,
+                    balance: balanceChanges.liquidityRemoved[0].toString(),
+                    symbol: tokenXSymbol,
+                    uiAmount: balanceChanges.liquidityRemoved[0],
+                    decimals: tokenXAddress === 'So11111111111111111111111111111111111111112' ? 9 : 6,
+                    name: `${tokenXSymbol} Token`
+                });
+            }
+
+            if (balanceChanges.liquidityRemoved[1] > 0) {
+                tokensReceived.push({
+                    address: tokenYAddress,
+                    balance: balanceChanges.liquidityRemoved[1].toString(),
+                    symbol: tokenYSymbol,
+                    uiAmount: balanceChanges.liquidityRemoved[1],
+                    decimals: tokenYAddress === 'So11111111111111111111111111111111111111112' ? 9 : 6,
+                    name: `${tokenYSymbol} Token`
+                });
+            }
+
+            // Add fees claimed if any
+            if (balanceChanges.feesClaimed[0] > 0) {
+                tokensReceived.push({
+                    address: tokenXAddress,
+                    balance: balanceChanges.feesClaimed[0].toString(),
+                    symbol: tokenXSymbol,
+                    uiAmount: balanceChanges.feesClaimed[0],
+                    decimals: tokenXAddress === 'So11111111111111111111111111111111111111112' ? 9 : 6,
+                    name: `${tokenXSymbol} Fees`
+                });
+            }
+
+            if (balanceChanges.feesClaimed[1] > 0) {
+                tokensReceived.push({
+                    address: tokenYAddress,
+                    balance: balanceChanges.feesClaimed[1].toString(),
+                    symbol: tokenYSymbol,
+                    uiAmount: balanceChanges.feesClaimed[1],
+                    decimals: tokenYAddress === 'So11111111111111111111111111111111111111112' ? 9 : 6,
+                    name: `${tokenYSymbol} Fees`
+                });
+            }
         }
+
+        return {
+            transactionId,
+            tokensReceived
+        };
     }
+
+
 
     /**
      * Claim fees from a Meteora pool - Real implementation from Edwin
@@ -513,9 +1203,6 @@ export class MeteoraService extends Service implements ILpService {
         }
     }
 
-    /**
-     * Get position information from transaction hash - Real implementation from Edwin
-     */
     async getPositionInfoFromTransaction(txHash: string): Promise<{ positionAddress: string; liquidityAdded: [number, number] }> {
         try {
             // Fetch transaction information
@@ -674,6 +1361,211 @@ export class MeteoraService extends Service implements ILpService {
                 binStep: meteoraPool.bin_step,
                 isActive: true
             }
+        };
+    }
+
+    /**
+     * Get token symbol for a specific token mint
+     */
+    private async getTokenSymbol(tokenMint: string): Promise<string> {
+        try {
+            // Try to get token symbol from Birdeye API directly
+            try {
+                const birdeyeApiKey = this.runtime.getSetting('BIRDEYE_API_KEY');
+                const headers: Record<string, string> = {
+                    'accept': 'application/json',
+                    'x-chain': 'solana',
+                };
+
+                if (birdeyeApiKey) {
+                    headers['X-API-KEY'] = birdeyeApiKey;
+                }
+
+                const response = await fetch(
+                    `https://public-api.birdeye.so/defi/v3/token/meta-data/single?address=${tokenMint}`,
+                    { headers }
+                );
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data?.data?.symbol) {
+                        logger.debug(`Got token symbol from Birdeye: ${data.data.symbol} for ${tokenMint}`);
+                        return data.data.symbol;
+                    }
+                }
+            } catch (error) {
+                logger.debug(`Could not get token symbol from Birdeye for ${tokenMint}:`, error);
+            }
+
+            // For unknown tokens, try to get the symbol from the token metadata
+            try {
+                const tokenMintPubkey = new PublicKey(tokenMint);
+                const tokenInfo = await this.connection.getParsedAccountInfo(tokenMintPubkey);
+
+                if (tokenInfo.value?.data && 'parsed' in tokenInfo.value.data) {
+                    const parsedData = tokenInfo.value.data.parsed as any;
+                    if (parsedData.info?.symbol) {
+                        return parsedData.info.symbol;
+                    }
+                }
+            } catch (error) {
+                logger.debug(`Could not get token symbol for ${tokenMint}:`, error);
+            }
+
+            // Fallback to a shortened version of the mint address
+            return tokenMint.substring(0, 8);
+        } catch (error) {
+            logger.error('Error getting token symbol:', error);
+            return tokenMint.substring(0, 8);
+        }
+    }
+
+    /**
+ * Get token balance for a specific token mint
+ */
+    private async getTokenBalance(tokenMint: string, walletPublicKey?: string): Promise<number> {
+        try {
+            let publicKey: PublicKey;
+
+            if (walletPublicKey) {
+                // Use the provided wallet public key from account
+                publicKey = new PublicKey(walletPublicKey);
+                logger.log(`Using provided wallet public key: ${walletPublicKey}`);
+                console.log(`Using provided wallet public key: ${walletPublicKey}`);
+            } else {
+                // Fallback to getting from Solana service
+                const solanaService = this.runtime.getService(SOLANA_SERVICE_NAME) as any;
+                if (!solanaService) {
+                    throw new Error('Solana service not available');
+                }
+
+                const keypair = await solanaService.getWalletKeypair();
+                if (!keypair?.publicKey) {
+                    throw new Error('Wallet public key not available');
+                }
+
+                publicKey = keypair.publicKey;
+                logger.log(`Using Solana service wallet public key: ${publicKey.toString()}`);
+                console.log(`Using Solana service wallet public key: ${publicKey.toString()}`);
+            }
+
+            const tokenMintPubkey = new PublicKey(tokenMint);
+
+            // Special handling for wrapped SOL (So11111111111111111111111111111111111111112)
+            if (tokenMint === 'So11111111111111111111111111111111111111112') {
+                // Get native SOL balance
+                const nativeBalance = await this.connection.getBalance(publicKey);
+                const nativeBalanceSOL = nativeBalance / Math.pow(10, 9); // Convert lamports to SOL
+
+                // Also check for wrapped SOL token accounts
+                const tokenAccounts = await this.connection.getParsedTokenAccountsByOwner(publicKey, {
+                    mint: tokenMintPubkey,
+                });
+
+                let wrappedSOLBalance = 0;
+                for (const account of tokenAccounts.value) {
+                    const accountInfo = account.account.data.parsed.info;
+                    wrappedSOLBalance += accountInfo.tokenAmount.uiAmount || 0;
+                }
+
+                // Return the total SOL balance (native + wrapped)
+                const totalBalance = nativeBalanceSOL + wrappedSOLBalance;
+                logger.log(`SOL balance: native=${nativeBalanceSOL}, wrapped=${wrappedSOLBalance}, total=${totalBalance}`);
+                return totalBalance;
+            }
+
+            // For other tokens, get token accounts for the wallet
+            const tokenAccounts = await this.connection.getParsedTokenAccountsByOwner(publicKey, {
+                mint: tokenMintPubkey,
+            });
+
+            if (tokenAccounts.value.length === 0) {
+                logger.log(`No token accounts found for ${tokenMint} in wallet ${publicKey.toString()}`);
+                return 0;
+            }
+
+            // Sum up all token account balances
+            let totalBalance = 0;
+            for (const account of tokenAccounts.value) {
+                const accountInfo = account.account.data.parsed.info;
+                const balance = accountInfo.tokenAmount.uiAmount || 0;
+                totalBalance += balance;
+                logger.log(`Token account ${account.pubkey.toString()} has balance: ${balance}`);
+            }
+
+            logger.log(`Total balance for ${tokenMint} in wallet ${publicKey.toString()}: ${totalBalance}`);
+            return totalBalance;
+        } catch (error) {
+            logger.error('Error getting token balance:', error);
+            return 0;
+        }
+    }
+
+    /**
+     * Extract balance changes from transaction
+     */
+    private async extractBalanceChanges(
+        connection: Connection,
+        signature: string,
+        tokenXAddress: string,
+        tokenYAddress: string
+    ): Promise<{ liquidityRemoved: [number, number]; feesClaimed: [number, number] }> {
+        const METEORA_DLMM_PROGRAM_ID = 'LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo';
+
+        const txInfo = await connection.getParsedTransaction(signature, { maxSupportedTransactionVersion: 0 });
+
+        if (!txInfo || !txInfo.meta) {
+            throw new Error('Transaction details not found or not parsed');
+        }
+
+        const outerInstructions = txInfo.transaction.message.instructions as any[];
+        const innerInstructions = txInfo.meta.innerInstructions || [];
+
+        const innerMap: Record<number, any[]> = {};
+        for (const inner of innerInstructions) {
+            innerMap[inner.index] = inner.instructions as any[];
+        }
+
+        const meteoraInstructionIndices: number[] = [];
+        outerInstructions.forEach((ix, index) => {
+            if (ix.programId?.toString() === METEORA_DLMM_PROGRAM_ID) {
+                meteoraInstructionIndices.push(index);
+            }
+        });
+
+        if (meteoraInstructionIndices.length < 2) {
+            throw new Error('Expected at least two Meteora instructions in the transaction');
+        }
+
+        const removeLiquidityIndex = meteoraInstructionIndices[0];
+        const claimFeeIndex = meteoraInstructionIndices[1];
+
+        const decodeTokenTransfers = (instructions: any[]): any[] => {
+            const transfers: any[] = [];
+            for (const ix of instructions) {
+                if (ix.program === 'spl-token' && ix.parsed?.type === 'transferChecked') {
+                    transfers.push(ix.parsed.info);
+                }
+            }
+            return transfers;
+        };
+
+        const removeLiquidityTransfers = innerMap[removeLiquidityIndex]
+            ? decodeTokenTransfers(innerMap[removeLiquidityIndex])
+            : [];
+        const claimFeeTransfers = innerMap[claimFeeIndex] ? decodeTokenTransfers(innerMap[claimFeeIndex]) : [];
+
+        const liquidityRemovedA =
+            removeLiquidityTransfers.find(transfer => transfer.mint === tokenXAddress)?.tokenAmount.uiAmount || 0;
+        const liquidityRemovedB =
+            removeLiquidityTransfers.find(transfer => transfer.mint === tokenYAddress)?.tokenAmount.uiAmount || 0;
+
+        const feesClaimedA = claimFeeTransfers.find(transfer => transfer.mint === tokenXAddress)?.tokenAmount.uiAmount || 0;
+        const feesClaimedB = claimFeeTransfers.find(transfer => transfer.mint === tokenYAddress)?.tokenAmount.uiAmount || 0;
+
+        return {
+            liquidityRemoved: [liquidityRemovedA, liquidityRemovedB],
+            feesClaimed: [feesClaimedA, feesClaimedB],
         };
     }
 

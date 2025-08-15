@@ -50,13 +50,13 @@ export const removeMeteoraLiquidityAction: Action = {
             {
                 name: '{{name1}}',
                 content: {
-                    text: 'Withdraw all liquidity from Meteora pool XYZ789',
+                    text: 'Remove 2.8 USDC and 0.015 SOL from Meteora pool XYZ789',
                 },
             },
             {
                 name: '{{name2}}',
                 content: {
-                    text: "I'll withdraw all your liquidity from the Meteora pool",
+                    text: "I'll remove liquidity from the Meteora pool to get you 2.8 USDC and 0.015 SOL",
                     actions: ['REMOVE_METEORA_LIQUIDITY'],
                 },
             },
@@ -65,13 +65,13 @@ export const removeMeteoraLiquidityAction: Action = {
             {
                 name: '{{name1}}',
                 content: {
-                    text: 'Exit my position in Meteora pool DEF456',
+                    text: 'Withdraw all liquidity from Meteora pool DEF456',
                 },
             },
             {
                 name: '{{name2}}',
                 content: {
-                    text: "I'll help you exit your Meteora liquidity position",
+                    text: "I'll withdraw all your liquidity from the Meteora pool",
                     actions: ['REMOVE_METEORA_LIQUIDITY'],
                 },
             },
@@ -93,15 +93,27 @@ export const removeMeteoraLiquidityAction: Action = {
 
             // Check if message contains withdrawal-related keywords
             const messageText = message.content?.text?.toLowerCase() || '';
-            const withdrawalKeywords = [
-                'remove', 'withdraw', 'unstake', 'exit', 'close', 'liquidity', 'pool', 'meteora', 'position'
-            ];
 
-            const hasWithdrawalIntent = withdrawalKeywords.some(keyword =>
-                messageText.includes(keyword)
-            );
+            // Must contain action words that indicate removing liquidity
+            const actionKeywords = ['remove', 'withdraw', 'unstake', 'exit', 'close'];
+            const hasActionIntent = actionKeywords.some(keyword => messageText.includes(keyword));
 
-            return hasWithdrawalIntent;
+            // Must contain liquidity-related words
+            const liquidityKeywords = ['liquidity', 'pool', 'position'];
+            const hasLiquidityIntent = liquidityKeywords.some(keyword => messageText.includes(keyword));
+
+            // Must contain Meteora
+            const hasMeteoraIntent = messageText.includes('meteora');
+
+            // Must contain amounts (numbers followed by token symbols or LP tokens)
+            const amountPattern = /\d+(?:\.\d+)?\s*(USDC|SOL|ETH|BTC|MATIC|AVAX|DOT|LINK|UNI|AAVE|COMP|MKR|YFI|CRV|BAL|SNX|SUSHI|1INCH|LP|LP\s*TOKENS?|LIQUIDITY|METEORA\s*LP)/i;
+            const hasAmountIntent = amountPattern.test(messageText);
+
+            // Must contain "all" or "everything" for remove all
+            const allPattern = /all|100%|everything|complete/i;
+            const hasAllIntent = allPattern.test(messageText);
+
+            return hasActionIntent && hasLiquidityIntent && hasMeteoraIntent && (hasAmountIntent || hasAllIntent);
         } catch (error) {
             console.error('Error validating REMOVE_METEORA_LIQUIDITY:', error);
             return false;
@@ -124,6 +136,10 @@ export const removeMeteoraLiquidityAction: Action = {
                 return;
             }
 
+            // Log account structure for debugging
+            console.log('Account structure:', JSON.stringify(account, null, 2));
+            logger.log('Account retrieved successfully');
+
             const meteoraService = runtime.getService('METEORA_SERVICE') as unknown as MeteoraService;
             if (!meteoraService) {
                 callback?.({ text: 'Meteora service not available. Please try again later.' });
@@ -134,7 +150,15 @@ export const removeMeteoraLiquidityAction: Action = {
             const params = await extractWithdrawalParams(message);
             if (!params) {
                 callback?.({
-                    text: 'Please specify the pool ID and LP token amount. Example: "Remove 100 LP tokens from Meteora pool ABC123"',
+                    text: 'Please specify the pool ID and either LP token amount or underlying token amounts. Examples:\n• "Remove 100 LP tokens from Meteora pool ABC123"\n• "Remove 2.8 USDC and 0.015 SOL from Meteora pool ABC123"\n• "Remove all liquidity from Meteora pool ABC123"',
+                });
+                return;
+            }
+
+            // Validate pool ID format
+            if (!params.poolId || params.poolId.length < 32 || params.poolId.length > 44) {
+                callback?.({
+                    text: `Invalid pool ID format: ${params.poolId}. Pool ID should be a valid Solana address (32-44 characters).\n\nTry searching for pools first: "Search SOL/USDC pools on Meteora" to get the correct pool ID.`,
                 });
                 return;
             }
@@ -148,12 +172,23 @@ export const removeMeteoraLiquidityAction: Action = {
                 return;
             }
 
+            // Log the public key being used
+            logger.log(`Using wallet public key: ${userVault.publicKey}`);
+            console.log(`Using wallet public key: ${userVault.publicKey}`);
+
+            console.log(`Calling meteoraService.removeLiquidity with: poolId=${params.poolId}, lpTokenAmountLamports=${params.lpTokenAmount}, isRemoveByTokenAmounts=${params.isRemoveByTokenAmounts}`);
+
             // Remove liquidity using Meteora service
             const result = await meteoraService.removeLiquidity({
                 userVault,
                 poolId: params.poolId,
                 lpTokenAmountLamports: params.lpTokenAmount,
                 slippageBps: params.slippageBps || 100, // Default 1% slippage
+                tokenAAmount: params.tokenAAmount,
+                tokenBAmount: params.tokenBAmount,
+                tokenASymbol: params.tokenASymbol,
+                tokenBSymbol: params.tokenBSymbol,
+                isRemoveByTokenAmounts: params.isRemoveByTokenAmounts,
             });
 
             if (result.success) {
@@ -163,8 +198,22 @@ export const removeMeteoraLiquidityAction: Action = {
                     actions: ['REMOVE_METEORA_LIQUIDITY'],
                 });
             } else {
+                let errorMessage = `❌ **Failed to remove liquidity**: ${result.error}`;
+
+                // Add helpful suggestions for common errors
+                if (result.error?.includes('No positions found')) {
+                    errorMessage += '\n\n💡 **Suggestions:**';
+                    errorMessage += '\n• Check if you have any liquidity positions in this pool';
+                    errorMessage += '\n• Verify the pool ID is correct';
+                    errorMessage += '\n• Try searching for your positions first';
+                } else if (result.error?.includes('Insufficient balance')) {
+                    errorMessage += '\n\n💡 **Suggestions:**';
+                    errorMessage += '\n• Check your LP token balance';
+                    errorMessage += '\n• Make sure you have enough LP tokens to remove';
+                }
+
                 callback?.({
-                    text: `❌ **Failed to remove liquidity**: ${result.error}`,
+                    text: errorMessage,
                     actions: ['REMOVE_METEORA_LIQUIDITY'],
                 });
             }
@@ -185,48 +234,152 @@ async function extractWithdrawalParams(message: Memory): Promise<{
     poolId: string;
     lpTokenAmount: string;
     slippageBps?: number;
+    tokenAAmount?: string;
+    tokenBAmount?: string;
+    tokenASymbol?: string;
+    tokenBSymbol?: string;
+    isRemoveByTokenAmounts?: boolean;
 } | null> {
     try {
         const messageText = message.content?.text || '';
+        console.log('Extracting withdrawal params from message:', messageText);
 
-        // Simple regex patterns to extract LP token amounts and pool ID
+        // Simple regex patterns to extract amounts and pool ID
         const lpTokenPattern = /(\d+(?:\.\d+)?)\s*(LP|LP\s*TOKENS?|LIQUIDITY|METEORA\s*LP)/gi;
-        const poolPattern = /pool\s+([A-Za-z0-9]{8,})/i;
+        const tokenAmountPattern = /(\d+(?:\.\d+)?)\s*(USDC|SOL|ETH|BTC|MATIC|AVAX|DOT|LINK|UNI|AAVE|COMP|MKR|YFI|CRV|BAL|SNX|SUSHI|1INCH)/gi;
+        const andPattern = /(\d+(?:\.\d+)?)\s*(USDC|SOL|ETH|BTC|MATIC|AVAX|DOT|LINK|UNI|AAVE|COMP|MKR|YFI|CRV|BAL|SNX|SUSHI|1INCH)\s+and\s+(\d+(?:\.\d+)?)\s*(USDC|SOL|ETH|BTC|MATIC|AVAX|DOT|LINK|UNI|AAVE|COMP|MKR|YFI|CRV|BAL|SNX|SUSHI|1INCH)/gi;
+        const poolPattern = /(?:pool\s+)?([A-Za-z0-9]{8,})/gi;
         const slippagePattern = /(\d+(?:\.\d+)?)%?\s*slippage/i;
         const allPattern = /all|100%|everything|complete/i;
 
+        console.log('Testing regex patterns:');
+        console.log('Message text:', messageText);
+        console.log('LP token pattern test:', lpTokenPattern.test(messageText));
+        console.log('Token amount pattern test:', tokenAmountPattern.test(messageText));
+        console.log('And pattern test:', andPattern.test(messageText));
+        console.log('Pool pattern test:', poolPattern.test(messageText));
+        console.log('All pattern test:', allPattern.test(messageText));
+
         let lpTokenAmount = '';
+        let tokenAAmount = '';
+        let tokenBAmount = '';
+        let tokenASymbol = '';
+        let tokenBSymbol = '';
         let isAllLiquidity = false;
+        let isRemoveByTokenAmounts = false;
 
         // Check if user wants to remove all liquidity
-        if (allPattern.test(messageText)) {
+        if (/all|100%|everything|complete/i.test(messageText)) {
             isAllLiquidity = true;
             lpTokenAmount = '0'; // Will be handled by the service to remove all
         } else {
-            // Extract LP token amount
-            const lpMatch = lpTokenPattern.exec(messageText);
-            if (lpMatch) {
-                lpTokenAmount = convertLpTokensToLamports(lpMatch[1]);
+            // First check for "X and Y" token pattern (e.g., "2.8 USDC and 0.015 SOL")
+            console.log('Checking for "X and Y" token pattern...');
+            const andPattern2 = /(\d+(?:\.\d+)?)\s*(USDC|SOL|ETH|BTC|MATIC|AVAX|DOT|LINK|UNI|AAVE|COMP|MKR|YFI|CRV|BAL|SNX|SUSHI|1INCH)\s+and\s+(\d+(?:\.\d+)?)\s*(USDC|SOL|ETH|BTC|MATIC|AVAX|DOT|LINK|UNI|AAVE|COMP|MKR|YFI|CRV|BAL|SNX|SUSHI|1INCH)/gi;
+            const andMatch = andPattern2.exec(messageText);
+            if (andMatch) {
+                isRemoveByTokenAmounts = true;
+                tokenAAmount = convertToLamports(andMatch[1], andMatch[2]);
+                tokenBAmount = convertToLamports(andMatch[3], andMatch[4]);
+                tokenASymbol = andMatch[2].toUpperCase();
+                tokenBSymbol = andMatch[4].toUpperCase();
+                console.log(`Found token amounts: ${andMatch[1]} ${tokenASymbol} and ${andMatch[3]} ${tokenBSymbol}`);
+            } else {
+                console.log('No "X and Y" pattern found, checking for single token amount...');
+                // Check for single token amount
+                const tokenAmountPattern2 = /(\d+(?:\.\d+)?)\s*(USDC|SOL|ETH|BTC|MATIC|AVAX|DOT|LINK|UNI|AAVE|COMP|MKR|YFI|CRV|BAL|SNX|SUSHI|1INCH)/gi;
+                const tokenMatch = tokenAmountPattern2.exec(messageText);
+                if (tokenMatch) {
+                    isRemoveByTokenAmounts = true;
+                    tokenAAmount = convertToLamports(tokenMatch[1], tokenMatch[2]);
+                    tokenASymbol = tokenMatch[2].toUpperCase();
+                    console.log(`Found single token amount: ${tokenMatch[1]} ${tokenASymbol}`);
+                } else {
+                    console.log('No single token amount found, checking for LP token amount...');
+                    // Extract LP token amount
+                    const lpTokenPattern2 = /(\d+(?:\.\d+)?)\s*(LP|LP\s*TOKENS?|LIQUIDITY|METEORA\s*LP)/gi;
+                    const lpMatch = lpTokenPattern2.exec(messageText);
+                    if (lpMatch) {
+                        lpTokenAmount = convertLpTokensToLamports(lpMatch[1]);
+                        console.log(`Found LP token amount: ${lpMatch[1]} LP tokens`);
+                    }
+                }
             }
         }
 
-        // Extract pool ID
-        const poolMatch = poolPattern.exec(messageText);
-        const poolId = poolMatch ? poolMatch[1] : '';
+        // Extract pool ID - look for various patterns
+        let poolId = '';
+
+        // Try the pool pattern first
+        const poolPattern2 = /(?:pool\s+)?([A-Za-z0-9]{8,})/gi;
+        const poolMatch = poolPattern2.exec(messageText);
+        if (poolMatch) {
+            poolId = poolMatch[1];
+            console.log(`Found pool ID via pattern: ${poolId}`);
+        } else {
+            console.log('No pool pattern match, looking for Solana address...');
+            // Look for any string that looks like a Solana address (base58, 32-44 chars)
+            const solanaAddressPattern = /([1-9A-HJ-NP-Za-km-z]{32,44})/g;
+            const addressMatches = messageText.match(solanaAddressPattern);
+            if (addressMatches && addressMatches.length > 0) {
+                // Use the first address found that's not a token amount
+                for (const address of addressMatches) {
+                    // Check if this address is not part of a token amount pattern
+                    const beforeAddress = messageText.substring(0, messageText.indexOf(address));
+                    const afterAddress = messageText.substring(messageText.indexOf(address) + address.length);
+
+                    // If there's no number before or after the address, it's likely a pool ID
+                    const beforePattern = /\d+\s*$/;
+                    const afterPattern = /^\s*\d+/;
+
+                    if (!beforePattern.test(beforeAddress) && !afterPattern.test(afterAddress)) {
+                        poolId = address;
+                        console.log(`Found pool ID via Solana address pattern: ${poolId}`);
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Validate pool ID format
+        if (poolId) {
+            // Check if it's a valid base58 string
+            const base58Pattern = /^[1-9A-HJ-NP-Za-km-z]+$/;
+            if (!base58Pattern.test(poolId)) {
+                console.error('Invalid pool ID format:', poolId);
+                return null;
+            }
+
+            // Check if it's a reasonable length for a Solana address
+            if (poolId.length < 32 || poolId.length > 44) {
+                console.error('Pool ID length is not valid for Solana address:', poolId.length);
+                return null;
+            }
+        }
 
         // Extract slippage
         const slippageMatch = slippagePattern.exec(messageText);
         const slippagePercent = slippageMatch ? parseFloat(slippageMatch[1]) : 1; // Default 1%
         const slippageBps = Math.round(slippagePercent * 100);
 
-        if ((!isAllLiquidity && !lpTokenAmount) || !poolId) {
+        console.log(`Validation check: isAllLiquidity=${isAllLiquidity}, lpTokenAmount=${lpTokenAmount}, isRemoveByTokenAmounts=${isRemoveByTokenAmounts}, poolId=${poolId}`);
+
+        if ((!isAllLiquidity && !lpTokenAmount && !isRemoveByTokenAmounts) || !poolId) {
+            console.log('Validation failed - missing required parameters');
             return null;
         }
+
+        console.log(`Final params: poolId=${poolId}, lpTokenAmount=${lpTokenAmount}, isAllLiquidity=${isAllLiquidity}, isRemoveByTokenAmounts=${isRemoveByTokenAmounts}, tokenAAmount=${tokenAAmount}, tokenBAmount=${tokenBAmount}`);
 
         return {
             poolId,
             lpTokenAmount: isAllLiquidity ? '0' : lpTokenAmount, // 0 indicates remove all
-            slippageBps
+            slippageBps,
+            tokenAAmount,
+            tokenBAmount,
+            tokenASymbol,
+            tokenBSymbol,
+            isRemoveByTokenAmounts
         };
     } catch (error) {
         console.error('Error extracting withdrawal params:', error);
@@ -240,7 +393,51 @@ async function extractWithdrawalParams(message: Memory): Promise<{
 function convertLpTokensToLamports(amount: string): string {
     const amountNum = parseFloat(amount);
     // LP tokens typically have 6 decimals
-    return (amountNum * Math.pow(10, 6)).toString();
+    const lamports = (amountNum * Math.pow(10, 6)).toString();
+    console.log(`Converting ${amount} LP tokens to ${lamports} lamports (6 decimals)`);
+    return lamports;
+}
+
+/**
+ * Convert token amount to lamports
+ */
+function convertToLamports(amount: string, token: string): string {
+    const decimals = getTokenDecimals(token);
+    const amountNum = parseFloat(amount);
+    const lamports = (amountNum * Math.pow(10, decimals)).toString();
+    console.log(`Converting ${amount} ${token} to ${lamports} lamports (${decimals} decimals)`);
+    return lamports;
+}
+
+/**
+ * Get token decimals
+ */
+function getTokenDecimals(token: string): number {
+    const decimalsMap: Record<string, number> = {
+        'USDC': 6,
+        'USDT': 6,
+        'SOL': 9,
+        'ETH': 18,
+        'BTC': 8,
+        'MATIC': 18,
+        'AVAX': 18,
+        'DOT': 10,
+        'LINK': 18,
+        'UNI': 18,
+        'AAVE': 18,
+        'COMP': 18,
+        'MKR': 18,
+        'YFI': 18,
+        'CRV': 18,
+        'BAL': 18,
+        'SNX': 18,
+        'SUSHI': 18,
+        '1INCH': 18,
+    };
+
+    const decimals = decimalsMap[token] || 9; // Default to 9 decimals
+    console.log(`Token ${token} has ${decimals} decimals`);
+    return decimals;
 }
 
 /**
@@ -254,6 +451,8 @@ async function getUserVaultFromAccount(account: any): Promise<any> {
                     if (chain === 'solana') {
                         const kp = mw.keypairs[chain];
                         if (kp.publicKey) {
+                            console.log(`Found Solana keypair with public key: ${kp.publicKey}`);
+                            logger.log(`Found Solana keypair with public key: ${kp.publicKey}`);
                             return {
                                 publicKey: kp.publicKey,
                                 keypair: kp
@@ -263,6 +462,8 @@ async function getUserVaultFromAccount(account: any): Promise<any> {
                 }
             }
         }
+        console.log('No Solana keypair found in account');
+        logger.log('No Solana keypair found in account');
         return null;
     } catch (error) {
         console.error('Error getting user vault:', error);

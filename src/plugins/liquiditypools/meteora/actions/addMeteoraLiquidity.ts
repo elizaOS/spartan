@@ -89,17 +89,25 @@ export const addMeteoraLiquidityAction: Action = {
                 return false;
             }
 
-            // Check if message contains liquidity-related keywords
+            // Check if message contains specific action keywords for adding liquidity
             const messageText = message.content?.text?.toLowerCase() || '';
-            const liquidityKeywords = [
-                'add', 'deposit', 'stake', 'provide', 'liquidity', 'pool', 'meteora'
-            ];
 
-            const hasLiquidityIntent = liquidityKeywords.some(keyword =>
-                messageText.includes(keyword)
-            );
+            // Must contain action words that indicate adding liquidity (not just searching)
+            const actionKeywords = ['add', 'deposit', 'stake', 'provide'];
+            const hasActionIntent = actionKeywords.some(keyword => messageText.includes(keyword));
 
-            return hasLiquidityIntent;
+            // Must contain liquidity-related words
+            const liquidityKeywords = ['liquidity', 'pool'];
+            const hasLiquidityIntent = liquidityKeywords.some(keyword => messageText.includes(keyword));
+
+            // Must contain Meteora
+            const hasMeteoraIntent = messageText.includes('meteora');
+
+            // Must contain amounts (numbers followed by token symbols)
+            const amountPattern = /\d+\s*(USDC|SOL|ETH|BTC|MATIC|AVAX|DOT|LINK|UNI|AAVE|COMP|MKR|YFI|CRV|BAL|SNX|SUSHI|1INCH)/i;
+            const hasAmountIntent = amountPattern.test(messageText);
+
+            return hasActionIntent && hasLiquidityIntent && hasMeteoraIntent && hasAmountIntent;
         } catch (error) {
             console.error('Error validating ADD_METEORA_LIQUIDITY:', error);
             return false;
@@ -122,6 +130,10 @@ export const addMeteoraLiquidityAction: Action = {
                 return;
             }
 
+            // Log account structure for debugging
+            console.log('Account structure:', JSON.stringify(account, null, 2));
+            logger.log('Account retrieved successfully');
+
             const meteoraService = runtime.getService('METEORA_SERVICE') as unknown as MeteoraService;
             if (!meteoraService) {
                 callback?.({ text: 'Meteora service not available. Please try again later.' });
@@ -132,7 +144,15 @@ export const addMeteoraLiquidityAction: Action = {
             const params = await extractLiquidityParams(message);
             if (!params) {
                 callback?.({
-                    text: 'Please specify the pool ID and amounts. Example: "Add 100 USDC and 1000 SOL to Meteora pool ABC123"',
+                    text: 'Please specify the pool ID and amounts. Example: "Add 100 USDC and 1000 SOL to Meteora pool ABC123" or "Add liquidity to 5rCf1DM8LjKTw4YqhnoLcngyZYeNnQqztScTogYHAS6 meteora with 1 USDC and 1 SOL"',
+                });
+                return;
+            }
+
+            // Validate pool ID format
+            if (!params.poolId || params.poolId.length < 32 || params.poolId.length > 44) {
+                callback?.({
+                    text: `Invalid pool ID format: ${params.poolId}. Pool ID should be a valid Solana address (32-44 characters).\n\nTry searching for pools first: "Search SOL/USDC pools on Meteora" to get the correct pool ID.`,
                 });
                 return;
             }
@@ -146,6 +166,12 @@ export const addMeteoraLiquidityAction: Action = {
                 return;
             }
 
+            // Log the public key being used
+            logger.log(`Using wallet public key: ${userVault.publicKey}`);
+            console.log(`Using wallet public key: ${userVault.publicKey}`);
+
+            console.log(`Calling meteoraService.addLiquidity with: poolId=${params.poolId}, tokenAAmountLamports=${params.tokenAAmount}, tokenBAmountLamports=${params.tokenBAmount}`);
+
             // Add liquidity using Meteora service
             const result = await meteoraService.addLiquidity({
                 userVault,
@@ -153,6 +179,8 @@ export const addMeteoraLiquidityAction: Action = {
                 tokenAAmountLamports: params.tokenAAmount,
                 tokenBAmountLamports: params.tokenBAmount,
                 slippageBps: params.slippageBps || 100, // Default 1% slippage
+                tokenASymbol: params.tokenASymbol,
+                tokenBSymbol: params.tokenBSymbol,
             });
 
             if (result.success) {
@@ -162,8 +190,18 @@ export const addMeteoraLiquidityAction: Action = {
                     actions: ['ADD_METEORA_LIQUIDITY'],
                 });
             } else {
+                let errorMessage = `❌ **Failed to add liquidity**: ${result.error}`;
+
+                // Add helpful suggestions for insufficient balance errors
+                if (result.error?.includes('Insufficient balance')) {
+                    errorMessage += '\n\n💡 **Suggestions:**';
+                    errorMessage += '\n• Check your token balances first';
+                    errorMessage += '\n• Make sure you have enough of both tokens';
+                    errorMessage += '\n• Consider swapping some SOL for USDC if needed';
+                }
+
                 callback?.({
-                    text: `❌ **Failed to add liquidity**: ${result.error}`,
+                    text: errorMessage,
                     actions: ['ADD_METEORA_LIQUIDITY'],
                 });
             }
@@ -185,29 +223,93 @@ async function extractLiquidityParams(message: Memory): Promise<{
     tokenAAmount: string;
     tokenBAmount?: string;
     slippageBps?: number;
+    tokenASymbol?: string;
+    tokenBSymbol?: string;
 } | null> {
     try {
         const messageText = message.content?.text || '';
 
         // Simple regex patterns to extract amounts and pool ID
         const amountPattern = /(\d+(?:\.\d+)?)\s*(USDC|SOL|ETH|BTC|MATIC|AVAX|DOT|LINK|UNI|AAVE|COMP|MKR|YFI|CRV|BAL|SNX|SUSHI|1INCH|ALPHA|BETA|GAMMA|DELTA|EPSILON|ZETA|ETA|THETA|IOTA|KAPPA|LAMBDA|MU|NU|XI|OMICRON|PI|RHO|SIGMA|TAU|UPSILON|PHI|CHI|PSI|OMEGA)/gi;
-        const poolPattern = /pool\s+([A-Za-z0-9]{8,})/i;
+
+        // Alternative pattern for "X and Y" format
+        const andPattern = /(\d+(?:\.\d+)?)\s*(USDC|SOL|ETH|BTC|MATIC|AVAX|DOT|LINK|UNI|AAVE|COMP|MKR|YFI|CRV|BAL|SNX|SUSHI|1INCH)\s+and\s+(\d+(?:\.\d+)?)\s*(USDC|SOL|ETH|BTC|MATIC|AVAX|DOT|LINK|UNI|AAVE|COMP|MKR|YFI|CRV|BAL|SNX|SUSHI|1INCH)/gi;
+        const poolPattern = /(?:pool\s+)?([A-Za-z0-9]{8,})/i;
         const slippagePattern = /(\d+(?:\.\d+)?)%?\s*slippage/i;
 
         const amounts: Array<{ amount: string; token: string }> = [];
         let match;
 
-        // Extract amounts and tokens
-        while ((match = amountPattern.exec(messageText)) !== null) {
+        // First try the "X and Y" pattern
+        const andMatch = andPattern.exec(messageText);
+        if (andMatch) {
             amounts.push({
-                amount: match[1],
-                token: match[2].toUpperCase()
+                amount: andMatch[1],
+                token: andMatch[2].toUpperCase()
             });
+            amounts.push({
+                amount: andMatch[3],
+                token: andMatch[4].toUpperCase()
+            });
+        } else {
+            // Extract amounts and tokens using the regular pattern
+            while ((match = amountPattern.exec(messageText)) !== null) {
+                amounts.push({
+                    amount: match[1],
+                    token: match[2].toUpperCase()
+                });
+            }
         }
 
-        // Extract pool ID
+        // Debug logging
+        console.log('Extracted amounts:', amounts);
+        console.log('Message text:', messageText);
+
+        // Extract pool ID - look for various patterns
+        let poolId = '';
+
+        // Try the pool pattern first
         const poolMatch = poolPattern.exec(messageText);
-        const poolId = poolMatch ? poolMatch[1] : '';
+        if (poolMatch) {
+            poolId = poolMatch[1];
+        } else {
+            // Look for any string that looks like a Solana address (base58, 32-44 chars)
+            const solanaAddressPattern = /([1-9A-HJ-NP-Za-km-z]{32,44})/g;
+            const addressMatches = messageText.match(solanaAddressPattern);
+            if (addressMatches && addressMatches.length > 0) {
+                // Use the first address found that's not a token amount
+                for (const address of addressMatches) {
+                    // Check if this address is not part of a token amount pattern
+                    const beforeAddress = messageText.substring(0, messageText.indexOf(address));
+                    const afterAddress = messageText.substring(messageText.indexOf(address) + address.length);
+
+                    // If there's no number before or after the address, it's likely a pool ID
+                    const beforePattern = /\d+\s*$/;
+                    const afterPattern = /^\s*\d+/;
+
+                    if (!beforePattern.test(beforeAddress) && !afterPattern.test(afterAddress)) {
+                        poolId = address;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Validate pool ID format
+        if (poolId) {
+            // Check if it's a valid base58 string
+            const base58Pattern = /^[1-9A-HJ-NP-Za-km-z]+$/;
+            if (!base58Pattern.test(poolId)) {
+                console.error('Invalid pool ID format:', poolId);
+                return null;
+            }
+
+            // Check if it's a reasonable length for a Solana address
+            if (poolId.length < 32 || poolId.length > 44) {
+                console.error('Pool ID length is not valid for Solana address:', poolId.length);
+                return null;
+            }
+        }
 
         // Extract slippage
         const slippageMatch = slippagePattern.exec(messageText);
@@ -222,11 +324,15 @@ async function extractLiquidityParams(message: Memory): Promise<{
         const tokenAAmount = convertToLamports(amounts[0].amount, amounts[0].token);
         const tokenBAmount = amounts.length > 1 ? convertToLamports(amounts[1].amount, amounts[1].token) : undefined;
 
+        console.log(`Final amounts: tokenAAmount=${tokenAAmount} (${amounts[0].amount} ${amounts[0].token}), tokenBAmount=${tokenBAmount} (${amounts[1]?.amount} ${amounts[1]?.token})`);
+
         return {
             poolId,
             tokenAAmount,
             tokenBAmount,
-            slippageBps
+            slippageBps,
+            tokenASymbol: amounts[0].token,
+            tokenBSymbol: amounts[1]?.token,
         };
     } catch (error) {
         console.error('Error extracting liquidity params:', error);
@@ -240,7 +346,9 @@ async function extractLiquidityParams(message: Memory): Promise<{
 function convertToLamports(amount: string, token: string): string {
     const decimals = getTokenDecimals(token);
     const amountNum = parseFloat(amount);
-    return (amountNum * Math.pow(10, decimals)).toString();
+    const lamports = (amountNum * Math.pow(10, decimals)).toString();
+    console.log(`Converting ${amount} ${token} to ${lamports} lamports (${decimals} decimals)`);
+    return lamports;
 }
 
 /**
@@ -269,7 +377,9 @@ function getTokenDecimals(token: string): number {
         '1INCH': 18,
     };
 
-    return decimalsMap[token] || 9; // Default to 9 decimals
+    const decimals = decimalsMap[token] || 9; // Default to 9 decimals
+    console.log(`Token ${token} has ${decimals} decimals`);
+    return decimals;
 }
 
 /**
@@ -283,6 +393,8 @@ async function getUserVaultFromAccount(account: any): Promise<any> {
                     if (chain === 'solana') {
                         const kp = mw.keypairs[chain];
                         if (kp.publicKey) {
+                            console.log(`Found Solana keypair with public key: ${kp.publicKey}`);
+                            logger.log(`Found Solana keypair with public key: ${kp.publicKey}`);
                             return {
                                 publicKey: kp.publicKey,
                                 keypair: kp
@@ -292,6 +404,8 @@ async function getUserVaultFromAccount(account: any): Promise<any> {
                 }
             }
         }
+        console.log('No Solana keypair found in account');
+        logger.log('No Solana keypair found in account');
         return null;
     } catch (error) {
         console.error('Error getting user vault:', error);

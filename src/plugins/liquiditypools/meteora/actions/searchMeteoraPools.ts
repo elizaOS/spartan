@@ -82,7 +82,29 @@ export const searchMeteoraPoolsAction: Action = {
                 return false;
             }
 
-            return true;
+            // Check if message contains search-related keywords
+            const messageText = message.content?.text?.toLowerCase() || '';
+
+            // Must contain search-related words
+            const searchKeywords = ['search', 'find', 'show', 'list', 'browse', 'explore', 'discover'];
+            const hasSearchIntent = searchKeywords.some(keyword => messageText.includes(keyword));
+
+            // Must contain Meteora
+            const hasMeteoraIntent = messageText.includes('meteora');
+
+            // Must contain pool-related words
+            const poolKeywords = ['pool', 'pools'];
+            const hasPoolIntent = poolKeywords.some(keyword => messageText.includes(keyword));
+
+            // Should NOT contain action words that indicate adding liquidity
+            const actionKeywords = ['add', 'deposit', 'stake', 'provide'];
+            const hasActionIntent = actionKeywords.some(keyword => messageText.includes(keyword));
+
+            // Should NOT contain specific amounts
+            const amountPattern = /\d+\s*(USDC|SOL|ETH|BTC|MATIC|AVAX|DOT|LINK|UNI|AAVE|COMP|MKR|YFI|CRV|BAL|SNX|SUSHI|1INCH)/i;
+            const hasAmountIntent = amountPattern.test(messageText);
+
+            return hasMeteoraIntent && (hasSearchIntent || hasPoolIntent) && !hasActionIntent && !hasAmountIntent;
         } catch (error) {
             console.error('Error validating SEARCH_METEORA_POOLS:', error);
             return false;
