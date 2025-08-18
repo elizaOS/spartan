@@ -25,9 +25,6 @@ RUN bun install -g @elizaos/cli
 # Set working directory
 WORKDIR /app
 
-# Install git (needed for some dependencies)
-RUN apk add --no-cache git
-
 # Copy package files first for better caching
 COPY package.json package-lock.json bun.lock* ./
 
@@ -41,8 +38,8 @@ COPY . .
 RUN bun run build
 
 # Create a non-root user
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S eliza -u 1001
+RUN groupadd -r -g 1001 nodejs
+RUN useradd -r -u 1001 -g nodejs eliza
 
 # Change ownership of the app directory
 RUN chown -R eliza:nodejs /app
