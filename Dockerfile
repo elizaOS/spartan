@@ -26,7 +26,7 @@ RUN bun install -g @elizaos/cli
 WORKDIR /app
 
 # Copy package files first for better caching
-COPY package.json bun.lock ./
+COPY package.json bun.lock* ./
 
 # Install dependencies
 RUN bun install
