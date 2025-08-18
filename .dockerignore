@@ -172,7 +172,6 @@ test/
 
 # Build tools configuration
 vite.config.ts
-tsup.config.ts
 tailwind.config.js
 postcss.config.js
 .nixpacks.toml

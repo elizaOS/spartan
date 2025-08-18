@@ -14,7 +14,7 @@
   "scripts": {
     "preinstall": "npm i -g bun && bun install",
     "start": "elizaos start",
-    "build": "vite build & tsup",
+    "build": "vite build && tsup",
     "build-frontend": "vite build",
     "lint": "prettier --write ./src",
     "dev": "elizaos dev",
