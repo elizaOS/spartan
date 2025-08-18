@@ -1,5 +1,21 @@
 FROM node:23-alpine
 
+# Install essential dependencies for the build process
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    ffmpeg \
+    g++ \
+    git \
+    make \
+    python3 \
+    unzip && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+
+
 # Install bun globally with npm
 RUN npm install -g bun
 
