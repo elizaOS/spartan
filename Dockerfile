@@ -47,6 +47,9 @@ RUN chown -R eliza:nodejs /app
 # Switch to non-root user
 USER eliza
 
+# Add node_modules/.bin to PATH so we can use elizaos from project dependencies
+ENV PATH="/app/node_modules/.bin:${PATH}"
+
 # Environment variables that should be provided at runtime
 ARG POSTGRES_URL
 ARG LOG_LEVEL
