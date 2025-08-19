@@ -46,6 +46,64 @@ interface BalanceChanges {
 }
 
 /**
+ * Custom error for insufficient balance
+ */
+export class InsufficientBalanceError extends Error {
+    constructor(
+        public requiredAmount: number,
+        public availableBalance: number,
+        public tokenAddress: string
+    ) {
+        super(`Insufficient balance for token ${tokenAddress}. Required: ${requiredAmount}, Available: ${availableBalance}`);
+        this.name = 'InsufficientBalanceError';
+    }
+}
+
+/**
+ * Custom error for Meteora statistical bugs
+ */
+export class MeteoraStatisticalBugError extends Error {
+    constructor(
+        public positionAddress: string,
+        message: string
+    ) {
+        super(`Meteora statistical bug: ${message}`);
+        this.name = 'MeteoraStatisticalBugError';
+    }
+}
+
+/**
+ * Retry wrapper function
+ */
+export async function withRetry<T>(
+    operation: () => Promise<T>,
+    operationName: string,
+    maxRetries: number = 3,
+    baseDelay: number = 1000
+): Promise<T> {
+    let lastError: Error;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            return await operation();
+        } catch (error) {
+            lastError = error instanceof Error ? error : new Error(String(error));
+
+            if (attempt < maxRetries) {
+                const delay = baseDelay * Math.pow(2, attempt - 1);
+                logger.warn(`${operationName} failed (attempt ${attempt}/${maxRetries}), retrying in ${delay}ms:`, lastError.message);
+                await new Promise(resolve => setTimeout(resolve, delay));
+            } else {
+                logger.error(`${operationName} failed after ${maxRetries} attempts:`, lastError.message);
+                throw lastError;
+            }
+        }
+    }
+
+    throw lastError!;
+}
+
+/**
  * Calculate amounts for liquidity provision
  */
 export async function calculateAmounts(

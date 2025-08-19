@@ -15,7 +15,7 @@ import { getAccountFromMessage } from '../../../autonomous-trader/utils';
  */
 export const removeMeteoraLiquidityAction: Action = {
     name: 'REMOVE_METEORA_LIQUIDITY',
-    description: 'Remove liquidity from a Meteora liquidity pool',
+    description: 'Remove liquidity from a Meteora liquidity pool. If no specific amount is mentioned, removes all available liquidity.',
     similes: [
         'remove meteora liquidity',
         'withdraw meteora lp',
@@ -28,14 +28,33 @@ export const removeMeteoraLiquidityAction: Action = {
         'meteora unstake',
         'meteora exit pool',
         'close meteora position',
-        'exit meteora position'
+        'exit meteora position',
+        'remove liquidity from meteora',
+        'withdraw from meteora pool',
+        'exit meteora liquidity',
+        'close meteora lp'
     ],
     examples: [
         [
             {
                 name: '{{name1}}',
                 content: {
-                    text: 'Remove 100 LP tokens from Meteora pool ABC123',
+                    text: 'Remove liquidity from Meteora pool ABC123',
+                },
+            },
+            {
+                name: '{{name2}}',
+                content: {
+                    text: "I'll remove all your liquidity from the Meteora pool",
+                    actions: ['REMOVE_METEORA_LIQUIDITY'],
+                },
+            },
+        ],
+        [
+            {
+                name: '{{name1}}',
+                content: {
+                    text: 'Remove 100 LP tokens from Meteora pool XYZ789',
                 },
             },
             {
@@ -50,28 +69,13 @@ export const removeMeteoraLiquidityAction: Action = {
             {
                 name: '{{name1}}',
                 content: {
-                    text: 'Remove 2.8 USDC and 0.015 SOL from Meteora pool XYZ789',
+                    text: 'Remove 2.8 USDC and 0.015 SOL from Meteora pool DEF456',
                 },
             },
             {
                 name: '{{name2}}',
                 content: {
                     text: "I'll remove liquidity from the Meteora pool to get you 2.8 USDC and 0.015 SOL",
-                    actions: ['REMOVE_METEORA_LIQUIDITY'],
-                },
-            },
-        ],
-        [
-            {
-                name: '{{name1}}',
-                content: {
-                    text: 'Withdraw all liquidity from Meteora pool DEF456',
-                },
-            },
-            {
-                name: '{{name2}}',
-                content: {
-                    text: "I'll withdraw all your liquidity from the Meteora pool",
                     actions: ['REMOVE_METEORA_LIQUIDITY'],
                 },
             },
@@ -105,15 +109,17 @@ export const removeMeteoraLiquidityAction: Action = {
             // Must contain Meteora
             const hasMeteoraIntent = messageText.includes('meteora');
 
-            // Must contain amounts (numbers followed by token symbols or LP tokens)
+            // Check for specific amounts (numbers followed by token symbols or LP tokens)
             const amountPattern = /\d+(?:\.\d+)?\s*(USDC|SOL|ETH|BTC|MATIC|AVAX|DOT|LINK|UNI|AAVE|COMP|MKR|YFI|CRV|BAL|SNX|SUSHI|1INCH|LP|LP\s*TOKENS?|LIQUIDITY|METEORA\s*LP)/i;
             const hasAmountIntent = amountPattern.test(messageText);
 
-            // Must contain "all" or "everything" for remove all
+            // Check for "all" or "everything" keywords
             const allPattern = /all|100%|everything|complete/i;
             const hasAllIntent = allPattern.test(messageText);
 
-            return hasActionIntent && hasLiquidityIntent && hasMeteoraIntent && (hasAmountIntent || hasAllIntent);
+            // If no specific amounts are mentioned, default to removing all liquidity
+            // This makes the action more intuitive - just saying "remove liquidity" means remove all
+            return hasActionIntent && hasLiquidityIntent && hasMeteoraIntent;
         } catch (error) {
             console.error('Error validating REMOVE_METEORA_LIQUIDITY:', error);
             return false;
@@ -150,7 +156,7 @@ export const removeMeteoraLiquidityAction: Action = {
             const params = await extractWithdrawalParams(message);
             if (!params) {
                 callback?.({
-                    text: 'Please specify the pool ID and either LP token amount or underlying token amounts. Examples:\n• "Remove 100 LP tokens from Meteora pool ABC123"\n• "Remove 2.8 USDC and 0.015 SOL from Meteora pool ABC123"\n• "Remove all liquidity from Meteora pool ABC123"',
+                    text: 'Please specify the pool ID. Examples:\n• "Remove liquidity from Meteora pool ABC123" (removes all)\n• "Remove 100 LP tokens from Meteora pool ABC123"\n• "Remove 2.8 USDC and 0.015 SOL from Meteora pool ABC123"',
                 });
                 return;
             }
@@ -248,7 +254,6 @@ async function extractWithdrawalParams(message: Memory): Promise<{
         const lpTokenPattern = /(\d+(?:\.\d+)?)\s*(LP|LP\s*TOKENS?|LIQUIDITY|METEORA\s*LP)/gi;
         const tokenAmountPattern = /(\d+(?:\.\d+)?)\s*(USDC|SOL|ETH|BTC|MATIC|AVAX|DOT|LINK|UNI|AAVE|COMP|MKR|YFI|CRV|BAL|SNX|SUSHI|1INCH)/gi;
         const andPattern = /(\d+(?:\.\d+)?)\s*(USDC|SOL|ETH|BTC|MATIC|AVAX|DOT|LINK|UNI|AAVE|COMP|MKR|YFI|CRV|BAL|SNX|SUSHI|1INCH)\s+and\s+(\d+(?:\.\d+)?)\s*(USDC|SOL|ETH|BTC|MATIC|AVAX|DOT|LINK|UNI|AAVE|COMP|MKR|YFI|CRV|BAL|SNX|SUSHI|1INCH)/gi;
-        const poolPattern = /(?:pool\s+)?([A-Za-z0-9]{8,})/gi;
         const slippagePattern = /(\d+(?:\.\d+)?)%?\s*slippage/i;
         const allPattern = /all|100%|everything|complete/i;
 
@@ -257,7 +262,6 @@ async function extractWithdrawalParams(message: Memory): Promise<{
         console.log('LP token pattern test:', lpTokenPattern.test(messageText));
         console.log('Token amount pattern test:', tokenAmountPattern.test(messageText));
         console.log('And pattern test:', andPattern.test(messageText));
-        console.log('Pool pattern test:', poolPattern.test(messageText));
         console.log('All pattern test:', allPattern.test(messageText));
 
         let lpTokenAmount = '';
@@ -268,10 +272,15 @@ async function extractWithdrawalParams(message: Memory): Promise<{
         let isAllLiquidity = false;
         let isRemoveByTokenAmounts = false;
 
-        // Check if user wants to remove all liquidity
-        if (/all|100%|everything|complete/i.test(messageText)) {
+        // Check if user explicitly wants to remove all liquidity or if no specific amounts are provided
+        const hasExplicitAll = /all|100%|everything|complete/i.test(messageText);
+        const hasSpecificAmounts = /(\d+(?:\.\d+)?)\s*(USDC|SOL|ETH|BTC|MATIC|AVAX|DOT|LINK|UNI|AAVE|COMP|MKR|YFI|CRV|BAL|SNX|SUSHI|1INCH|LP|LP\s*TOKENS?|LIQUIDITY|METEORA\s*LP)/i.test(messageText);
+
+        if (hasExplicitAll || !hasSpecificAmounts) {
+            // Default to removing all liquidity if no specific amounts are mentioned
             isAllLiquidity = true;
             lpTokenAmount = '0'; // Will be handled by the service to remove all
+            console.log('Defaulting to remove all liquidity');
         } else {
             // First check for "X and Y" token pattern (e.g., "2.8 USDC and 0.015 SOL")
             console.log('Checking for "X and Y" token pattern...');
@@ -307,37 +316,40 @@ async function extractWithdrawalParams(message: Memory): Promise<{
             }
         }
 
-        // Extract pool ID - look for various patterns
+        // Extract pool ID - prioritize Solana addresses
         let poolId = '';
 
-        // Try the pool pattern first
-        const poolPattern2 = /(?:pool\s+)?([A-Za-z0-9]{8,})/gi;
-        const poolMatch = poolPattern2.exec(messageText);
-        if (poolMatch) {
-            poolId = poolMatch[1];
-            console.log(`Found pool ID via pattern: ${poolId}`);
-        } else {
-            console.log('No pool pattern match, looking for Solana address...');
-            // Look for any string that looks like a Solana address (base58, 32-44 chars)
-            const solanaAddressPattern = /([1-9A-HJ-NP-Za-km-z]{32,44})/g;
-            const addressMatches = messageText.match(solanaAddressPattern);
-            if (addressMatches && addressMatches.length > 0) {
-                // Use the first address found that's not a token amount
-                for (const address of addressMatches) {
-                    // Check if this address is not part of a token amount pattern
-                    const beforeAddress = messageText.substring(0, messageText.indexOf(address));
-                    const afterAddress = messageText.substring(messageText.indexOf(address) + address.length);
+        // First, look for Solana addresses (base58, 32-44 chars) - these are most likely to be pool IDs
+        const solanaAddressPattern = /([1-9A-HJ-NP-Za-km-z]{32,44})/g;
+        const addressMatches = messageText.match(solanaAddressPattern);
+        if (addressMatches && addressMatches.length > 0) {
+            // Use the first address found that's not part of a token amount pattern
+            for (const address of addressMatches) {
+                // Check if this address is not part of a token amount pattern
+                const beforeAddress = messageText.substring(0, messageText.indexOf(address));
+                const afterAddress = messageText.substring(messageText.indexOf(address) + address.length);
 
-                    // If there's no number before or after the address, it's likely a pool ID
-                    const beforePattern = /\d+\s*$/;
-                    const afterPattern = /^\s*\d+/;
+                // If there's no number before or after the address, it's likely a pool ID
+                const beforePattern = /\d+\s*$/;
+                const afterPattern = /^\s*\d+/;
 
-                    if (!beforePattern.test(beforeAddress) && !afterPattern.test(afterAddress)) {
-                        poolId = address;
-                        console.log(`Found pool ID via Solana address pattern: ${poolId}`);
-                        break;
-                    }
+                if (!beforePattern.test(beforeAddress) && !afterPattern.test(afterAddress)) {
+                    poolId = address;
+                    console.log(`Found pool ID via Solana address pattern: ${poolId}`);
+                    break;
                 }
+            }
+        }
+
+        // If no Solana address found, try the pool pattern as fallback
+        if (!poolId) {
+            console.log('No Solana address found, trying pool pattern...');
+            // Look for "pool" followed by an identifier, but be more specific
+            const poolPattern = /(?:pool\s+)([A-Za-z0-9]{32,44})/gi;
+            const poolMatch = poolPattern.exec(messageText);
+            if (poolMatch) {
+                poolId = poolMatch[1];
+                console.log(`Found pool ID via pool pattern: ${poolId}`);
             }
         }
 

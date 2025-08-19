@@ -15,16 +15,17 @@ import type {
     PositionInfo
 } from '../interfaces/types';
 import { Connection, PublicKey, Keypair } from '@solana/web3.js';
-import { BN } from '@coral-xyz/anchor';
 import { calculateAmounts, withRetry, InsufficientBalanceError, MeteoraStatisticalBugError } from '../utils/utils';
 import { SOLANA_SERVICE_NAME } from '../../../autonomous-trader/constants';
 import bs58 from 'bs58';
+
+// Import BN from Anchor for Meteora SDK compatibility
+import { BN } from '@coral-xyz/anchor';
 
 // Handle missing Meteora SDK dependency gracefully
 let DLMM: any = null;
 let PositionInfo: any = null;
 let StrategyType: any = null;
-let BN: any = null;
 
 try {
     // Try to import Meteora SDK - this will fail gracefully if not installed
@@ -32,7 +33,6 @@ try {
     DLMM = meteoraModule.default || meteoraModule.DLMM;
     PositionInfo = meteoraModule.PositionInfo;
     StrategyType = meteoraModule.StrategyType;
-    BN = meteoraModule.BN;
 } catch (error) {
     logger.warn('Meteora SDK not available, using fallback functionality');
 }
@@ -684,7 +684,7 @@ export class MeteoraService extends Service implements ILpService {
 
         logger.log(`Converting amounts for calculateAmounts: tokenX=${tokenXAmountInTokens} (from ${tokenXAmount} lamports), tokenY=${tokenYAmountInTokens} (from ${tokenYAmount} lamports)`);
 
-        const [totalXAmount, totalYAmount]: [BN, BN] = await calculateAmounts(
+        const [totalXAmount, totalYAmount]: [any, any] = await calculateAmounts(
             tokenXAmountInTokens,
             tokenYAmountInTokens,
             activeBinPricePerToken,
@@ -1056,25 +1056,28 @@ export class MeteoraService extends Service implements ILpService {
 
         // Determine removal strategy
         const isRemoveAll = lpTokenAmountLamports === '0';
-        let bpsToRemove: BN;
+        let bpsToRemove: any;
         let shouldClosePosition: boolean;
 
         if (isRemoveAll) {
             logger.log('Removing all liquidity from position');
-            bpsToRemove = new BN(100 * 100); // 100%
+            bpsToRemove = new BN('10000'); // 100%
             shouldClosePosition = true;
         } else if (isRemoveByTokenAmounts && (tokenAAmount || tokenBAmount)) {
             logger.log(`Removing liquidity to get specific token amounts: tokenA=${tokenAAmount} (${tokenASymbol}), tokenB=${tokenBAmount} (${tokenBSymbol})`);
-            // For now, we'll remove a percentage based on the requested amounts
-            // This is a simplified approach - in a real implementation, you'd calculate the exact LP tokens needed
-            bpsToRemove = new BN(50 * 100); // 50% as a starting point
+
+            const bpsValue = '5000'; // 50% as a starting point
+            logger.log(`Creating BN with value: ${bpsValue}`);
+            bpsToRemove = new BN(bpsValue);
             shouldClosePosition = false;
         } else {
             logger.log(`Removing ${lpTokenAmountLamports} lamports of liquidity`);
             // Calculate percentage based on LP token amount vs total position
             const totalLpTokens = position.positionData.totalXAmount.add(position.positionData.totalYAmount);
             const percentage = (Number(lpTokenAmountLamports) / totalLpTokens.toNumber()) * 100;
-            bpsToRemove = new BN(Math.min(percentage * 100, 100 * 100)); // Cap at 100%
+            const bpsValue = Math.min(percentage * 100, 100 * 100).toString(); // Cap at 100%
+            logger.log(`Creating BN with value: ${bpsValue}`);
+            bpsToRemove = new BN(bpsValue);
             shouldClosePosition = percentage >= 100;
         }
 
@@ -1100,7 +1103,7 @@ export class MeteoraService extends Service implements ILpService {
         // Process transactions
         for (const tx of txArray) {
             // Sign the transaction
-            tx.sign([keypair]);
+            tx.sign(keypair);
 
             // Send the transaction
             const signature = await connection.sendRawTransaction(tx.serialize(), {
@@ -1115,6 +1118,7 @@ export class MeteoraService extends Service implements ILpService {
 
             // Extract balance changes from transaction
             const balanceChanges = await this.extractBalanceChanges(connection, signature, tokenXAddress, tokenYAddress);
+            console.log('balanceChanges', balanceChanges)
 
             // Add tokens received to the result
             if (balanceChanges.liquidityRemoved[0] > 0) {
@@ -1511,15 +1515,20 @@ export class MeteoraService extends Service implements ILpService {
         tokenYAddress: string
     ): Promise<{ liquidityRemoved: [number, number]; feesClaimed: [number, number] }> {
         const METEORA_DLMM_PROGRAM_ID = 'LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo';
+        console.log('signature', signature)
 
-        const txInfo = await connection.getParsedTransaction(signature, { maxSupportedTransactionVersion: 0 });
+        const txDetails = await this.connection.getTransaction(signature, {
+            commitment: 'confirmed',
+            maxSupportedTransactionVersion: 0
+        });
+        console.log('txDetails', txDetails)
 
-        if (!txInfo || !txInfo.meta) {
+        if (!txDetails || !txDetails.meta) {
             throw new Error('Transaction details not found or not parsed');
         }
 
-        const outerInstructions = txInfo.transaction.message.instructions as any[];
-        const innerInstructions = txInfo.meta.innerInstructions || [];
+        const outerInstructions = (txDetails.transaction.message as any).instructions as any[];
+        const innerInstructions = txDetails.meta.innerInstructions || [];
 
         const innerMap: Record<number, any[]> = {};
         for (const inner of innerInstructions) {
@@ -1527,41 +1536,59 @@ export class MeteoraService extends Service implements ILpService {
         }
 
         const meteoraInstructionIndices: number[] = [];
+        console.log('outerInstructions length:', outerInstructions.length);
+        console.log('METEORA_DLMM_PROGRAM_ID:', METEORA_DLMM_PROGRAM_ID);
+
         outerInstructions.forEach((ix, index) => {
+            console.log(`Instruction ${index}:`, ix);
             if (ix.programId?.toString() === METEORA_DLMM_PROGRAM_ID) {
                 meteoraInstructionIndices.push(index);
             }
         });
 
-        if (meteoraInstructionIndices.length < 2) {
-            throw new Error('Expected at least two Meteora instructions in the transaction');
-        }
+        console.log('meteoraInstructionIndices:', meteoraInstructionIndices);
 
-        const removeLiquidityIndex = meteoraInstructionIndices[0];
-        const claimFeeIndex = meteoraInstructionIndices[1];
+        // Extract balance changes from pre/post token balances
+        const preTokenBalances = txDetails.meta.preTokenBalances || [];
+        const postTokenBalances = txDetails.meta.postTokenBalances || [];
 
-        const decodeTokenTransfers = (instructions: any[]): any[] => {
-            const transfers: any[] = [];
-            for (const ix of instructions) {
-                if (ix.program === 'spl-token' && ix.parsed?.type === 'transferChecked') {
-                    transfers.push(ix.parsed.info);
-                }
-            }
-            return transfers;
+        // Find token balance changes for the specified tokens
+        const getTokenBalanceChange = (tokenMint: string): number => {
+            const preBalance = preTokenBalances.find(balance => balance.mint === tokenMint)?.uiTokenAmount?.uiAmount || 0;
+            const postBalance = postTokenBalances.find(balance => balance.mint === tokenMint)?.uiTokenAmount?.uiAmount || 0;
+            return postBalance - preBalance;
         };
 
-        const removeLiquidityTransfers = innerMap[removeLiquidityIndex]
-            ? decodeTokenTransfers(innerMap[removeLiquidityIndex])
-            : [];
-        const claimFeeTransfers = innerMap[claimFeeIndex] ? decodeTokenTransfers(innerMap[claimFeeIndex]) : [];
+        const liquidityRemovedA = Math.max(0, getTokenBalanceChange(tokenXAddress));
+        const liquidityRemovedB = Math.max(0, getTokenBalanceChange(tokenYAddress));
 
-        const liquidityRemovedA =
-            removeLiquidityTransfers.find(transfer => transfer.mint === tokenXAddress)?.tokenAmount.uiAmount || 0;
-        const liquidityRemovedB =
-            removeLiquidityTransfers.find(transfer => transfer.mint === tokenYAddress)?.tokenAmount.uiAmount || 0;
+        // For fees, we'll use a simple approach - if there are Meteora instructions, try to extract from them
+        let feesClaimedA = 0;
+        let feesClaimedB = 0;
 
-        const feesClaimedA = claimFeeTransfers.find(transfer => transfer.mint === tokenXAddress)?.tokenAmount.uiAmount || 0;
-        const feesClaimedB = claimFeeTransfers.find(transfer => transfer.mint === tokenYAddress)?.tokenAmount.uiAmount || 0;
+        if (meteoraInstructionIndices.length > 0) {
+            const decodeTokenTransfers = (instructions: any[]): any[] => {
+                const transfers: any[] = [];
+                for (const ix of instructions) {
+                    if (ix.program === 'spl-token' && ix.parsed?.type === 'transferChecked') {
+                        transfers.push(ix.parsed.info);
+                    }
+                }
+                return transfers;
+            };
+
+            // Try to extract from Meteora instructions if available
+            const removeLiquidityIndex = meteoraInstructionIndices[0];
+            const claimFeeIndex = meteoraInstructionIndices.length > 1 ? meteoraInstructionIndices[1] : null;
+
+            const removeLiquidityTransfers = innerMap[removeLiquidityIndex]
+                ? decodeTokenTransfers(innerMap[removeLiquidityIndex])
+                : [];
+            const claimFeeTransfers = claimFeeIndex && innerMap[claimFeeIndex] ? decodeTokenTransfers(innerMap[claimFeeIndex]) : [];
+
+            feesClaimedA = claimFeeTransfers.find(transfer => transfer.mint === tokenXAddress)?.tokenAmount.uiAmount || 0;
+            feesClaimedB = claimFeeTransfers.find(transfer => transfer.mint === tokenYAddress)?.tokenAmount.uiAmount || 0;
+        }
 
         return {
             liquidityRemoved: [liquidityRemovedA, liquidityRemovedB],
