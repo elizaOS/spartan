@@ -37,18 +37,12 @@ COPY . .
 # Build the application
 RUN bun run build
 
-# Create a non-root user
-RUN groupadd -r -g 1001 nodejs
-RUN useradd -r -u 1001 -g nodejs eliza
-
-# Change ownership of the app directory
-RUN chown -R eliza:nodejs /app
+# Change ownership of the app directory to node user
+RUN chown -R node:node /app
 
 # Switch to non-root user
-USER eliza
+USER node
 
-# Add node_modules/.bin to PATH so we can use elizaos from project dependencies
-ENV PATH="/app/node_modules/.bin:${PATH}"
 
 # Environment variables that should be provided at runtime
 ARG POSTGRES_URL
