@@ -40,6 +40,7 @@
     "@elizaos/plugin-bootstrap": "latest",
     "@elizaos/plugin-coingecko": "latest",
     "@elizaos/plugin-coinmarketcap": "1.0.1",
+    "@elizaos/plugin-discord": "^1.2.5",
     "@elizaos/plugin-elevenlabs": "latest",
     "@elizaos/plugin-farcaster": "1.0.5",
     "@elizaos/plugin-jupiter": "^1.0.1",
