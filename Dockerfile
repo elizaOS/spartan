@@ -19,8 +19,12 @@ RUN apt-get update && \
 # Install bun globally with npm
 RUN npm install -g bun
 
-# Install ElizaOS CLI globally with bun
-RUN bun install -g @elizaos/cli
+# Add bun global bin to PATH for root and node users
+ENV PATH="/root/.bun/bin:/home/node/.bun/bin:$PATH"
+
+# Create a wrapper script for elizaos that uses the local installation
+RUN echo '#!/bin/bash\nexec /app/node_modules/.bin/elizaos "$@"' > /usr/local/bin/elizaos && \
+    chmod +x /usr/local/bin/elizaos
 
 # Set working directory
 WORKDIR /app
@@ -39,6 +43,9 @@ RUN bun run build
 
 # Change ownership of the app directory to node user
 RUN chown -R node:node /app
+
+# Create node user's bun directory
+RUN mkdir -p /home/node/.bun && chown -R node:node /home/node/.bun
 
 # Switch to non-root user
 USER node
