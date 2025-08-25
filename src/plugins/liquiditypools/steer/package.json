@@ -1,0 +1,33 @@
+{
+    "name": "@spartan/steer-plugin",
+    "version": "1.0.0",
+    "description": "Steer Finance protocol integration for ElizaOS",
+    "main": "index.ts",
+    "dependencies": {
+        "@steer-finance/sdk": "^1.0.0",
+        "@steerprotocol/sdk": "^1.0.0",
+        "viem": "^2.0.0"
+    },
+    "peerDependencies": {
+        "@elizaos/core": "^1.0.0"
+    },
+    "devDependencies": {
+        "vitest": "^1.0.0",
+        "@types/node": "^20.0.0"
+    },
+    "scripts": {
+        "test": "vitest",
+        "test:watch": "vitest --watch",
+        "test:coverage": "vitest --coverage"
+    },
+    "keywords": [
+        "elizaos",
+        "steer-finance",
+        "defi",
+        "liquidity-pools",
+        "vaults",
+        "staking"
+    ],
+    "author": "ElizaOS Team",
+    "license": "MIT"
+}
