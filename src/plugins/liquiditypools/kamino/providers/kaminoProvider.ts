@@ -1,4 +1,5 @@
 import type { IAgentRuntime, Memory, Provider, State } from '@elizaos/core';
+import { ModelType } from '@elizaos/core';
 import { KaminoService } from '../services/kaminoService';
 import { getAccountFromMessage } from '../../../autonomous-trader/utils';
 
@@ -51,19 +52,21 @@ export const kaminoProvider: Provider = {
 
                 // Get user's Kamino positions
                 const userPositions = await getUserKaminoPositions(kaminoService, account);
-                kaminoInfo += userPositions;
-
-                // Get available reserves
                 const availableReserves = await getAvailableKaminoReserves(kaminoService);
-                kaminoInfo += availableReserves;
-
-                // Get market overview
                 const marketOverview = await getKaminoMarketOverview(kaminoService);
-                kaminoInfo += marketOverview;
-
-                // Get discovered markets
                 const discoveredMarkets = await getDiscoveredKaminoMarkets(kaminoService);
-                kaminoInfo += discoveredMarkets;
+                
+                // Generate enhanced response using LLM
+                const enhancedReport = await generateEnhancedKaminoLendingReport(runtime, {
+                    account,
+                    userPositions,
+                    availableReserves,
+                    marketOverview,
+                    discoveredMarkets,
+                    kaminoService
+                });
+                
+                kaminoInfo += enhancedReport;
 
             } else {
                 kaminoInfo = 'Kamino lending protocol information is only available in private messages.';
@@ -321,4 +324,70 @@ async function getDiscoveredKaminoMarkets(kaminoService: KaminoService): Promise
     }
 
     return marketsInfo;
+}
+
+/**
+ * Generate enhanced Kamino lending report using LLM
+ */
+async function generateEnhancedKaminoLendingReport(runtime: IAgentRuntime, data: {
+    account: any;
+    userPositions: string;
+    availableReserves: string;
+    marketOverview: string;
+    discoveredMarkets: string;
+    kaminoService: KaminoService;
+}): Promise<string> {
+    try {
+        // Create a focused prompt for the LLM
+        const lendingPrompt = `You are a professional DeFi analyst specializing in Kamino Finance lending protocols. Generate a comprehensive, well-crafted lending analysis report for the user.
+
+USER ACCOUNT DATA:
+${JSON.stringify(data.account, null, 2)}
+
+USER POSITIONS:
+${data.userPositions}
+
+AVAILABLE RESERVES:
+${data.availableReserves}
+
+MARKET OVERVIEW:
+${data.marketOverview}
+
+DISCOVERED MARKETS:
+${data.discoveredMarkets}
+
+Please generate a professional, engaging report that includes:
+
+1. **Portfolio Summary** - Overview of the user's current Kamino lending positions and performance
+2. **Market Analysis** - Current state of Kamino lending markets and opportunities
+3. **Position Analysis** - Detailed breakdown of user's lending and borrowing positions
+4. **Opportunity Assessment** - Analysis of the best lending and borrowing opportunities available
+5. **Risk Management** - Key risks and considerations for the user's current positions
+6. **Strategy Recommendations** - Specific, actionable recommendations for portfolio optimization
+7. **Market Trends** - How current market conditions affect lending strategies
+
+Format the report with:
+- Clear sections with descriptive headers
+- Use emojis for visual appeal and quick scanning
+- Include specific numbers and percentages
+- Provide professional but engaging tone
+- Focus on actionable insights for this specific user
+- Include relevant comparisons to market standards
+- End with a concise summary and next steps
+
+Make it comprehensive yet easy to read. Be specific about the user's data and provide clear, personalized insights about their Kamino lending situation.
+
+Generate a professional Kamino lending analysis report:`;
+
+        // Use LLM to generate the enhanced report
+        const enhancedReport = await runtime.useModel(ModelType.TEXT_LARGE, {
+            prompt: lendingPrompt
+        });
+
+        return enhancedReport || `${data.userPositions}\n\n${data.availableReserves}\n\n${data.marketOverview}\n\n${data.discoveredMarkets}`;
+
+    } catch (error) {
+        console.error('Error generating enhanced Kamino lending report:', error);
+        return `${data.userPositions}\n\n${data.availableReserves}\n\n${data.marketOverview}\n\n${data.discoveredMarkets}`; // Fallback to original data
+    }
 }

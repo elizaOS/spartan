@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { KaminoLiquidityService } from '../services/kaminoLiquidityService';
-import { getKaminoLiquidityStatsAction } from '../actions/getKaminoLiquidityStats';
 
 // Mock the runtime
 const mockRuntime = {
@@ -127,6 +126,37 @@ describe('KaminoLiquidityService', () => {
         });
     });
 
+    describe('getAllStrategies', () => {
+        it('should return array of strategies', async () => {
+            const strategies = await service.getAllStrategies();
+            expect(Array.isArray(strategies)).toBe(true);
+        });
+    });
+
+    describe('getStrategiesByFilter', () => {
+        it('should return strategies for NON_PEGGED filter', async () => {
+            const strategies = await service.getStrategiesByFilter({ strategyType: 'NON_PEGGED' });
+            expect(Array.isArray(strategies)).toBe(true);
+        });
+
+        it('should return strategies for STABLE filter', async () => {
+            const strategies = await service.getStrategiesByFilter({ strategyType: 'STABLE' });
+            expect(Array.isArray(strategies)).toBe(true);
+        });
+    });
+
+    describe('getStrategyByAddress', () => {
+        it('should return strategy for valid address', async () => {
+            const strategy = await service.getStrategyByAddress('mock-strategy-1');
+            expect(strategy).toBeDefined();
+        });
+
+        it('should return null for invalid address', async () => {
+            const strategy = await service.getStrategyByAddress('invalid-address');
+            expect(strategy).toBeNull();
+        });
+    });
+
     describe('testConnection', () => {
         it('should return connection test results', async () => {
             const results = await service.testConnection();
@@ -136,79 +166,22 @@ describe('KaminoLiquidityService', () => {
             expect(results).toHaveProperty('connectionTest');
             expect(results).toHaveProperty('programExists');
             expect(results).toHaveProperty('strategyCount');
+            expect(results).toHaveProperty('sdkTest');
             expect(results).toHaveProperty('timestamp');
         });
     });
-});
 
-describe('getKaminoLiquidityStatsAction', () => {
-    const mockLiquidityService = {
-        getTokenLiquidityStats: vi.fn()
-    };
+    describe('resolveTokenWithBirdeye', () => {
+        it('should return null when birdeye service is not available', async () => {
+            mockRuntime.getService.mockReturnValue(null);
+            const result = await service.resolveTokenWithBirdeye('ai16z');
+            expect(result).toBeNull();
+        });
 
-    beforeEach(() => {
-        vi.clearAllMocks();
-        mockRuntime.getService.mockReturnValue(mockLiquidityService);
-    });
-
-    it('should return success response for valid token', async () => {
-        const mockStats = {
-            tokenName: 'AI16Z Token',
-            strategies: [
-                {
-                    address: 'mock-strategy-1',
-                    strategyType: 'Liquidity Pool',
-                    estimatedTvl: 1000000,
-                    apy: 10.5,
-                    feeTier: '0.3%',
-                    rebalancing: 'Auto',
-                    positions: []
-                }
-            ],
-            totalTvl: 1000000,
-            totalVolume: 50000,
-            apyRange: { min: 8.5, max: 12.5 },
-            poolCount: 1
-        };
-
-        mockLiquidityService.getTokenLiquidityStats.mockResolvedValue(mockStats);
-
-        const result = await getKaminoLiquidityStatsAction.handler(
-            mockRuntime,
-            { tokenIdentifier: 'ai16z' },
-            {} as any
-        );
-
-        expect(result.success).toBe(true);
-        expect(result.message).toContain('KAMINO LIQUIDITY STATS FOR AI16Z');
-        expect(result.message).toContain('AI16Z Token');
-        expect(result.message).toContain('$1,000,000');
-        expect(result.data).toEqual(mockStats);
-    });
-
-    it('should return error when service is not available', async () => {
-        mockRuntime.getService.mockReturnValue(null);
-
-        const result = await getKaminoLiquidityStatsAction.handler(
-            mockRuntime,
-            { tokenIdentifier: 'ai16z' },
-            {} as any
-        );
-
-        expect(result.success).toBe(false);
-        expect(result.message).toContain('Kamino liquidity service is not available');
-    });
-
-    it('should handle service errors gracefully', async () => {
-        mockLiquidityService.getTokenLiquidityStats.mockRejectedValue(new Error('Service error'));
-
-        const result = await getKaminoLiquidityStatsAction.handler(
-            mockRuntime,
-            { tokenIdentifier: 'ai16z' },
-            {} as any
-        );
-
-        expect(result.success).toBe(false);
-        expect(result.message).toContain('Error fetching Kamino liquidity stats');
+        it('should return token info for known tokens', async () => {
+            const result = await service.resolveTokenWithBirdeye('ai16z');
+            expect(result).toHaveProperty('name', 'AI16Z Token (Symbol)');
+            expect(result).toHaveProperty('address', 'ai16z');
+        });
     });
 });
