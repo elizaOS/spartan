@@ -468,8 +468,6 @@ export class MeteoraService extends Service implements ILpService {
                 keys: Object.keys(walletKeypair)
             })}`);
 
-            // The keypair from account might not be a proper Solana Keypair object
-            // We need to convert it to a proper Keypair for signing
             let properKeypair: any;
 
             if (walletKeypair.secretKey) {
@@ -515,16 +513,6 @@ export class MeteoraService extends Service implements ILpService {
             logger.log(`Using provided wallet public key from account: ${walletPublicKey}`);
             logger.log(`Using converted keypair: ${keypair.publicKey?.toString()}`);
 
-            // Validate the converted keypair has required methods
-            /*
-            if (typeof keypair.sign !== 'function') {
-                throw new Error('Converted keypair does not have sign method - invalid keypair structure');
-            }
-            if (typeof keypair.signTransaction !== 'function') {
-                throw new Error('Converted keypair does not have signTransaction method - invalid keypair structure');
-            }
-            */
-
             // Validate keypair matches the provided public key
             if (keypair.publicKey.toString() !== walletPublicKey) {
                 throw new Error(`Keypair mismatch: expected ${walletPublicKey}, got ${keypair.publicKey.toString()}`);
@@ -551,10 +539,6 @@ export class MeteoraService extends Service implements ILpService {
         const tokenYAddress = dlmmPool.tokenY.publicKey.toString();
 
         logger.log(`Pool token order: tokenX=${tokenXAddress}, tokenY=${tokenYAddress}`);
-
-        // Map the user's intended amounts to the correct pool token order
-        // We need to determine which token is which based on the pool's token order
-        // and map the amounts accordingly
 
         let tokenXAmount: string;
         let tokenYAmount: string;
@@ -1193,12 +1177,6 @@ export class MeteoraService extends Service implements ILpService {
                 throw new Error('No positions found in this pool');
             }
 
-            // Create claim fee transaction
-            const claimFeeTx = await dlmmPool.claimSwapFee({
-                owner: new PublicKey('mock-user-key'),
-                position: userPositions[0],
-            });
-
             // Return success message
             return `Successfully claimed fees from pool ${poolAddress}`;
         } catch (error) {
@@ -1562,7 +1540,6 @@ export class MeteoraService extends Service implements ILpService {
         const liquidityRemovedA = Math.max(0, getTokenBalanceChange(tokenXAddress));
         const liquidityRemovedB = Math.max(0, getTokenBalanceChange(tokenYAddress));
 
-        // For fees, we'll use a simple approach - if there are Meteora instructions, try to extract from them
         let feesClaimedA = 0;
         let feesClaimedB = 0;
 
