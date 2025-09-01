@@ -1,0 +1,95 @@
+services:
+  # MySQL 9 Database Service
+  mysql:
+    image: mysql:9.1.0
+    container_name: spartan-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootsecret
+      MYSQL_DATABASE: spartan_db
+      MYSQL_USER: spartan_user
+      MYSQL_PASSWORD: spartan_secret
+      TZ: UTC
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql/init:/docker-entrypoint-initdb.d
+    ports:
+      - '3307:3306'
+    command: >
+      --innodb-buffer-pool-size=1G
+      --log-bin=spartan-binlog
+      --binlog-format=ROW
+      --innodb-file-per-table=1
+      --innodb-log-file-size=256M
+      --max-connections=200
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$$MYSQL_ROOT_PASSWORD"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # Spartan Application Service
+  spartan:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: spartan-app
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      # Database configuration
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: spartan_db
+      DB_USER: spartan_user
+      DB_PASSWORD: spartan_secret
+      DB_ROOT_PASSWORD: rootsecret
+      # Eliza configuration
+      ELIZA_ENV: production
+      LOG_LEVEL: info
+    ports:
+      - '3000:3000'
+      - '50000-50100:50000-50100/udp'
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Redis for caching (optional but recommended for Eliza)
+  redis:
+    image: redis:7-alpine
+    container_name: spartan-redis
+    restart: unless-stopped
+    ports:
+      - '6380:6379'
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  mysql_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  default:
+    name: spartan-network
+    driver: bridge
