@@ -154,7 +154,7 @@ describe('SteerLiquidityService', () => {
     });
 
     describe('token name resolution', () => {
-        it('should return known token names', () => {
+        it('should return symbol for non-0x identifiers', () => {
             const result = service['getTokenName']('USDC');
             expect(result).toBe('USDC');
         });
