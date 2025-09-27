@@ -3,6 +3,7 @@ import type { Plugin } from '@elizaos/core';
 // Providers
 import { kaminoProvider } from './providers/kaminoProvider';
 import { kaminoLiquidityProvider } from './providers/kaminoLiquidityProvider';
+import { kaminoPoolProvider } from './providers/kaminoPoolProvider';
 
 // Services
 import { KaminoService } from './services/kaminoService';
@@ -20,7 +21,8 @@ export const kaminoPlugin: Plugin = {
     evaluators: [],
     providers: [
         kaminoProvider,
-        kaminoLiquidityProvider
+        kaminoLiquidityProvider,
+        kaminoPoolProvider
     ],
     actions: [],
     services: [

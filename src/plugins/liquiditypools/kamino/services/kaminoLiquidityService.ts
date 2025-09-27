@@ -374,6 +374,153 @@ export class KaminoLiquidityService extends Service {
     }
 
     /**
+     * Get a specific strategy by its address
+     */
+    async getStrategyByAddress(strategyAddress: string): Promise<KaminoStrategy | null> {
+        try {
+            logger.log(`Getting strategy by address: ${strategyAddress}`);
+
+            // First, try to get all strategies and filter by address
+            const allStrategies = await this.getAllStrategies();
+            const strategy = allStrategies.find(s => s.address === strategyAddress);
+
+            if (strategy) {
+                logger.log(`Found strategy: ${strategyAddress}`);
+                return strategy;
+            }
+
+            // If not found in general strategies, try to construct from specific data
+            // Check if it's a staking strategy
+            const stakingYields = await this.getStakingYields();
+            const stakingStrategy = stakingYields.find(s => s.tokenMint === strategyAddress);
+            
+            if (stakingStrategy) {
+                const strategy: KaminoStrategy = {
+                    address: stakingStrategy.tokenMint,
+                    strategyType: 'Staking Strategy',
+                    estimatedTvl: 0,
+                    volume24h: 0,
+                    apy: parseFloat(stakingStrategy.apy),
+                    tokenA: stakingStrategy.tokenMint,
+                    tokenB: 'SOL',
+                    feeTier: '0%',
+                    rebalancing: 'Auto',
+                    lastRebalance: new Date().toISOString(),
+                    positions: [{
+                        type: 'Staking',
+                        range: 'N/A',
+                        liquidity: 0,
+                        feesEarned: 0
+                    }]
+                };
+                logger.log(`Constructed staking strategy for: ${strategyAddress}`);
+                return strategy;
+            }
+
+            // Check if it's a Limo trading strategy
+            const limoTrades = await this.getLimoTrades();
+            const limoTrade = limoTrades.find(t => 
+                t.inMint === strategyAddress || t.outMint === strategyAddress
+            );
+
+            if (limoTrade) {
+                const apy = await this.calculateLimoApy(limoTrade);
+                const strategy: KaminoStrategy = {
+                    address: strategyAddress,
+                    strategyType: 'Limo Trading Strategy',
+                    estimatedTvl: parseFloat(limoTrade.sizeUsd) || 0,
+                    volume24h: parseFloat(limoTrade.sizeUsd) || 0,
+                    apy: apy,
+                    tokenA: limoTrade.inMint,
+                    tokenB: limoTrade.outMint,
+                    feeTier: this.calculateLimoFeeTier(limoTrade),
+                    rebalancing: this.determineRebalancingStrategy(limoTrade),
+                    lastRebalance: limoTrade.updatedOn,
+                    positions: [{
+                        type: 'Trading',
+                        range: this.determineTradingRange(limoTrade),
+                        liquidity: parseFloat(limoTrade.sizeUsd) || 0,
+                        feesEarned: parseFloat(limoTrade.tipAmountUsd) || 0
+                    }]
+                };
+                logger.log(`Constructed Limo trading strategy for: ${strategyAddress}`);
+                return strategy;
+            }
+
+            logger.log(`No strategy found for address: ${strategyAddress}`);
+            return null;
+
+        } catch (error) {
+            logger.error('Error getting strategy by address:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Get detailed pool information by pool address
+     */
+    async getPoolByAddress(poolAddress: string): Promise<any> {
+        try {
+            logger.log(`Getting pool information for address: ${poolAddress}`);
+
+            // Try to get strategy information first
+            const strategy = await this.getStrategyByAddress(poolAddress);
+            
+            if (strategy) {
+                // Get additional token information if available
+                let tokenInfo = null;
+                try {
+                    tokenInfo = await this.resolveTokenWithBirdeye(strategy.tokenA);
+                } catch (error) {
+                    logger.warn(`Could not resolve token info for ${strategy.tokenA}:`, error);
+                }
+
+                const poolInfo = {
+                    address: poolAddress,
+                    strategy: strategy,
+                    tokenInfo: tokenInfo,
+                    timestamp: new Date().toISOString(),
+                    // Add additional pool-specific metrics
+                    metrics: {
+                        totalValueLocked: strategy.estimatedTvl,
+                        volume24h: strategy.volume24h,
+                        apy: strategy.apy,
+                        feeTier: strategy.feeTier,
+                        rebalancing: strategy.rebalancing,
+                        lastRebalance: strategy.lastRebalance,
+                        positionCount: strategy.positions.length
+                    }
+                };
+
+                logger.log(`Pool information retrieved for: ${poolAddress}`);
+                return poolInfo;
+            }
+
+            // If no strategy found, try to get basic token information
+            try {
+                const tokenInfo = await this.resolveTokenWithBirdeye(poolAddress);
+                if (tokenInfo) {
+                    return {
+                        address: poolAddress,
+                        tokenInfo: tokenInfo,
+                        timestamp: new Date().toISOString(),
+                        note: 'Address found as token, but no active Kamino strategy detected'
+                    };
+                }
+            } catch (error) {
+                logger.warn(`Could not resolve token info for ${poolAddress}:`, error);
+            }
+
+            logger.log(`No pool or token information found for address: ${poolAddress}`);
+            return null;
+
+        } catch (error) {
+            logger.error('Error getting pool by address:', error);
+            return null;
+        }
+    }
+
+    /**
      * Get token liquidity information from Kamino
      */
     async getTokenLiquidityStats(tokenIdentifier: string): Promise<TokenLiquidityStats> {

@@ -198,7 +198,7 @@ async function getKaminoLiquidityStats(kaminoLiquidityService: KaminoLiquiditySe
  * Get detailed information about a specific strategy
  */
 async function getStrategyDetails(strategy: any): Promise<string> {
-    let details = `   🏊‍♂️ STRATEGY: ${strategy.address.slice(0, 8)}...${strategy.address.slice(-8)}\n`;
+    let details = `   🏊‍♂️ STRATEGY: ${strategy.address}\n`;
     details += `      📈 Type: ${strategy.strategyType}\n`;
     details += `      💰 TVL: $${strategy.estimatedTvl.toLocaleString()}\n`;
     details += `      📊 24h Volume: $${strategy.volume24h.toLocaleString()}\n`;
