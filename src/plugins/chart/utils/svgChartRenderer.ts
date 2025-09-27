@@ -106,7 +106,11 @@ export class SvgChartRenderer {
     private static calculateScales(chartData: ChartData, chartWidth: number, chartHeight: number) {
         const allDataPoints = chartData.datasets.flatMap(dataset => dataset.data);
         
+        console.log('🔍 [SvgChartRenderer] calculateScales - Data points:', allDataPoints.length);
+        console.log('🔍 [SvgChartRenderer] Data points:', allDataPoints.map(p => ({ x: p.x, y: p.y })));
+        
         if (allDataPoints.length === 0) {
+            console.log('⚠️ [SvgChartRenderer] No data points found, using default scale');
             return {
                 x: { min: 0, max: 100, range: 100 },
                 y: { min: 0, max: 100, range: 100 },
@@ -176,6 +180,10 @@ export class SvgChartRenderer {
             const yMinPadded = yMin - yPadding;
             const yMaxPadded = yMax + yPadding;
             const yRange = yMaxPadded - yMinPadded || 100;
+
+            console.log('📊 [SvgChartRenderer] Y-axis scale:', {
+                yMin, yMax, yPadding, yMinPadded, yMaxPadded, yRange
+            });
 
             return {
                 x: { min: xMin, max: xMax, range: xRange },
@@ -361,8 +369,16 @@ export class SvgChartRenderer {
 
         chartData.datasets.forEach((dataset, datasetIndex) => {
             const color = dataset.color || this.COLORS[theme][datasetIndex % this.COLORS[theme].length];
+            const chartType = dataset.type || chartData.config.type;
             
-            switch (dataset.type || chartData.config.type) {
+            console.log('📊 [SvgChartRenderer] Processing dataset:', {
+                datasetIndex,
+                chartType,
+                dataLength: dataset.data.length,
+                label: dataset.label
+            });
+            
+            switch (chartType) {
                 case 'line':
                     elements += this.generateLineChart(dataset, scales, chartWidth, chartHeight, color);
                     break;
@@ -385,6 +401,7 @@ export class SvgChartRenderer {
                     elements += this.generateHistogramChart(dataset, scales, chartWidth, chartHeight, color);
                     break;
                 default:
+                    console.log('⚠️ [SvgChartRenderer] Unknown chart type, defaulting to line:', chartType);
                     elements += this.generateLineChart(dataset, scales, chartWidth, chartHeight, color);
             }
         });
@@ -588,7 +605,17 @@ export class SvgChartRenderer {
         chartHeight: number, 
         color: string
     ): string {
-        if (dataset.data.length === 0) return '';
+        console.log('🕯️ [SvgChartRenderer] generateCandlestickChart called with:', {
+            dataLength: dataset.data.length,
+            scales: scales,
+            chartWidth,
+            chartHeight
+        });
+        
+        if (dataset.data.length === 0) {
+            console.log('⚠️ [SvgChartRenderer] No data for candlestick chart');
+            return '';
+        }
 
         const themeColors = this.TRADINGVIEW_THEMES.crypto; // Default to crypto theme
         const upColor = themeColors.candleUp;
@@ -602,13 +629,33 @@ export class SvgChartRenderer {
             const x = this.scaleX(point.x, scales.x, chartWidth);
             const centerX = x - barWidth / 2;
             
-            // For simplified data, create OHLC from single price point
-            const price = point.y;
-            const volatility = price * 0.02; // 2% volatility
-            const open = price + (Math.random() - 0.5) * volatility;
-            const high = Math.max(price, open) + Math.random() * volatility;
-            const low = Math.min(price, open) - Math.random() * volatility;
-            const close = price;
+            // Check if this is market data (percentage change) or price data
+            const isMarketData = Math.abs(point.y) > 100; // Market data typically has large percentage values
+            
+            let open, high, low, close;
+            
+            if (isMarketData) {
+                // For market data (percentage changes), create realistic OHLC from the percentage
+                const baseChange = point.y;
+                const volatility = Math.abs(baseChange) * 0.1; // 10% of the change as volatility
+                
+                // Create a realistic price movement pattern
+                const trend = baseChange > 0 ? 1 : -1;
+                const randomFactor = (Math.random() - 0.5) * 0.5;
+                
+                open = baseChange * (0.8 + randomFactor);
+                close = baseChange;
+                high = Math.max(open, close) + Math.abs(baseChange) * 0.3 * Math.random();
+                low = Math.min(open, close) - Math.abs(baseChange) * 0.2 * Math.random();
+            } else {
+                // For price data, create OHLC from single price point
+                const price = point.y;
+                const volatility = price * 0.02; // 2% volatility
+                open = price + (Math.random() - 0.5) * volatility;
+                high = Math.max(price, open) + Math.random() * volatility;
+                low = Math.min(price, open) - Math.random() * volatility;
+                close = price;
+            }
             
             const isUp = close >= open;
             const candleColor = isUp ? upColor : downColor;
@@ -637,6 +684,25 @@ export class SvgChartRenderer {
             } else {
                 // Filled candle for down movement
                 candles += `<rect x="${centerX}" y="${candleTop}" width="${barWidth}" height="${candleHeight}" fill="${candleColor}" stroke="${candleColor}" stroke-width="1"/>`;
+            }
+            
+            // Add token name labels for market data
+            if (isMarketData && (point as any).tokenName) {
+                const tokenName = (point as any).tokenName;
+                const labelY = chartHeight + 15;
+                candles += `
+                    <text 
+                        x="${x}" 
+                        y="${labelY}" 
+                        text-anchor="middle" 
+                        fill="#7D8590" 
+                        font-size="10" 
+                        font-weight="500"
+                        class="chart-text"
+                    >
+                        ${tokenName}
+                    </text>
+                `;
             }
         });
 

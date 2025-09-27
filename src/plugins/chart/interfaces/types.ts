@@ -225,6 +225,7 @@ export interface ChartRequest {
     includeVolume?: boolean;
     indicators?: string[];
     dataSource?: 'analytics' | 'market' | 'portfolio' | 'technical';
+    realIndicators?: any; // Real technical indicator values extracted from text
 }
 
 /**
@@ -232,7 +233,7 @@ export interface ChartRequest {
  */
 export interface ChartResponse {
     success: boolean;
-    data: ChartData | PriceChartData | PortfolioChartData | TechnicalChartData | MarketChartData | PerformanceChartData;
+    data: ChartData | PriceChartData | PortfolioChartData | TechnicalChartData | MarketChartData | PerformanceChartData | TechnicalChartData[];
     timestamp: number;
     source: string;
     error?: string;
