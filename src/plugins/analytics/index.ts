@@ -12,6 +12,8 @@ import { analyticsProvider } from './providers/analytics';
 import { marketDataProvider } from './providers/marketData';
 import { technicalIndicatorsProvider } from './providers/technicalIndicators';
 import { historicalDataProvider } from './providers/historicalData';
+import { spartanNewsProvider } from './providers/spartanNews';
+import { askScarletProvider } from './providers/askScarlet';
 
 // Services
 import { AnalyticsService } from './services/analyticsService';
@@ -28,7 +30,9 @@ export const analyticsPlugin: Plugin = {
         analyticsProvider,
         marketDataProvider,
         technicalIndicatorsProvider,
-        historicalDataProvider
+        historicalDataProvider,
+        spartanNewsProvider,
+        askScarletProvider
     ],
     actions: [
         getTokenAnalytics,

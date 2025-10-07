@@ -68,7 +68,8 @@ export default {
         ],
     ] as ActionExample[][],
     validate: async (runtime: IAgentRuntime, message: Memory, state?: State): Promise<boolean> => {
-        // Always allow this action to be executed
+
+        // Allow the action for other market analytics requests
         return true;
     },
     handler: async (

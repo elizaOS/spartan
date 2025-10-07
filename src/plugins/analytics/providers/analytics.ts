@@ -2,6 +2,7 @@ import type { IAgentRuntime, Memory, Provider, State } from '@elizaos/core';
 import { AnalyticsService } from '../services/analyticsService';
 import { getAccountFromMessage } from '../../autonomous-trader/utils';
 import { parseDateFilterFromMessage, formatDateFilterText } from '../../autonomous-trader/providers/date_filter';
+import type { ComprehensiveTokenAnalytics, AccountAnalytics, MarketAnalytics } from '../interfaces/types';
 
 /**
  * Main Analytics Provider
@@ -98,6 +99,27 @@ export const analyticsProvider: Provider = {
 };
 
 /**
+ * Type guard to check if data is ComprehensiveTokenAnalytics
+ */
+function isComprehensiveTokenAnalytics(data: any): data is ComprehensiveTokenAnalytics {
+    return data && typeof data === 'object' && 'tokenAddress' in data && 'price' in data && 'technicalIndicators' in data;
+}
+
+/**
+ * Type guard to check if data is AccountAnalytics
+ */
+function isAccountAnalytics(data: any): data is AccountAnalytics {
+    return data && typeof data === 'object' && 'walletAddress' in data && 'totalValue' in data && 'portfolio' in data;
+}
+
+/**
+ * Type guard to check if data is MarketAnalytics
+ */
+function isMarketAnalytics(data: any): data is MarketAnalytics {
+    return data && typeof data === 'object' && 'marketCap' in data && 'volume24h' in data && 'topGainers' in data;
+}
+
+/**
  * Analyze a token with comprehensive analytics
  */
 async function analyzeTokenComprehensive(analyticsService: AnalyticsService, tokenAddress: string, dateFilter?: any): Promise<string> {
@@ -107,7 +129,7 @@ async function analyzeTokenComprehensive(analyticsService: AnalyticsService, tok
         const request = {
             tokenAddress,
             chain: 'solana', // Default to Solana for now
-            timeframe: '1d',
+            timeframe: '1d' as const,
             includeHistorical: true,
             includeHolders: true,
             includeSnipers: true
@@ -117,6 +139,12 @@ async function analyzeTokenComprehensive(analyticsService: AnalyticsService, tok
 
         if (!response.success || !response.data) {
             analysis += `❌ Error analyzing token: ${response.error || 'Unknown error'}\n`
+            return analysis;
+        }
+
+        // Type guard to ensure we have ComprehensiveTokenAnalytics
+        if (!isComprehensiveTokenAnalytics(response.data)) {
+            analysis += `❌ Unexpected data type returned from analytics service\n`
             return analysis;
         }
 
@@ -216,6 +244,12 @@ async function analyzePortfolio(analyticsService: AnalyticsService, account: any
             return analysis;
         }
 
+        // Type guard to ensure we have AccountAnalytics
+        if (!isAccountAnalytics(response.data)) {
+            analysis += `❌ Unexpected data type returned from account analytics service\n\n`
+            return analysis;
+        }
+
         const portfolioData = response.data;
 
         analysis += `💰 PORTFOLIO OVERVIEW:\n`
@@ -268,6 +302,12 @@ async function getMarketOverview(analyticsService: AnalyticsService): Promise<st
 
         if (!response.success || !response.data) {
             analysis += `❌ Error getting market data: ${response.error || 'Unknown error'}\n\n`
+            return analysis;
+        }
+
+        // Type guard to ensure we have MarketAnalytics
+        if (!isMarketAnalytics(response.data)) {
+            analysis += `❌ Unexpected data type returned from market analytics service\n\n`
             return analysis;
         }
 

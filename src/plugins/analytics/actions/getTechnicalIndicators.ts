@@ -68,7 +68,8 @@ export default {
         ],
     ] as ActionExample[][],
     validate: async (runtime: IAgentRuntime, message: Memory, state?: State): Promise<boolean> => {
-        // Always allow this action to be executed
+
+        // Allow the action for other technical indicator requests
         return true;
     },
     handler: async (
@@ -84,10 +85,27 @@ export default {
 
             // If no token address provided, try to extract from message text
             if (!tokenAddress) {
-                const wallets = await getWalletsFromText(runtime, message);
-                if (wallets.length > 0) {
-                    tokenAddress = wallets[0];
+
+                const solanaService = runtime.getService('chain_solana') as any;
+                if (!solanaService) {
+                  console.error('getWalletsFromText - CANT FIND chain_solana service')
+                  return []
+                }
+                const addresses = solanaService.detectPubkeysFromString(message.content.text)
+                const tokens = []
+                const types = await Promise.all(addresses.map(a => solanaService.getAddressType(a)))
+                for(const i in addresses) {
+                  const address = addresses[i]
+                  const type = types[i]
+                  if (type === 'Token') {
+                    tokens.push(address)
+                  }
+                }
+                //const wallets = await getWalletsFromText(runtime, message);
+                if (tokens.length > 0) {
+                    tokenAddress = tokens[0];
                 } else {
+                    // symbol lookup?
                     const errorResponse = '❌ Please provide a token address to analyze technical indicators.\n\n' +
                         '💡 Examples:\n' +
                         '• "Show me technical indicators for SOL"\n' +
@@ -460,10 +478,6 @@ export default {
                 responseText += `• Price vs SMA200: ${visualOutput ? '🔴 Below (Long-term Bearish)' : 'Below (Long-term Bearish)'}\n`;
             }
             responseText += '\n';
-
-            // Final summary with current price and market data
-            responseText += `💰 Current Price: $${currentPrice.toFixed(6)}\n`;
-            responseText += `📊 24h Volume: $${tokenData.price.volume24h?.toLocaleString() || 'N/A'}\n`;
 
             if (callback) {
                 callback({

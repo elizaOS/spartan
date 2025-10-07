@@ -360,6 +360,7 @@ export class CoingeckoProvider {
 
             let coinId: string | null = null;
             let coinData: any = null;
+            let resolvedSymbol = symbol; // Declare resolvedSymbol at function scope
 
             // First, try to get the coins list to find the coin ID
             const coinsList = await this.getCoinsList();
@@ -367,7 +368,6 @@ export class CoingeckoProvider {
                 console.log(`Got ${coinsList.length} coins from CoinGecko list`);
 
                 // Try to get symbol from Birdeye cache first
-                let resolvedSymbol = symbol;
                 if (!resolvedSymbol) {
                     try {
                         const birdeyeTokens = await this.runtime.getCache<any[]>('tokens_solana');
@@ -386,7 +386,7 @@ export class CoingeckoProvider {
                 // Try to find by symbol first (most reliable)
                 if (resolvedSymbol) {
                     const foundBySymbol = coinsList.find((coin: any) =>
-                        coin.symbol && coin.symbol.toLowerCase() === resolvedSymbol.toLowerCase()
+                        coin.symbol && resolvedSymbol && coin.symbol.toLowerCase() === resolvedSymbol.toLowerCase()
                     );
                     if (foundBySymbol) {
                         coinId = foundBySymbol.id;
@@ -397,7 +397,7 @@ export class CoingeckoProvider {
                 // If not found by symbol, try to find by name (partial match)
                 if (!coinId && resolvedSymbol) {
                     const foundByName = coinsList.find((coin: any) =>
-                        coin.name && coin.name.toLowerCase().includes(resolvedSymbol.toLowerCase())
+                        coin.name && resolvedSymbol && coin.name.toLowerCase().includes(resolvedSymbol.toLowerCase())
                     );
                     if (foundByName) {
                         coinId = foundByName.id;
