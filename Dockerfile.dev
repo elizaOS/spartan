@@ -1,0 +1,103 @@
+FROM node:23.3.0-slim
+
+# Install essential dependencies for development
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    ffmpeg \
+    g++ \
+    git \
+    make \
+    python3 \
+    unzip \
+    vim \
+    procps && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install bun globally with npm
+RUN npm install -g bun
+
+# Create bun directories and set permissions
+RUN mkdir -p /root/.bun /home/node/.bun && \
+    chown -R node:node /home/node/.bun
+
+# Add bun global bin to PATH
+ENV PATH="/root/.bun/bin:/home/node/.bun/bin:/usr/local/bin:/app/node_modules/.bin:$PATH"
+
+# Ensure bun is executable
+RUN chmod +x /usr/local/bin/bun || true
+
+# Set working directory
+WORKDIR /app
+
+# Clone the official ElizaOS monorepo (for reference/dependencies)
+RUN git config --global http.sslVerify false && \
+    git clone https://github.com/elizaos/eliza.git /eliza
+
+# Install ElizaOS CLI globally
+RUN bun install -g @elizaos/cli
+
+# Ensure ElizaOS CLI is executable
+RUN chmod +x /usr/local/bin/elizaos || true
+
+# Copy package.json first for better caching
+COPY package.json.docker ./package.json
+
+# Initialize bun project and install dependencies
+RUN bun init -y && bun install
+
+# Install required plugins using ElizaOS CLI
+RUN elizaos plugins add @elizaos/plugin-bootstrap && \
+    elizaos plugins add @elizaos/plugin-sql && \
+    elizaos plugins add @elizaos/core && \
+    elizaos plugins add @elizaos/plugin-solana && \
+    elizaos plugins add @elizaos-plugins/plugin-birdeye
+
+# Fix permissions for node user
+RUN chown -R node:node /app && \
+    chmod -R 755 /app && \
+    mkdir -p /app/node_modules /app/dist && \
+    chown -R node:node /app/node_modules /app/dist && \
+    chmod -R 777 /app/node_modules /app/dist
+
+# Create node user's bun directory
+RUN mkdir -p /home/node/.bun && chown -R node:node /home/node/.bun
+
+# Fix global package permissions
+RUN chown -R node:node /usr/local/lib/node_modules && \
+    chown -R node:node /usr/local/bin && \
+    find /usr/local -name "elizaos" -type f -exec chmod +x {} \; 2>/dev/null || true
+
+# Switch to non-root user
+USER node
+
+# Update PATH for node user
+ENV PATH="/usr/local/bin:$PATH"
+
+# Environment variables
+ARG POSTGRES_URL
+ARG LOG_LEVEL=debug
+ARG OPENAI_API_KEY
+ARG ANTHROPIC_API_KEY
+ARG SOLANA_PRIVATE_KEY
+ARG SOLANA_PUBLIC_KEY
+ARG BIRDEYE_API_KEY
+ARG INVESTMENT_MANAGER_DISCORD_APPLICATION_ID
+ARG INVESTMENT_MANAGER_DISCORD_API_TOKEN
+ARG SMTP_HOST
+ARG SMTP_PORT=587
+ARG SMTP_USERNAME
+ARG SMTP_PASSWORD
+ARG SMTP_FROM
+
+# Expose ports
+EXPOSE 3000
+EXPOSE 50000-50100/udp
+
+# Set working directory
+WORKDIR /app
+
+# Development command with hot-reload
+CMD ["bun", "run", "--watch", "src/index.ts"]

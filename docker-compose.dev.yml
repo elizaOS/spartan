@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  elizaos-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: elizaos-dev
+    volumes:
+      # Mount source code for hot-reload
+      - ./src:/app/src:cached
+      - ./index.html:/app/index.html:cached
+      - ./vite.config.ts:/app/vite.config.ts:cached
+      - ./tsconfig.json:/app/tsconfig.json:cached
+      - ./tsconfig.node.json:/app/tsconfig.node.json:cached
+      - ./tsup.config.ts:/app/tsup.config.ts:cached
+      - ./tailwind.config.js:/app/tailwind.config.js:cached
+      - ./postcss.config.js:/app/postcss.config.js:cached
+      # Mount env files
+      - ./.env:/app/.env:cached
+      # Persist node_modules and dist
+      - node_modules:/app/node_modules
+      - dist:/app/dist
+    ports:
+      - "3000:3000"
+      - "50000-50100:50000-50100/udp"
+    environment:
+      - NODE_ENV=development
+      - LOG_LEVEL=${LOG_LEVEL:-debug}
+      - POSTGRES_URL=${POSTGRES_URL}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - SOLANA_PRIVATE_KEY=${SOLANA_PRIVATE_KEY}
+      - SOLANA_PUBLIC_KEY=${SOLANA_PUBLIC_KEY}
+      - BIRDEYE_API_KEY=${BIRDEYE_API_KEY}
+      - INVESTMENT_MANAGER_DISCORD_APPLICATION_ID=${INVESTMENT_MANAGER_DISCORD_APPLICATION_ID}
+      - INVESTMENT_MANAGER_DISCORD_API_TOKEN=${INVESTMENT_MANAGER_DISCORD_API_TOKEN}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USERNAME=${SMTP_USERNAME}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SMTP_FROM=${SMTP_FROM}
+    # Keep container running
+    tty: true
+    stdin_open: true
+    # Restart policy
+    restart: unless-stopped
+
+volumes:
+  node_modules:
+  dist:
