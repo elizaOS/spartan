@@ -374,7 +374,7 @@ export ANTHROPIC_API_KEY=your_key_here
 
 ## API Routes Implementation
 
-The following routes have been added to `/root/spartan-07-22-neo/packages/spartan/src/plugins/degenIntel/apis.ts` to support the MCP agents:
+The following routes have been added to `/plugins/degenIntel/apis.ts` to support the MCP agents:
 
 ### Analytics Routes (6 endpoints)
 
