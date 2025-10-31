@@ -6,9 +6,12 @@ import { COMPONENT_ACCOUNT_TYPE } from '../../autonomous-trader/constants'
 import { accountMockComponent } from '../../autonomous-trader/utils'
 // look up by Ids
 
+import type { Metawallet } from '../../multiwallet/types'
+import type { Position } from '../types'
+
 type MwAndPos = {
-  mw: any;
-  pos: any;
+  mw: Metawallet;
+  pos: Position & { chain: string };
 }
 
 // not used
@@ -52,16 +55,21 @@ export async function interface_positions_ByAccountId(
     return false
   }
   //console.log('interface_positions_ByAccountIdPosIds account', account)
-  const component = account.components.find(c => c.type === COMPONENT_ACCOUNT_TYPE)
+  const component = account.components?.find(c => c.type === COMPONENT_ACCOUNT_TYPE)
+  if (!component) {
+    runtime.logger.log('interface_positions_ByAccountId - found an account entity without COMPONENT_ACCOUNT_TYPE component')
+    return false
+  }
 
   // find pos in metaWallets (no more db calls)
-  let list = {}
-  for(const mw of component.data.metawallets) {
+  let list: Record<UUID, MwAndPos> = {}
+  const metawallets = component.data.metawallets as Metawallet[]
+  for(const mw of metawallets) {
     for(const chain in mw.keypairs) {
       const kp = mw.keypairs[chain]
       if (kp.positions) {
         for(const pos of kp.positions) {
-          list[pos.id] = { mw, pos, }
+          list[pos.id] = { mw, pos: {...pos, chain } }
         }
       }
     }
@@ -72,15 +80,15 @@ export async function interface_positions_ByAccountId(
 // used by updatePosition
 export async function interface_positions_ByAccountIdPosIds(
   runtime: IAgentRuntime, accountId: UUID, positionIds: UUID[]
-): Promise<{ account: any, component: Component | false, list: Record<UUID, MwAndPos> }> {
+): Promise<{ account: any, component: Component | undefined, list: Record<UUID, MwAndPos> }> {
   // one db read
   const res = await interface_positions_ByAccountId(runtime, accountId)
-  if (!res) return { account: false, component: false, list: {} }
+  if (!res) return { account: false, component: undefined, list: {} }
   //console.log('interface_positions_ByAccountIdPosIds - res', res)
   const account = res.account
   const component = res.component
   // res.list is keyed by pos.id
-  const list = {} // list is keyed by position id
+  const list: Record<UUID, MwAndPos> = {} // list is keyed by position id
   for(const posId of positionIds) {
     list[posId] = res.list[posId]
   }
@@ -128,7 +136,7 @@ export async function listPositions(
   const intWalletService = runtime.getService('AUTONOMOUS_TRADER_INTERFACE_WALLETS') as any;
   const metaWallets = await intWalletService.getMetaWallets()
   //console.log('listPositions - metaWallets', metaWallets)
-  const positions = []
+  const positions: { position: any, entityId: UUID, mw: any }[] = []
   for(const mw of metaWallets) {
     //console.log('listPositions - mw', mw)
     if (mw.keypairs.solana.positions?.length) {
