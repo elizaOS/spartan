@@ -4,6 +4,7 @@ import {
   type Memory,
   type State,
   type HandlerCallback,
+  type HandlerOptions,
   type ActionExample,
   type UUID,
   createUniqueUuid,
@@ -20,12 +21,15 @@ export const checkRegistrationCode: Action = {
   description: 'Replies, allows a user set their email address' + CONSTANTS.DESCONLYCALLME,
   // can only enter this if we don't have an email
   validate: async (runtime: IAgentRuntime, message: Memory) => {
-
+    // Check if message content and text exist
+    if (!message.content?.text) {
+      return false
+    }
 
     // list checks in least cost to most cost
     const containsGeneratedCode = findGeneratedCode(message.content.text, CONSTANTS.useCodeLength)
     if (containsGeneratedCode !== null) {
-      runtime.logger.log('VERIFY_REGISTRATION_CODE containsGeneratedCode', typeof(containsGeneratedCode), containsGeneratedCode)
+      runtime.logger.log('VERIFY_REGISTRATION_CODE containsGeneratedCode', typeof (containsGeneratedCode), containsGeneratedCode)
     } else {
       // kinda normal
       //console.log('VERIFY_REGISTRATION_CODE validate - code not found', message.content.text, CONSTANTS.useCodeLength)
@@ -55,11 +59,11 @@ export const checkRegistrationCode: Action = {
   handler: async (
     runtime: IAgentRuntime,
     message: Memory,
-    state: State,
-    _options: { [key: string]: unknown },
-    callback: HandlerCallback,
-    responses: any[]
-  ): Promise<boolean> => {
+    state?: State,
+    options?: HandlerOptions,
+    callback?: HandlerCallback,
+    responses?: Memory[]
+  ): Promise<void> => {
     console.log('VERIFY_REGISTRATION_CODE handler')
 
     // get room and it's components?
@@ -67,7 +71,7 @@ export const checkRegistrationCode: Action = {
 
     //const entityId = createUniqueUuid(runtime, message.metadata.fromId);
 
-    const passedCode = findGeneratedCode(message.content.text, CONSTANTS.useCodeLength)
+    const passedCode = findGeneratedCode(message.content.text!, CONSTANTS.useCodeLength)
     if (passedCode === null) {
       console.log('shouldnt be here no code found of', CONSTANTS.useCodeLength, 'length in', message.content.text)
       return
@@ -86,16 +90,30 @@ export const checkRegistrationCode: Action = {
     const agentEntityId = createUniqueUuid(runtime, runtime.agentId);
     const agentEntity = await runtime.getEntityById(agentEntityId);
     //console.log('agentEntity', agentEntity)
+
+    if (!agentEntity?.components) {
+      console.log('agentEntity or components not found')
+      return
+    }
+
     let spartanData = agentEntity.components.find(c => c.type === CONSTANTS.SPARTAN_SERVICE_TYPE)
-    let spartanDataNew
+    let spartanDataNew = false
     if (!spartanData) {
       // initialize
       spartanDataNew = true
       spartanData = {
+        id: uuidv4() as UUID,
+        entityId: agentEntityId,
+        agentId: runtime.agentId,
+        worldId: roomDetails?.worldId || createUniqueUuid(runtime, 'default-world'),
+        roomId: message.roomId,
+        sourceEntityId: message.entityId,
+        type: CONSTANTS.SPARTAN_SERVICE_TYPE,
         data: {
           users: [],
           accounts: [],
-        }
+        },
+        createdAt: Date.now(),
       }
     }
     if (spartanData.data.accounts === undefined) spartanData.data.accounts = []
@@ -112,11 +130,10 @@ export const checkRegistrationCode: Action = {
     console.log('VERIFY_REGISTRATION_CODE email', componentData, 'code', passedCode)
     if (componentData.tries === undefined) componentData.tries = 0
     //responses.length = 0 // just clear them all
-    let output: Memory | boolean = false
     if (componentData.tries > 3) {
       console.log('hacker...')
-      output = takeItPrivate(runtime, message, 'You can no longer validate, you must delete your registration and restart')
-      callback(output)
+      const response = takeItPrivate(runtime, message, 'You can no longer validate, you must delete your registration and restart')
+      callback?.(response)
       return
     }
     if (passedCode === componentData.code) {
@@ -129,16 +146,18 @@ export const checkRegistrationCode: Action = {
       const accountEntity = await runtime.getEntityById(emailEntityId);
       //const isLinking = spartanData.data.users.includes(emailEntityId)
       if (accountEntity) {
-        output = takeItPrivate(runtime, message, 'Looks good, I see your already registered before, linking to existing account')
+        const response = takeItPrivate(runtime, message, 'Looks good, I see your already registered before, linking to existing account')
+        callback?.(response)
 
         // self healing
-        if (spartanData.data.accounts.indexOf(emailEntityId) === -1) {
+        if (spartanData && Array.isArray(spartanData.data.accounts) && spartanData.data.accounts.indexOf(emailEntityId) === -1) {
           console.log('warning spartanData didnt have accountId', emailEntityId)
           spartanData.data.accounts.push(emailEntityId)
         }
 
       } else {
-        output = takeItPrivate(runtime, message, 'Looks good, you are now registered and have access to my services')
+        const response = takeItPrivate(runtime, message, 'Looks good, you are now registered and have access to my services')
+        callback?.(response)
 
         // need account entity too
         const entitySuccess = await runtime.createEntity({
@@ -152,7 +171,7 @@ export const checkRegistrationCode: Action = {
         await runtime.createComponent({
           id: uuidv4() as UUID,
           agentId: runtime.agentId,
-          worldId: roomDetails.worldId,
+          worldId: roomDetails?.worldId || createUniqueUuid(runtime, 'default-world'),
           roomId: message.roomId,
           sourceEntityId: message.entityId,
           entityId: emailEntityId,
@@ -163,13 +182,13 @@ export const checkRegistrationCode: Action = {
           createdAt: Date.now(),
         });
         // not sure how we'd already have accounts, but lets keep it clean
-        if (spartanData.data.accounts.indexOf(emailEntityId) === -1) {
+        if (spartanData && Array.isArray(spartanData.data.accounts) && spartanData.data.accounts.indexOf(emailEntityId) === -1) {
           spartanData.data.accounts.push(emailEntityId)
         } else {
           console.log('duplicate accountId in spartanData', emailEntityId)
         }
       }
-      if (spartanData.data.users.indexOf(userEntityId) === -1) {
+      if (spartanData && Array.isArray(spartanData.data.users) && spartanData.data.users.indexOf(userEntityId) === -1) {
         spartanData.data.users.push(userEntityId)
       } else {
         console.log('duplicate userEntityId in spartanData', userEntityId)
@@ -180,9 +199,11 @@ export const checkRegistrationCode: Action = {
       // increase tries
       componentData.tries++
       console.log('got', passedCode, 'expected', componentData.code)
-      output = takeItPrivate(runtime, message, 'That does not match my records, please double check, it is case sensitive')
+      const response = takeItPrivate(runtime, message, 'That does not match my records, please double check, it is case sensitive')
+      if (callback) {
+        callback(response)
+      }
     }
-    callback(output)
 
     // is verified saving?
     console.log('saving', componentData)
@@ -207,13 +228,13 @@ export const checkRegistrationCode: Action = {
     */
 
     // update spartanData
-    async function updateSpartanData(agentEntityId, spartanData) {
+    async function updateSpartanData(agentEntityId: UUID, spartanData: any) {
       if (spartanDataNew) {
         // initial spartan set up
         await runtime.createComponent({
           id: uuidv4() as UUID,
           agentId: runtime.agentId,
-          worldId: roomDetails.worldId,
+          worldId: roomDetails?.worldId || createUniqueUuid(runtime, 'default-world'),
           roomId: message.roomId,
           sourceEntityId: message.entityId,
           entityId: agentEntityId,
@@ -225,14 +246,14 @@ export const checkRegistrationCode: Action = {
         // 2nd+ sups
         await runtime.updateComponent({
           id: spartanData.id,
-          // do we need all these fields?
-          //agentId: runtime.agentId,
-          //worldId: roomDetails.worldId,
-          //roomId: message.roomId,
-          //sourceEntityId: entityId,
-          //entityId: entityId,
-          //type: CONSTANTS.SPARTAN_SERVICE_TYPE,
+          entityId: spartanData.entityId,
+          agentId: spartanData.agentId,
+          worldId: spartanData.worldId,
+          roomId: spartanData.roomId,
+          sourceEntityId: spartanData.sourceEntityId,
+          type: spartanData.type,
           data: spartanData.data,
+          createdAt: spartanData.createdAt,
         });
       }
     }
