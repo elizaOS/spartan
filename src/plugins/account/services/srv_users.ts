@@ -1,5 +1,5 @@
-import { IAgentRuntime, getSalt, encryptStringValue, Service, logger } from '@elizaos/core';
-import { interface_users_list, interface_users_listVerified, interface_users_ByIds, interface_user_update } from '../interfaces/int_users'
+import { IAgentRuntime, Service, logger, type UUID } from '@elizaos/core';
+import { interface_users_list, interface_users_listVerified, interface_users_ByIds, interface_user_update } from '../interfaces/int_users';
 
 export class InterfaceUserService extends Service {
   private isRunning = false;
@@ -13,7 +13,6 @@ export class InterfaceUserService extends Service {
 
   constructor(public runtime: IAgentRuntime) {
     super(runtime); // sets this.runtime
-    logger.log('AUTONOMOUS_TRADER_INTERFACE_USERS constructor');
   }
 
   async interface_users_list() {
@@ -28,7 +27,7 @@ export class InterfaceUserService extends Service {
     return interface_users_ByIds(this.runtime, entities)
   }
 
-  async interface_user_update(componentData) {
+  async interface_user_update(componentData: any) {
     return interface_user_update(this.runtime, componentData)
   }
 
@@ -68,7 +67,7 @@ export class InterfaceUserService extends Service {
       this.isRunning = true;
       logger.info('Trading chain service started successfully');
     } catch (error) {
-      logger.error('Error starting trading chain service:', error);
+      logger.error('Error starting trading chain service:', error instanceof Error ? error.message : String(error));
       throw error;
     }
   }
@@ -85,7 +84,7 @@ export class InterfaceUserService extends Service {
       this.isRunning = false;
       logger.info('Trading service stopped successfully');
     } catch (error) {
-      logger.error('Error stopping trading service:', error);
+      logger.error('Error stopping trading service:', error instanceof Error ? error.message : String(error));
       throw error;
     }
   }
