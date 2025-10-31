@@ -4,7 +4,7 @@ import { acquireService, askLlmObject } from '../../autonomous-trader/utils';
 
 export async function copyStrategy(runtime: IAgentRuntime) {
   const service = await acquireService(runtime, 'TRADER_STRATEGY', 'copy trading strategy');
-  const infoService = await acquireService(runtime, 'TRADER_DATAPROVIDER', 'copy trading info');
+  const infoService = await acquireService(runtime, 'INTEL_DATAPROVIDER', 'copy trading info');
 
   const me = {
     name: 'Copy trading strategy',
