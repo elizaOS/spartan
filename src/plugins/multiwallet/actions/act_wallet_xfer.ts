@@ -1,6 +1,7 @@
 import {
     type Action,
     type ActionExample,
+    type ActionResult,
     type Content,
     type HandlerCallback,
     type IAgentRuntime,
@@ -12,25 +13,12 @@ import {
     createUniqueUuid,
     parseJSONObjectFromText,
 } from '@elizaos/core';
-import {
-    createAssociatedTokenAccountInstruction,
-    createTransferInstruction,
-    getAssociatedTokenAddressSync,
-} from '@solana/spl-token';
-import {
-    Connection,
-    Keypair,
-    PublicKey,
-    SystemProgram,
-    TransactionMessage,
-    VersionedTransaction,
-} from '@solana/web3.js';
+import { PublicKey, Keypair } from '@solana/web3.js';
 import bs58 from 'bs58';
 import { v4 as uuidv4 } from 'uuid';
 import { UUID } from 'crypto';
-import { getWalletKey } from '../keypairUtils';
 import { SOLANA_SERVICE_NAME } from '../../autonomous-trader/constants';
-import { HasEntityIdFromMessage, takeItPrivate, messageReply, getAccountFromMessage } from '../../autonomous-trader/utils'
+import { askLlmObject, HasEntityIdFromMessage, takeItPrivate, messageReply, getAccountFromMessage } from '../../autonomous-trader/utils'
 
 /**
  * Interface representing the content of a transfer with a specific address.
@@ -54,7 +42,7 @@ interface TransferAddressContent extends Content {
  * @returns {boolean} Returns true if the content is valid for transfer, and false otherwise.
  */
 function isTransferAddressContent(content: TransferAddressContent): boolean {
-    logger.log('Content for transfer', content);
+    logger.log('Content for transfer', JSON.stringify(content));
 
     // Base validation
     if (!content.recipientWalletAddress || typeof content.recipientWalletAddress !== 'string' || !content.amount) {
@@ -174,8 +162,8 @@ export default {
         //logger.log('MULTIWALLET_TRANSFER Validating transfer from entity:', message.entityId);
 
         if (!await HasEntityIdFromMessage(runtime, message)) {
-          console.warn('MULTIWALLET_TRANSFER validate - author not found')
-          return false
+            console.warn('MULTIWALLET_TRANSFER validate - author not found')
+            return false
         }
 
         const account = await getAccountFromMessage(runtime, message)
@@ -196,8 +184,8 @@ export default {
         state: State,
         options: { [key: string]: unknown },
         callback?: HandlerCallback,
-        responses: any[]
-    ): Promise<boolean> => {
+        responses?: Memory[]
+    ): Promise<ActionResult | void | undefined> => {
         logger.log('MULTIWALLET_TRANSFER Starting TRANSFER_ADDRESS handler...');
         //console.log('options', options)
 
@@ -211,8 +199,12 @@ export default {
         console.log('MULTIWALLET_TRANSFER sourceResult', sourceResult)
 
         if (!sourceResult.sourceWalletAddress) {
-          console.log('MULTIWALLET_TRANSFER cant determine source wallet address')
-          return false
+            console.log('MULTIWALLET_TRANSFER cant determine source wallet address')
+            return {
+                success: false,
+                text: 'Could not determine source wallet address',
+                error: 'PARSE_ERROR'
+            }
         }
 
         // find this user's wallet
@@ -240,54 +232,57 @@ export default {
         //console.log('MULTIWALLET_TRANSFER wallets', userMetawallets)
 
         // confirm wallet is in this list
-        let found = false
-        for(const mw of userMetawallets) {
-          const kp = mw.keypairs.solana
-          if (kp) {
-            console.log('kp', kp)
-            if (kp.publicKey.toString() === sourceResult.sourceWalletAddress) {
-              if (found === false) found = []
-              found.push(kp)
+        let found: any[] = []
+        for (const mw of userMetawallets) {
+            const kp = mw.keypairs.solana
+            if (kp) {
+                console.log('kp', kp)
+                if (kp.publicKey.toString() === sourceResult.sourceWalletAddress) {
+                    found.push(kp)
+                }
             }
-          }
         }
 
         if (!found.length) {
-          console.log('MULTIWALLET_TRANSFER did not find any local wallet with this source address', sourceResult)
-          return false
+            console.log('MULTIWALLET_TRANSFER did not find any local wallet with this source address', sourceResult)
+            return {
+                success: false,
+                text: 'No matching wallet found for source address',
+                error: 'WALLET_NOT_FOUND'
+            }
         }
         console.log('MULTIWALLET_TRANSFER found', found)
 
         // gather possibilities
         let contextStr = ''
         const solanaService = runtime.getService(SOLANA_SERVICE_NAME) as any;
-        for(const kp of found) {
-          const pubKey = kp.publicKey
-          contextStr += 'Wallet Address: ' + pubKey + '\n'
-          // get wallet contents
-          const pubKeyObj = new PublicKey(pubKey)
-          const [balances, heldTokens] = await Promise.all([
-            solanaService.getBalancesByAddrs([pubKey]),
-            solanaService.getTokenAccountsByKeypair(pubKeyObj),
-          ]);
-          const solBal = balances[pubKey]
-          contextStr += '  Token Address (Symbol)' + "\n"
-          contextStr += '  So11111111111111111111111111111111111111111 ($sol) balance: ' + (solBal ?? 'unknown') + "\n"
-          console.log('solBal', solBal, 'heldTokens', heldTokens)
-          // loop on remaining tokens and output
-          for(const t of heldTokens) {
-            // data.program, data.space, data.parsed
-            // data.parsed: .type and .info which has (isNative, mint, owner, state, tokenAmount)
-            //console.log('data', t.account.data) // parsed.info.mint
-            const amountRaw = t.account.data.parsed.info.tokenAmount.amount;
-            const mintKey = new PublicKey(t.account.data.parsed.info.mint);
-            const decimals = t.account.data.parsed.info.tokenAmount.decimals;
-            const balance = Number(amountRaw) / (10 ** decimals);
-            const symbol = await solanaService.getTokenSymbol(mintKey)
-            //console.log('MULTIWALLET_TRANSFER symbol', symbol)
-            contextStr += '  ' + t.pubkey.toString() + ' ($' + symbol + ') balance: ' + balance + "\n"
-          }
-          contextStr += '\n'
+        for (const kp of found) {
+            const pubKey = kp.publicKey
+            contextStr += 'Wallet Address: ' + pubKey + '\n'
+            // get wallet contents
+            const pubKeyObj = new PublicKey(pubKey)
+            const [balances, heldTokens] = await Promise.all([
+                solanaService.getBalancesByAddrs([pubKey]),
+                solanaService.getTokenAccountsByKeypair(pubKeyObj),
+            ]);
+            const solBal = balances[pubKey]
+            contextStr += '  Token Address (Symbol)' + "\n"
+            contextStr += '  So11111111111111111111111111111111111111111 ($sol) balance: ' + (solBal ?? 'unknown') + "\n"
+            console.log('solBal', solBal, 'heldTokens', heldTokens)
+            // loop on remaining tokens and output
+            for (const t of heldTokens) {
+                // data.program, data.space, data.parsed
+                // data.parsed: .type and .info which has (isNative, mint, owner, state, tokenAmount)
+                //console.log('data', t.account.data) // parsed.info.mint
+                const amountRaw = t.account.data.parsed.info.tokenAmount.amount;
+                const mintKey = new PublicKey(t.account.data.parsed.info.mint);
+                const decimals = t.account.data.parsed.info.tokenAmount.decimals;
+                const balance = Number(amountRaw) / (10 ** decimals);
+                const symbol = await solanaService.getTokenSymbol(mintKey)
+                //console.log('MULTIWALLET_TRANSFER symbol', symbol)
+                contextStr += '  ' + t.pubkey.toString() + ' ($' + symbol + ') balance: ' + balance + "\n"
+            }
+            contextStr += '\n'
         }
         console.log('contextStr', contextStr)
 
@@ -306,12 +301,16 @@ export default {
         */
 
         const content = await askLlmObject(runtime, { prompt: transferPrompt.replace('{{possibleWallets}}', contextStr) },
-          ['tokenAddress', 'senderWalletAddress', 'recipientWalletAddress', 'amount'])
+            ['tokenAddress', 'senderWalletAddress', 'recipientWalletAddress', 'amount'])
 
         console.log('MULTIWALLET_TRANSFER content', content)
         if (!content) {
-          console.log('couldnt figure it out')
-          return false
+            console.log('couldnt figure it out')
+            return {
+                success: false,
+                text: 'Could not determine transfer details',
+                error: 'PARSE_ERROR'
+            }
         }
 
         // Override the recipient from the model with the one from options
@@ -326,10 +325,14 @@ export default {
         const sourceKp = found.find(kp => kp.publicKey === content.senderWalletAddress)
         //console.log('MULTIWALLET_TRANSFER sourceKp', sourceKp)
         if (!sourceKp) {
-          // FIXME
-          // can be the model failing to match something
-          console.warn('unknown address', content.senderWalletAddress, 'in', found)
-          return false
+            // FIXME
+            // can be the model failing to match something
+            console.warn('unknown address', content.senderWalletAddress, 'in', found)
+            return {
+                success: false,
+                text: 'Source wallet not found',
+                error: 'WALLET_NOT_FOUND'
+            }
         }
         const secretKey = bs58.decode(sourceKp.privateKey);
         const senderKeypair = Keypair.fromSecretKey(secretKey);
@@ -341,20 +344,26 @@ export default {
         console.log('MULTIWALLET_TRANSFER recipientAddress', recipientAddress)
         if (!recipientAddress) {
             runtime.logger.info("No recipient address provided.")
-            responses.length = 0
-            const memory: Memory = {
-                entityId: uuidv4() as UUID,
-                roomId: message.roomId,
-                text: 'No recipient address provided.',
-                content: {
-                    //thought: responseContent.thought,
-                    text: 'No recipient address provided.',
-                    error: 'Missing recipient address'
-                    //actions: responseContent.actions,
+            if (responses) {
+                responses.length = 0
+                const memory: Memory = {
+                    id: uuidv4() as UUID,
+                    entityId: message.entityId,
+                    roomId: message.roomId,
+                    content: {
+                        //thought: responseContent.thought,
+                        text: 'No recipient address provided.',
+                        error: 'Missing recipient address'
+                        //actions: responseContent.actions,
+                    }
                 }
+                responses.push(memory)
             }
-            responses.push(memory)
-            return false;
+            return {
+                success: false,
+                text: 'No recipient address provided.',
+                error: 'Missing recipient address'
+            };
         }
 
         // Validate the recipient address
@@ -362,18 +371,24 @@ export default {
             new PublicKey(recipientAddress);
         } catch (error) {
             runtime.logger.info("Invalid recipient address provided.")
-            responses.length = 0
-            const memory: Memory = {
-                entityId: uuidv4() as UUID,
-                roomId: message.roomId,
-                text: 'Invalid recipient address provided.',
-                content: {
-                    text: 'Invalid recipient address provided.',
-                    error: 'Invalid recipient address'
+            if (responses) {
+                responses.length = 0
+                const memory: Memory = {
+                    id: uuidv4() as UUID,
+                    entityId: message.entityId,
+                    roomId: message.roomId,
+                    content: {
+                        text: 'Invalid recipient address provided.',
+                        error: 'Invalid recipient address'
+                    }
                 }
+                responses.push(memory)
             }
-            responses.push(memory)
-            return false;
+            return {
+                success: false,
+                text: 'Invalid recipient address provided.',
+                error: 'Invalid recipient address'
+            };
         }
 
         // ensure decimal
@@ -381,148 +396,127 @@ export default {
         if (!isTransferAddressContent(content)) {
             // FIXME: more than amount could be wrong here...
             runtime.logger.info("Need a valid amount to transfer.")
-            responses.length = 0
-            const memory: Memory = {
-                entityId: uuidv4() as UUID,
-                roomId: message.roomId,
-                text: 'Need a valid amount to transfer.',
-                content: {
-                    text: 'Need a valid amount to transfer.',
-                    error: 'Invalid transfer content'
+            if (responses) {
+                responses.length = 0
+                const memory: Memory = {
+                    id: uuidv4() as UUID,
+                    entityId: message.entityId,
+                    roomId: message.roomId,
+                    content: {
+                        text: 'Need a valid amount to transfer.',
+                        error: 'Invalid transfer content'
+                    }
                 }
+                responses.push(memory)
             }
-            responses.push(memory)
-            return false;
+            return {
+                success: false,
+                text: 'Need a valid amount to transfer.',
+                error: 'Invalid transfer content'
+            };
         }
 
         console.log('MULTIWALLET_TRANSFER ATTEMPTING SEND')
 
         try {
-            //const { keypair: senderKeypair } = await getWalletKey(runtime, true);
-            const connection = new Connection(
-                runtime.getSetting('SOLANA_RPC_URL') || 'https://api.mainnet-beta.solana.com'
-            );
-            const recipientPubkey = new PublicKey(recipientAddress);
+            const solanaService = runtime.getService(SOLANA_SERVICE_NAME) as any;
+            if (!solanaService) {
+                throw new Error('Solana service not available');
+            }
 
+            const recipientPubkey = new PublicKey(recipientAddress);
             let signature: string;
 
             // Handle SOL transfer
             if (content.tokenAddress === "So11111111111111111111111111111111111111111") {
                 const lamports = Number(content.amount) * 1e9;
-
-                const instruction = SystemProgram.transfer({
-                    fromPubkey: senderKeypair.publicKey,
-                    toPubkey: recipientPubkey,
-                    lamports,
-                });
-
-                const messageV0 = new TransactionMessage({
-                    payerKey: senderKeypair.publicKey,
-                    recentBlockhash: (await connection.getLatestBlockhash()).blockhash,
-                    instructions: [instruction],
-                }).compileToV0Message();
-
-                const transaction = new VersionedTransaction(messageV0);
-                transaction.sign([senderKeypair]);
-
-                signature = await connection.sendTransaction(transaction);
+                signature = await solanaService.transferSol(senderKeypair, recipientPubkey, lamports);
 
                 runtime.logger.info(`Sent ${content.amount} SOL from ${content.senderWalletAddress} to ${recipientAddress}. Transaction hash: ${signature}`)
-                responses.length = 0
-                const memory: Memory = {
-                    entityId: uuidv4() as UUID,
-                    roomId: message.roomId,
+                if (responses) {
+                    responses.length = 0
+                    const memory: Memory = {
+                        id: uuidv4() as UUID,
+                        entityId: message.entityId,
+                        roomId: message.roomId,
+                        content: {
+                            text: `Sent ${content.amount} SOL. Transaction hash: ${signature}`,
+                            success: true,
+                            signature,
+                            amount: content.amount,
+                            sender: content.senderWalletAddress,
+                            recipient: recipientAddress,
+                        }
+                    }
+                    responses.push(memory)
+                }
+                return {
+                    success: true,
                     text: `Sent ${content.amount} SOL. Transaction hash: ${signature}`,
-                    content: {
-                        text: `Sent ${content.amount} SOL. Transaction hash: ${signature}`,
-                        success: true,
+                    data: {
                         signature,
                         amount: content.amount,
                         sender: content.senderWalletAddress,
                         recipient: recipientAddress,
                     }
                 }
-                responses.push(memory)
             }
             // Handle SPL token transfer
             else {
                 const mintPubkey = new PublicKey(content.tokenAddress);
-                const mintInfo = await connection.getParsedAccountInfo(mintPubkey);
-                const decimals =
-                    (mintInfo.value?.data as { parsed: { info: { decimals: number } } })?.parsed?.info
-                        ?.decimals ?? 9;
-                const adjustedAmount = BigInt(Number(content.amount) * 10 ** decimals);
-
-                const senderATA = getAssociatedTokenAddressSync(mintPubkey, senderKeypair.publicKey);
-                const recipientATA = getAssociatedTokenAddressSync(mintPubkey, recipientPubkey);
-
-                const instructions = [];
-
-                const recipientATAInfo = await connection.getAccountInfo(recipientATA);
-                if (!recipientATAInfo) {
-                    instructions.push(
-                        createAssociatedTokenAccountInstruction(
-                            senderKeypair.publicKey,
-                            recipientATA,
-                            recipientPubkey,
-                            mintPubkey
-                        )
-                    );
-                }
-
-                instructions.push(
-                    createTransferInstruction(
-                        senderATA,
-                        recipientATA,
-                        senderKeypair.publicKey,
-                        adjustedAmount
-                    )
-                );
-
-                const messageV0 = new TransactionMessage({
-                    payerKey: senderKeypair.publicKey,
-                    recentBlockhash: (await connection.getLatestBlockhash()).blockhash,
-                    instructions,
-                }).compileToV0Message();
-
-                const transaction = new VersionedTransaction(messageV0);
-                transaction.sign([senderKeypair]);
-
-                signature = await connection.sendTransaction(transaction);
+                signature = await solanaService.transferSplToken(senderKeypair, recipientPubkey, mintPubkey, Number(content.amount));
 
                 runtime.logger.info(`Sent ${content.amount} tokens to ${recipientAddress}\nTransaction hash: ${signature}`)
-                responses.length = 0
-                const memory: Memory = {
-                    entityId: uuidv4() as UUID,
-                    roomId: message.roomId,
-                    text: `Sent ${content.amount} tokens to ${recipientAddress} from ${content.senderWalletAddress}\nTransaction hash: ${signature}`,
-                    content: {
-                        text: `Sent ${content.amount} tokens to ${recipientAddress}\nTransaction hash: ${signature}`,
-                        success: true,
+                if (responses) {
+                    responses.length = 0
+                    const memory: Memory = {
+                        id: uuidv4() as UUID,
+                        entityId: message.entityId,
+                        roomId: message.roomId,
+                        content: {
+                            text: `Sent ${content.amount} tokens to ${recipientAddress} from ${content.senderWalletAddress}\nTransaction hash: ${signature}`,
+                            success: true,
+                            signature,
+                            amount: content.amount,
+                            sender: content.senderWalletAddress,
+                            recipient: recipientAddress,
+                        }
+                    }
+                    responses.push(memory)
+                }
+                return {
+                    success: true,
+                    text: `Sent ${content.amount} tokens to ${recipientAddress}\nTransaction hash: ${signature}`,
+                    data: {
                         signature,
                         amount: content.amount,
                         sender: content.senderWalletAddress,
                         recipient: recipientAddress,
                     }
                 }
+            }
+        } catch (error) {
+            logger.error('Error during transfer:', error instanceof Error ? error.message : String(error));
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            runtime.logger.info(`Transfer failed: ${errorMessage}`)
+            if (responses) {
+                responses.length = 0
+                const memory: Memory = {
+                    id: uuidv4() as UUID,
+                    entityId: message.entityId,
+                    roomId: message.roomId,
+                    content: {
+                        text: `Transfer failed: ${errorMessage}`,
+                        error: errorMessage
+                    }
+                }
                 responses.push(memory)
             }
-
-            return true;
-        } catch (error) {
-            logger.error('Error during transfer:', error);
-            runtime.logger.info(`Transfer failed: ${error.message}`)
-            responses.length = 0
-            const memory: Memory = {
-                entityId: uuidv4() as UUID,
-                roomId: message.roomId,
-                text: `Transfer failed: ${error.message}`,
-                content: {
-                    error: error.message
-                }
-            }
-            responses.push(memory)
-            return false;
+            return {
+                success: false,
+                text: `Transfer failed: ${errorMessage}`,
+                error: errorMessage
+            };
         }
     },
 
