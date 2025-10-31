@@ -4,7 +4,9 @@ import {
   type Memory,
   type State,
   type HandlerCallback,
+  type HandlerOptions,
   type ActionExample,
+  type ActionResult,
   type UUID,
   type Content,
 } from '@elizaos/core';
@@ -34,11 +36,11 @@ export const deleteRegistration: Action = {
   handler: async (
     runtime: IAgentRuntime,
     message: Memory,
-    state: State,
-    _options: { [key: string]: unknown },
-    callback: HandlerCallback,
-    responses: any[]
-  ): Promise<boolean> => {
+    state?: State,
+    options?: HandlerOptions,
+    callback?: HandlerCallback,
+    responses?: Memory[]
+  ): Promise<ActionResult | void | undefined> => {
     console.log('DELETE_REGISTRATION handler')
     //console.log('message', message)
 
@@ -54,11 +56,24 @@ export const deleteRegistration: Action = {
       console.log('deleting', componentData)
       output = takeItPrivate(runtime, message, 'Just cleared your registration: ' + componentData.address)
       runtime.deleteComponent(componentData.componentId)
+      callback?.(output)
+      return {
+        success: true,
+        text: 'Registration deleted successfully',
+        data: {
+          deletedAddress: componentData.address,
+          componentId: componentData.componentId
+        }
+      }
     } else {
       output = takeItPrivate(runtime, message, 'Cant find your registration')
+      callback?.(output)
+      return {
+        success: false,
+        text: 'Registration not found',
+        error: 'No registration found to delete'
+      }
     }
-    callback(output)
-    return true
   },
   examples: [
     [
