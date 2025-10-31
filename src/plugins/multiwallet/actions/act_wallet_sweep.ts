@@ -1,6 +1,7 @@
 import {
     type Action,
     type ActionExample,
+    type ActionResult,
     type Content,
     type HandlerCallback,
     type IAgentRuntime,
@@ -26,6 +27,7 @@ import {
     SystemProgram,
     TransactionMessage,
     VersionedTransaction,
+    TransactionInstruction,
 } from '@solana/web3.js';
 import bs58 from 'bs58';
 import { v4 as uuidv4 } from 'uuid';
@@ -44,7 +46,7 @@ interface SweepWalletContent extends Content {
  * Checks if the given sweep content is valid.
  */
 function isSweepWalletContent(content: SweepWalletContent): boolean {
-    logger.log('Content for sweep', content);
+    logger.log('Content for sweep', JSON.stringify(content));
 
     if (!content.senderWalletAddress || typeof content.senderWalletAddress !== 'string') {
         console.warn('bad senderWalletAddress')
@@ -136,12 +138,18 @@ export default {
         state: State,
         _options: { [key: string]: unknown },
         callback?: HandlerCallback,
-        responses: any[] = []
-    ): Promise<boolean> => {
+        responses?: Memory[]
+    ): Promise<ActionResult | void | undefined> => {
         logger.log('MULTIWALLET_SWEEP Starting handler...');
 
         const account = await getAccountFromMessage(runtime, message)
-        if (!account) return false; // shouldn't hit here
+        if (!account) {
+            return {
+                success: false,
+                text: 'Account not found',
+                error: 'ACCOUNT_NOT_FOUND'
+            }
+        }
 
         //const validSources = account.metawallets.map(mw => mw.keypairs.solana.publicKey)
         //console.log('validSources', validSources)
@@ -165,7 +173,11 @@ export default {
 
         if (!sourceResult.sourceWalletAddress) {
             console.log('MULTIWALLET_SWEEP cant determine source wallet address');
-            return false;
+            return {
+                success: false,
+                text: 'Could not determine source wallet address',
+                error: 'SOURCE_WALLET_NOT_FOUND'
+            };
         }
 
         // find this user's wallet
@@ -193,7 +205,11 @@ export default {
         console.log('userMetawallet', userMetawallet)
         if (!userMetawallet) {
             callback?.({ text: 'The requested wallet is not registered in your account.' });
-            return false;
+            return {
+                success: false,
+                text: 'The requested wallet is not registered in your account.',
+                error: 'WALLET_NOT_REGISTERED'
+            };
         }
         let found = [userMetawallet.keypairs.solana];
 
@@ -226,8 +242,8 @@ export default {
             // get wallet contents
             const pubKeyObj = new PublicKey(pubKey);
             const [balances, heldTokens] = await Promise.all([
-              solanaService.getBalancesByAddrs([pubKey]),
-              solanaService.getTokenAccountsByKeypair(pubKeyObj),
+                solanaService.getBalancesByAddrs([pubKey]),
+                solanaService.getTokenAccountsByKeypair(pubKeyObj),
             ]);
             const solBal = balances[pubKey]
             contextStr += '  Token Address (Symbol)\n';
@@ -260,14 +276,22 @@ export default {
 
         if (content === null) {
             console.log('no usable llm response')
-            return false
+            return {
+                success: false,
+                text: 'No usable response from language model',
+                error: 'LLM_PARSE_ERROR'
+            }
         }
 
         console.log('MULTIWALLET_SWEEP content', content);
 
         if (!isSweepWalletContent(content)) {
             callback?.({ text: 'Invalid sweep parameters provided' });
-            return false;
+            return {
+                success: false,
+                text: 'Invalid sweep parameters provided',
+                error: 'INVALID_PARAMETERS'
+            };
         }
 
         // find source keypair
@@ -276,7 +300,11 @@ export default {
         if (!sourceKp) {
             console.warn('MULTIWALLET_SWEEP Could not find the specified wallet')
             callback?.({ text: 'Could not find the specified wallet' });
-            return false;
+            return {
+                success: false,
+                text: 'Could not find the specified wallet',
+                error: 'WALLET_NOT_FOUND'
+            };
         }
         console.log('sourceKp', sourceKp)
 
@@ -526,7 +554,7 @@ export default {
                 recipientATAs.map(ata => connection.getAccountInfo(ata))
             );
 
-            const instructions = [];
+            const instructions: TransactionInstruction[] = [];
             let transferredTokens = 0;
             let skippedTokens = 0;
             let closedAccounts = 0;
@@ -642,7 +670,11 @@ export default {
 
             if (instructions.length === 0) {
                 callback?.({ text: 'No assets to sweep - no recipient ATAs exist and no empty accounts to close' });
-                return false;
+                return {
+                    success: false,
+                    text: 'No assets to sweep - no recipient ATAs exist and no empty accounts to close',
+                    error: 'NO_ASSETS_TO_SWEEP'
+                };
             }
 
             console.log(`Total instructions: ${instructions.length}`);
@@ -677,19 +709,28 @@ export default {
                 ].join('\n');
 
                 callback?.({ text: summary });
-                return true;
+                return {
+                    success: true,
+                    text: summary,
+                    data: {
+                        transferredTokens,
+                        skippedTokens,
+                        closedAccounts,
+                        signature
+                    }
+                };
 
             } else {
                 // Fall back to batching for very large numbers of instructions
                 console.log('Too many instructions for single transaction, batching...');
 
                 const batchSize = 8;
-                const batches = [];
+                const batches: TransactionInstruction[][] = [];
                 for (let i = 0; i < instructions.length; i += batchSize) {
                     batches.push(instructions.slice(i, i + batchSize));
                 }
 
-                const signatures = [];
+                const signatures: string[] = [];
                 for (let i = 0; i < batches.length; i++) {
                     const batch = batches[i];
                     console.log(`Sending batch ${i + 1}/${batches.length} with ${batch.length} instructions...`);
@@ -727,37 +768,38 @@ export default {
                 ].join('\n');
 
                 callback?.({ text: summary });
-                return true;
-            }
-            const responseText = `Sweep completed successfully! Transaction ID: ${signature}`;
-            responses.length = 0;
-            const memory: Memory = {
-                entityId: uuidv4() as UUID,
-                roomId: message.roomId,
-                text: responseText,
-                content: {
-                    text: responseText,
+                return {
                     success: true,
-                    signature,
-                    sender: content.senderWalletAddress,
-                    recipient: content.recipientWalletAddress,
-                }
-            };
-            responses.push(memory);
-            return true;
+                    text: summary,
+                    data: {
+                        transferredTokens,
+                        skippedTokens,
+                        closedAccounts,
+                        signatures
+                    }
+                };
+            }
         } catch (error) {
-            logger.error('Error during sweep:', error);
-            responses.length = 0;
-            const memory: Memory = {
-                entityId: uuidv4() as UUID,
-                roomId: message.roomId,
-                text: `Sweep failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-                content: {
-                    error: error instanceof Error ? error.message : 'Unknown error'
+            logger.error('Error during sweep:', error instanceof Error ? error.message : String(error));
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            if (responses) {
+                responses.length = 0
+                const memory: Memory = {
+                    id: uuidv4() as UUID,
+                    entityId: message.entityId,
+                    roomId: message.roomId,
+                    content: {
+                        text: `Sweep failed: ${errorMessage}`,
+                        error: errorMessage
+                    }
                 }
+                responses.push(memory)
+            }
+            return {
+                success: false,
+                text: `Sweep failed: ${errorMessage}`,
+                error: errorMessage
             };
-            responses.push(memory);
-            return false;
         }
     },
     examples: [
