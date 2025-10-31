@@ -43,7 +43,7 @@ interface OpenPositionContent extends Content {
  * Checks if the given position content is valid.
  */
 function isOpenPositionContent(content: OpenPositionContent): boolean {
-    logger.log('Content for open position', content);
+    logger.log({ content }, 'Content for open position');
 
     if (!content.amount || (typeof content.amount !== 'string' && typeof content.amount !== 'number')) {
         console.warn('bad amount', typeof (content.amount), content.amount)
@@ -103,11 +103,11 @@ async function swapToken(
         const amountBN = new BigNumber(amount);
         const adjustedAmount = amountBN.multipliedBy(new BigNumber(10).pow(decimals));
 
-        logger.log('Fetching quote with params:', {
+        logger.log({
             inputMint: inputTokenCA,
             outputMint: outputTokenCA,
             amount: adjustedAmount,
-        });
+        }, 'Fetching quote with params');
 
         const jupiterService = runtime.getService('JUPITER_SERVICE') as any;
 
@@ -149,7 +149,7 @@ async function swapToken(
             quoteResponse: quoteData
         };
     } catch (error) {
-        logger.error('Error in swapToken:', error);
+        logger.error({ error }, 'Error in swapToken');
         throw error;
     }
 }
@@ -203,7 +203,7 @@ export default {
         'OPEN_POSITION_ON_SOL',
         'OPEN_POSITION_ON_TOKENS',
     ],
-    validate: async (runtime: IAgentRuntime, message: Memory) => {
+    validate: async (runtime: IAgentRuntime, message: Memory, state?: State) => {
         // they have to be registered
         if (!await HasEntityIdFromMessage(runtime, message)) {
             console.log('OPEN_POSITION validate - author not found')
@@ -231,7 +231,7 @@ export default {
         _options: { [key: string]: unknown },
         callback?: HandlerCallback,
         responses: any[] = []
-    ): Promise<boolean> => {
+    ) => {
         logger.log('OPEN_POSITION Starting handler...');
         const account = await getAccountFromMessage(runtime, message)
         if (!account) return false; // shouldn't hit here
@@ -241,8 +241,10 @@ export default {
         const sources = await getWalletsFromText(runtime, message)
         console.log('sources', sources)
         if (sources.length !== 1) {
-            takeItPrivate2(runtime, message, "Can't determine source wallet", callback)
-            return false
+            if (callback) {
+                takeItPrivate2(runtime, message, "Can't determine source wallet", callback)
+            }
+            return
         }
         const sourceResult = {
             sourceWalletAddress: sources[0]
@@ -250,7 +252,7 @@ export default {
 
         if (!sourceResult.sourceWalletAddress) {
             console.log('OPEN_POSITION cant determine source wallet address');
-            return false;
+            return;
         }
 
 
@@ -284,7 +286,7 @@ export default {
 
         if (!found.length) {
             console.log('OPEN_POSITION did not find any local wallet with this source address', sourceResult);
-            return false;
+            return;
         }
         console.log('OPEN_POSITION found', found);
 
@@ -332,8 +334,8 @@ export default {
 
         if (content === null) {
             console.log('no usable llm response')
-            callback({ text: 'Could not figure out the request' });
-            return false
+            callback?.({ text: 'Could not figure out the request' });
+            return
         }
 
         console.log('OPEN_POSITION content', content);
@@ -343,8 +345,8 @@ export default {
         const sourceKp = found.find(kp => kp.publicKey === sourceResult.sourceWalletAddress);
         if (!sourceKp) {
             console.warn('OPEN_POSITION Could not find the specified wallet')
-            callback({ text: 'Could not find the specified wallet' });
-            return false;
+            callback?.({ text: 'Could not find the specified wallet' });
+            return;
         }
 
         // clean up symbols
@@ -379,8 +381,8 @@ export default {
 
         // check for input & output
         if (!isOpenPositionContent(content)) {
-            callback({ text: 'Invalid position parameters provided' });
-            return false;
+            callback?.({ text: 'Invalid position parameters provided' });
+            return;
         }
 
         const secretKey = bs58.decode(sourceKp.privateKey);
@@ -490,12 +492,14 @@ ${content.exitReasoning ? `• Reasoning: ${content.exitReasoning}` : ''}
 
 💼 **Wallet:** ${sourceResult.sourceWalletAddress}`;
 
-            takeItPrivate2(runtime, message, responseText, callback)
-            return true;
+            if (callback) {
+                takeItPrivate2(runtime, message, responseText, callback)
+            }
         } catch (error) {
-            logger.error('Error during position opening:', error);
-            takeItPrivate2(runtime, message, `Position opening failed: ${error instanceof Error ? error.message : 'Unknown error'}`, callback)
-            return false;
+            runtime.logger.error({ error }, 'Error during position opening');
+            if (callback) {
+                takeItPrivate2(runtime, message, `Position opening failed: ${error instanceof Error ? error.message : 'Unknown error'}`, callback)
+            }
         }
     },
     examples: [
