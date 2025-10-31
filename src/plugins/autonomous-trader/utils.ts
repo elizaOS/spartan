@@ -1,6 +1,9 @@
 import {
   type IAgentRuntime,
   type Content,
+  type Memory,
+  type ChannelType,
+  type UUID,
   ModelType,
   logger,
   parseJSONObjectFromText,
@@ -8,24 +11,67 @@ import {
 } from '@elizaos/core';
 //import { interface_users_ByIds } from './interfaces/int_users'
 //import { interface_accounts_ByIds } from './interfaces/int_accounts'
-import { PublicKey, } from '@solana/web3.js';
+import { PublicKey } from '@solana/web3.js';
+import { type Metawallet } from '../multiwallet/types';
+
+// Type definitions for better type safety
+interface AskObject {
+  prompt?: string;
+  system?: string;
+  [key: string]: any;
+}
+
+interface CacheWrapper<T> {
+  exp?: number;
+  setAt?: number;
+  data: T;
+}
+
+interface CacheOptions {
+  notOlderThan?: number;
+}
+
+interface TokenAccount {
+  account: {
+    data: {
+      parsed: {
+        info: {
+          mint: string;
+          tokenAmount: {
+            amount: string;
+            decimals: number;
+          };
+        };
+      };
+    };
+  };
+  pubkey: PublicKey;
+}
+
+interface ParsedTokenAccount {
+  symbol: string;
+  decimals: number;
+  balanceUi: number;
+}
 
 
 // we used to use message.entityId
 // this is the user entity id
-export async function getEntityIdFromMessage(runtime, message) {
+export async function getEntityIdFromMessage(runtime: IAgentRuntime, message: Memory): Promise<string | undefined> {
   //return createUniqueUuid(runtime, message.metadata.fromId);
   //console.log('getEntityIdFromMessage message', message)
 
   // ensureEntity because I don't think the clients are going to build it
   if (message?.metadata?.sourceId) {
-    const entityId = message.metadata.sourceId
+    const entityId: UUID = message.metadata.sourceId
     const entity = await runtime.getEntityById(entityId);
     if (!entity) {
       const success = await runtime.createEntity({
         id: entityId,
+        names: [],
         //names: [message.names],
         //metadata: entityMetadata,
+        metadata: {}, // Empty metadata for now
         agentId: runtime.agentId,
       });
     }
@@ -33,7 +79,7 @@ export async function getEntityIdFromMessage(runtime, message) {
   return message?.metadata?.sourceId
 }
 
-export async function HasEntityIdFromMessage(runtime, message) {
+export async function HasEntityIdFromMessage(runtime: IAgentRuntime, message: Memory): Promise<boolean> {
   /*
   if (!message?.metadata?.fromId) {
     console.log('WALLET_IMPORT validate - author not found')
@@ -45,7 +91,7 @@ export async function HasEntityIdFromMessage(runtime, message) {
 }
 
 // they've started the registered process by providing an email
-export async function getDataFromMessage(runtime, message) {
+export async function getDataFromMessage(runtime: IAgentRuntime, message: Memory): Promise<any> {
   //console.log('getDataFromMessage', message)
   //return createUniqueUuid(runtime, message.metadata.fromId);
   const entityId = await getEntityIdFromMessage(runtime, message)
@@ -66,18 +112,20 @@ export async function getDataFromMessage(runtime, message) {
     if (component && !component.discordUserId) {
       //console.log('component', component)
       // find the id
-      const discordUserId = message.metadata.fromId
-      component.discordUserId = discordUserId
-      // save update it
-      //const mockComponent = accountMockComponent(component)
-      //const intAcountService = runtime.getService('AUTONOMOUS_TRADER_INTERFACE_ACCOUNTS') as any;
-      //await intAcountService.interface_account_upsert(message, component)
-      const intUserService = runtime.getService('AUTONOMOUS_TRADER_INTERFACE_USERS') as any;
-      // we need componentId
-      if (intUserService) {
-        // don't need to await it
-        // we should because it seems to lead to like 8 writes
-        await intUserService.interface_user_update(component)
+      const discordUserId = (message.metadata as any)?.fromId
+      if (discordUserId) {
+        component.discordUserId = discordUserId
+        // save update it
+        //const mockComponent = accountMockComponent(component)
+        //const intAcountService = runtime.getService('AUTONOMOUS_TRADER_INTERFACE_ACCOUNTS') as any;
+        //await intAcountService.interface_account_upsert(message, component)
+        const intUserService = runtime.getService('AUTONOMOUS_TRADER_INTERFACE_USERS') as any;
+        // we need componentId
+        if (intUserService) {
+          // don't need to await it
+          // we should because it seems to lead to like 8 writes
+          await intUserService.interface_user_update(component)
+        }
       }
     }
   }
@@ -86,7 +134,7 @@ export async function getDataFromMessage(runtime, message) {
 
 // they have a verified email
 // returns componentData
-export async function getAccountFromMessage(runtime, message) {
+export async function getAccountFromMessage(runtime: IAgentRuntime, message: Memory): Promise<any> {
   const componentData = await getDataFromMessage(runtime, message)
   if (componentData?.verified) {
     const emailAddr = componentData.address
@@ -150,7 +198,7 @@ console.log('MULTIWALLET_SWAP sourceResult', sourceResult);
 // max wallets? 1, 2 for transfer
 // we return an array of what?
 // RENAME: to getAddressFromText
-export async function getWalletsFromText(runtime, message) {
+export async function getWalletsFromText(runtime: IAgentRuntime, message: Memory): Promise<string[]> {
   // what about partial?
   // only works in the source context...
   const solanaService = runtime.getService('chain_solana') as any;
@@ -165,10 +213,10 @@ export async function getWalletsFromText(runtime, message) {
 
 export async function acquireService(
   runtime: IAgentRuntime,
-  serviceType,
+  serviceType: string,
   asking = '',
   retries = 10
-) {
+): Promise<any> {
   let service = runtime.getService(serviceType) as any;
   while (!service) {
     console.log(asking, 'waiting for', serviceType, 'service...');
@@ -184,16 +232,16 @@ export async function acquireService(
 
 export async function askLlmObject(
   runtime: IAgentRuntime,
-  ask: Object,
+  ask: AskObject,
   requiredFields: string[],
   maxRetries = 3
-) {
+): Promise<any> {
   //console.log('using askLlmObject')
   let responseContent: any | null = null;
   // Retry if missing required fields
   let retries = 0;
 
-  function checkRequired(resp) {
+  function checkRequired(resp: any): boolean {
     if (!resp) {
       console.log('No response')
       return false;
@@ -247,14 +295,14 @@ export async function askLlmObject(
   return responseContent;
 }
 
-export async function messageReply(runtime, message, reply) {
-  const responseContent = {
+export function messageReply(runtime: IAgentRuntime, message: Memory, reply: string): Content {
+  const responseContent: Content = {
     text: reply,
     attachments: [],
-    source: message.source,
+    source: (message as any).source || 'unknown',
     // keep channelType the same
-    channelType: message.channelType,
-    inReplyTo: createUniqueUuid(runtime, message.id)
+    channelType: (message as any).channelType as ChannelType | undefined,
+    inReplyTo: createUniqueUuid(runtime, message.id || '')
     // for the web UI
     //actions: ['REPLY'],
   };
@@ -263,24 +311,24 @@ export async function messageReply(runtime, message, reply) {
   return responseContent
 }
 
-export function takeItPrivate(runtime, message, reply): Content {
-  const responseContent = {
+export function takeItPrivate(runtime: IAgentRuntime, message: Memory, reply: string): Content {
+  const responseContent: Content = {
     text: reply,
-    channelType: 'DM',
-    inReplyTo: createUniqueUuid(runtime, message.id)
+    channelType: 'DM' as ChannelType,
+    inReplyTo: createUniqueUuid(runtime, message.id || '')
     // for the web UI
     //actions: ['REPLY'],
   };
   return responseContent
 }
 
-function splitTextBySentence(text, maxLength = 4096) {
+function splitTextBySentence(text: string, maxLength = 4096): string[] {
   if (!text) return [];
 
   const sentenceRegex = /[^.!?]+[.!?]+[\])'"`’”]*|[^.!?]+$/g;
   const sentences = text.match(sentenceRegex) || [];
 
-  const chunks = [];
+  const chunks: string[] = [];
   let currentChunk = '';
 
   for (const sentence of sentences) {
@@ -305,7 +353,7 @@ function splitTextBySentence(text, maxLength = 4096) {
   return chunks;
 }
 
-export function takeItPrivate2(runtime, message, reply, callback): Content {
+export function takeItPrivate2(runtime: IAgentRuntime, message: Memory, reply: string, callback: (content: Content) => void): void {
   console.log('takeItPrivate2 input', reply.length)
   //console.log('source', message)
   if (message.content.source === 'discord') {
@@ -316,10 +364,10 @@ export function takeItPrivate2(runtime, message, reply, callback): Content {
       console.log('discord split chunk', c.length)
       if (c) {
         console.log('sending', c)
-        const responseContent = {
+        const responseContent: Content = {
           text: c,
-          channelType: 'DM',
-          inReplyTo: createUniqueUuid(runtime, message.id)
+          channelType: 'DM' as ChannelType,
+          inReplyTo: createUniqueUuid(runtime, message.id || '')
           // for the web UI
           //actions: ['REPLY'],
         };
@@ -331,20 +379,20 @@ export function takeItPrivate2(runtime, message, reply, callback): Content {
     const chunks = splitTextBySentence(reply, 4096)
     for (const c of chunks) {
       console.log('telegram split chunk', c.length)
-      const responseContent = {
+      const responseContent: Content = {
         text: c,
-        channelType: 'DM',
-        inReplyTo: createUniqueUuid(runtime, message.id)
+        channelType: 'DM' as ChannelType,
+        inReplyTo: createUniqueUuid(runtime, message.id || '')
         // for the web UI
         //actions: ['REPLY'],
       };
       callback(responseContent)
     }
   } else {
-    const responseContent = {
+    const responseContent: Content = {
       text: reply,
-      channelType: 'DM',
-      inReplyTo: createUniqueUuid(runtime, message.id)
+      channelType: 'DM' as ChannelType,
+      inReplyTo: createUniqueUuid(runtime, message.id || '')
       // for the web UI
       //actions: ['REPLY'],
     };
@@ -353,12 +401,14 @@ export function takeItPrivate2(runtime, message, reply, callback): Content {
 }
 
 // also in solana service
-export async function parseTokenAccounts(heldTokens) {
-  const out = {}
+export async function parseTokenAccounts(heldTokens: TokenAccount[]): Promise<Record<string, ParsedTokenAccount>> {
+  const out: Record<string, ParsedTokenAccount> = {}
   for (const t of heldTokens) {
     const ca = t.account.data.parsed.info.mint
     const mintKey = new PublicKey(ca);
-    const symbol = await solanaService.getTokenSymbol(mintKey)
+    // Note: solanaService should be passed as parameter or obtained from runtime
+    // const symbol = await solanaService.getTokenSymbol(mintKey)
+    const symbol = 'UNKNOWN'; // Placeholder - needs proper service reference
     const amountRaw = t.account.data.parsed.info.tokenAmount.amount;
     const decimals = t.account.data.parsed.info.tokenAmount.decimals;
     const balance = Number(amountRaw) / (10 ** decimals);
@@ -371,7 +421,25 @@ export async function parseTokenAccounts(heldTokens) {
   return out
 }
 
-export async function walletContainsMinimum(runtime, pubKey, ca, amount) {
+export function extractBase64Strings(input: string): string[] {
+  const base64Regex = /(?:[A-Za-z0-9+/]{4}){4,}(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?/g;
+  const candidates = input.match(base64Regex) || [];
+
+  return candidates.filter(str => {
+    // Must contain at least one non-base58 character (like +, /, or =)
+    if (!/[+/=]/.test(str)) return false;
+
+    try {
+      const decoded = Buffer.from(str, 'base64');
+      const reEncoded = decoded.toString('base64').replace(/=+$/, '');
+      return reEncoded === str.replace(/=+$/, '');
+    } catch {
+      return false;
+    }
+  });
+}
+
+export async function walletContainsMinimum(runtime: IAgentRuntime, pubKey: string, ca: string, amount: number): Promise<boolean | null> {
   // usually validate on getting shapes for setstrategy
   //console.trace('walletContainsMinimum')
   console.log('walletContainsMinimum', pubKey)
@@ -398,7 +466,7 @@ export async function walletContainsMinimum(runtime, pubKey, ca, amount) {
   }
 }
 
-export function accountMockComponent(account) {
+export function accountMockComponent(account: any): any {
   const id = account.componentId
   const entityId = account.entityId
   delete account.componentId
@@ -411,7 +479,7 @@ export function accountMockComponent(account) {
   }
 }
 
-export function generateRandomString(length) {
+export function generateRandomString(length: number): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
   let result = '';
   const charsLength = chars.length;
@@ -423,14 +491,14 @@ export function generateRandomString(length) {
   return result;
 }
 
-export function findGeneratedCode(message, length) {
+export function findGeneratedCode(message: string, length: number): string | null {
   if (!message?.match) return null;
   const pattern = new RegExp(`\\b[A-Za-z0-9]{${length}}\\b`);
   const match = message.match(pattern);
   return match ? match[0] : null;
 }
 
-export function extractEmails(text) {
+export function extractEmails(text: string): string[] {
   const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
   const matches = text.match(emailRegex);
   return matches || [];
@@ -438,20 +506,20 @@ export function extractEmails(text) {
 
 //
 
-export async function getCacheExp(runtime, key) {
-  const wrapper = await runtime.getCache<any>(key);
+export async function getCacheExp<T>(runtime: IAgentRuntime, key: string): Promise<T | false> {
+  const wrapper = await runtime.getCache<CacheWrapper<T>>(key);
   if (!wrapper) return false
   // if exp is in the past
-  if (wrapper.exp < Date.now()) {
+  if (wrapper.exp && wrapper.exp < Date.now()) {
     // no data
     return false
   }
   return wrapper.data
 }
 
-export async function setCacheExp(runtime, key, val, ttlInSecs) {
+export async function setCacheExp<T>(runtime: IAgentRuntime, key: string, val: T, ttlInSecs: number): Promise<void> {
   const exp = Date.now() + ttlInSecs * 1_000
-  return runtime.setCache<any>(key, {
+  await runtime.setCache<CacheWrapper<T>>(key, {
     // sys call waste atm
     // fetchedAt: Date.now(),
     exp,
@@ -459,10 +527,10 @@ export async function setCacheExp(runtime, key, val, ttlInSecs) {
   });
 }
 
-export async function getCacheTimed(runtime, key, options = {}) {
-  const wrapper = await runtime.getCache<any>(key);
+export async function getCacheTimed<T>(runtime: IAgentRuntime, key: string, options: CacheOptions = {}): Promise<T | false> {
+  const wrapper = await runtime.getCache<CacheWrapper<T>>(key);
   if (!wrapper) return false
-  if (options.notOlderThan) {
+  if (options.notOlderThan && wrapper.setAt) {
     const diff = Date.now() - wrapper.setAt
     //console.log('checking notOlderThan', diff + 'ms', 'setAt', wrapper.setAt, 'asking', options.notOlderThan)
     if (diff > options.notOlderThan) {
@@ -474,9 +542,9 @@ export async function getCacheTimed(runtime, key, options = {}) {
   return wrapper.data
 }
 
-export async function setCacheTimed(runtime, key, val, tsInMs = 0) {
+export async function setCacheTimed<T>(runtime: IAgentRuntime, key: string, val: T, tsInMs = 0): Promise<void> {
   if (tsInMs === 0) tsInMs = Date.now()
-  return runtime.setCache<any>(key, {
+  await runtime.setCache<CacheWrapper<T>>(key, {
     // sys call waste atm
     setAt: tsInMs,
     data: val,
@@ -493,9 +561,9 @@ export async function changeAllWalletStrategiesToNone(runtime: IAgentRuntime): P
     console.log('changeAllWalletStrategiesToNone - starting operation')
 
     // Get all meta wallets to see what we're working with
-    const { getMetaWallets } = await import('./interfaces/int_wallets')
-    const { interface_accounts_ByIds, interface_account_update } = await import('./interfaces/int_accounts')
-    const { interface_accounts_list } = await import('./interfaces/int_accounts')
+    const { getMetaWallets } = await import('../multiwallet/interfaces/int_wallets')
+    const { interface_accounts_ByIds, interface_account_update } = await import('../account/interfaces/int_accounts')
+    const { interface_accounts_list } = await import('../account/interfaces/int_accounts')
 
     const allMetaWallets = await getMetaWallets(runtime)
     console.log('changeAllWalletStrategiesToNone - found', allMetaWallets.length, 'meta wallets')
@@ -571,7 +639,7 @@ export async function closeZeroBalanceTokenAccounts(runtime: IAgentRuntime): Pro
     const bs58 = await import('bs58')
 
     // Get all meta wallets
-    const { getMetaWallets } = await import('./interfaces/int_wallets')
+    const { getMetaWallets } = await import('../multiwallet/interfaces/int_wallets')
     const allMetaWallets = await getMetaWallets(runtime)
     console.log('closeZeroBalanceTokenAccounts - found', allMetaWallets.length, 'meta wallets')
 
@@ -586,8 +654,8 @@ export async function closeZeroBalanceTokenAccounts(runtime: IAgentRuntime): Pro
 
     // Process each wallet
     for (const metawallet of allMetaWallets) {
-      if (!metawallet.keypairs?.solana?.privateKey) {
-        console.log('closeZeroBalanceTokenAccounts - skipping wallet without private key')
+      if (!metawallet.keypairs?.solana) {
+        console.log('closeZeroBalanceTokenAccounts - skipping wallet without solana keypair')
         continue
       }
 
@@ -597,7 +665,7 @@ export async function closeZeroBalanceTokenAccounts(runtime: IAgentRuntime): Pro
 
       try {
         // Create keypair from private key
-        const secretKey = bs58.default.decode(metawallet.keypairs.solana.privateKey)
+        const secretKey = bs58.default.decode((metawallet.keypairs.solana as any).privateKey)
         const keypair = Keypair.fromSecretKey(secretKey)
 
         // Get all token accounts for this wallet
