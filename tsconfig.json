@@ -34,11 +34,14 @@
       "@elizaos/core/*": [
         "../core/src/*"
       ],
+      "discord.js": [
+        "packages/spartan/src/discord-types.d.ts"
+      ],
       "discord-api-types": [
-        "../../node_modules/discord-api-types"
+        "node_modules/discord-api-types"
       ],
       "discord-api-types/*": [
-        "../../node_modules/discord-api-types/*"
+        "node_modules/discord-api-types/*"
       ]
     }
   },
@@ -46,9 +49,9 @@
     "src/index.ts"
   ],
   "exclude": [
-    "**/node_modules/@discordjs/builders/node_modules/**",
-    "**/node_modules/@discordjs/formatters/node_modules/**",
-    "**/node_modules/@discordjs/ws/node_modules/**",
-    "**/node_modules/discord.js/typings/index.d.mts"
+    "**/node_modules/**",
+    "dist/**",
+    "**/*.test.ts",
+    "**/*.spec.ts"
   ]
 }
