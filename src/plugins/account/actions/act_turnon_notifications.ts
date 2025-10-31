@@ -1,6 +1,7 @@
 import {
     type Action,
     type ActionExample,
+    type ActionResult,
     type Content,
     type HandlerCallback,
     type IAgentRuntime,
@@ -10,28 +11,6 @@ import {
 } from '@elizaos/core';
 import { HasEntityIdFromMessage, getAccountFromMessage, takeItPrivate2, accountMockComponent } from '../../autonomous-trader/utils';
 import { interface_account_update } from '../interfaces/int_accounts';
-
-/**
- * Interface representing notification settings content
- */
-interface NotificationContent extends Content {
-    enableNotifications: boolean;
-}
-
-/**
- * Checks if the given notification content is valid
- */
-function isValidNotificationContent(content: NotificationContent): boolean {
-    logger.log('Content for notification settings', content);
-
-    if (typeof content.enableNotifications !== 'boolean') {
-        console.warn('Invalid enableNotifications value:', content.enableNotifications);
-        return false;
-    }
-
-    console.log('Notification content is valid');
-    return true;
-}
 
 export default {
     name: 'TURN_ON_NOTIFICATIONS',
@@ -84,20 +63,30 @@ export default {
         _options: { [key: string]: unknown },
         callback?: HandlerCallback,
         responses: any[] = []
-    ): Promise<boolean> => {
+    ): Promise<ActionResult | void | undefined> => {
         logger.log('TURN_ON_NOTIFICATIONS Starting handler...');
 
         const account = await getAccountFromMessage(runtime, message);
         if (!account) {
-            takeItPrivate2(runtime, message, "Account not found. Please register first.", callback);
-            return false;
+            if (callback) {
+                takeItPrivate2(runtime, message, "Account not found. Please register first.", callback);
+            }
+            return {
+                success: false,
+                error: "Account not found. Please register first."
+            };
         }
 
         try {
             // Check if account component exists
             if (!account.componentId) {
-                takeItPrivate2(runtime, message, "Account component not found. Please try again.", callback);
-                return false;
+                if (callback) {
+                    takeItPrivate2(runtime, message, "Account component not found. Please try again.", callback);
+                }
+                return {
+                    success: false,
+                    error: "Account component not found. Please try again."
+                };
             }
 
             // Update account component with notifications enabled
@@ -110,8 +99,13 @@ export default {
             const success = await interface_account_update(runtime, component);
 
             if (!success) {
-                takeItPrivate2(runtime, message, "Failed to update notification settings. Please try again.", callback);
-                return false;
+                if (callback) {
+                    takeItPrivate2(runtime, message, "Failed to update notification settings. Please try again.", callback);
+                }
+                return {
+                    success: false,
+                    error: "Failed to update notification settings. Please try again."
+                };
             }
 
             const responseText = `✅ **Notifications Enabled!**
@@ -124,13 +118,27 @@ export default {
 
 To turn off notifications later, just say "turn off notifications" or "disable notifications".`;
 
-            takeItPrivate2(runtime, message, responseText, callback);
-            return true;
+            if (callback) {
+                takeItPrivate2(runtime, message, responseText, callback);
+            }
+            return {
+                success: true,
+                text: responseText,
+                data: {
+                    notificationsEnabled: true
+                }
+            };
 
         } catch (error) {
-            logger.error('Error during notification enabling:', error);
-            takeItPrivate2(runtime, message, `Failed to enable notifications: ${error instanceof Error ? error.message : 'Unknown error'}`, callback);
-            return false;
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            logger.error('Error during notification enabling:', errorMessage);
+            if (callback) {
+                takeItPrivate2(runtime, message, `Failed to enable notifications: ${errorMessage}`, callback);
+            }
+            return {
+                success: false,
+                error: `Failed to enable notifications: ${errorMessage}`
+            };
         }
     },
     examples: [
