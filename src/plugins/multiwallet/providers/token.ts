@@ -201,7 +201,11 @@ export const tokenProvider: Provider = {
             }
 
         } else {
-            tokenStr = 'Token details are only available in private messages.'
+          console.log('Token details are only available in private messages.')
+          // don't need to say this in the prompt, just wastes tokens
+          //tokenStr = 'Token details are only available in private messages.'
+
+          // what can we say about a token publicly? price/data provider info
         }
 
         console.log('tokenStr', tokenStr)
