@@ -1,6 +1,7 @@
 import {
     type Action,
     type ActionExample,
+    type ActionResult,
     type Content,
     type HandlerCallback,
     type IAgentRuntime,
@@ -22,10 +23,10 @@ import BigNumber from 'bignumber.js';
 import bs58 from 'bs58';
 import { v4 as uuidv4 } from 'uuid';
 import { UUID } from 'crypto';
-import { getWalletKey } from '../keypairUtils';
+// import { getWalletKey } from '../keypairUtils'; // Commented out as module not found
 import { SOLANA_SERVICE_NAME } from '../../autonomous-trader/constants';
-import type { SolanaService } from '../service';
-import type { Item } from '../types';
+// import type { SolanaService } from '../service'; // Commented out as module not found
+// import type { Item } from '../types'; // Commented out as module not found
 import { askLlmObject, takeItPrivate, getAccountFromMessage, getWalletsFromText, HasEntityIdFromMessage, getDataFromMessage } from '../../autonomous-trader/utils'
 
 /**
@@ -44,7 +45,7 @@ interface SwapWalletContent extends Content {
  * Checks if the given swap content is valid.
  */
 function isSwapWalletContent(content: SwapWalletContent): boolean {
-    logger.log('Content for swap', content);
+    logger.log('Content for swap', JSON.stringify(content));
 
     /*
     if (!content.sourceWalletAddress || typeof content.sourceWalletAddress !== 'string') {
@@ -107,11 +108,11 @@ async function swapToken(
         const amountBN = new BigNumber(amount);
         const adjustedAmount = amountBN.multipliedBy(new BigNumber(10).pow(decimals));
 
-        logger.log('Fetching quote with params:', {
+        logger.log('Fetching quote with params:', JSON.stringify({
             inputMint: inputTokenCA,
             outputMint: outputTokenCA,
-            amount: adjustedAmount,
-        });
+            amount: adjustedAmount.toString(),
+        }));
 
         const jupiterService = runtime.getService('JUPITER_SERVICE') as any;
 
@@ -147,9 +148,9 @@ async function swapToken(
         };
 
         const swapData = await jupiterService.executeSwap({
-          quoteResponse: quoteData,
-          userPublicKey: walletPublicKey.toBase58(),
-          slippageBps: 200.
+            quoteResponse: quoteData,
+            userPublicKey: walletPublicKey.toBase58(),
+            slippageBps: 200.
         });
         //console.log('swapData', swapData)
 
@@ -175,7 +176,7 @@ async function swapToken(
             quoteResponse: quoteData
         };
     } catch (error) {
-        logger.error('Error in swapToken:', error);
+        logger.error('Error in swapToken:', error instanceof Error ? error.message : String(error));
         throw error;
     }
 }
@@ -266,11 +267,17 @@ export default {
         state: State,
         _options: { [key: string]: unknown },
         callback?: HandlerCallback,
-        responses: any[] = []
-    ): Promise<boolean> => {
+        responses?: Memory[]
+    ): Promise<ActionResult | void | undefined> => {
         logger.log('MULTIWALLET_SWAP Starting handler...');
         const account = await getAccountFromMessage(runtime, message)
-        if (!account) return false; // shouldn't hit here
+        if (!account) {
+            return {
+                success: false,
+                text: 'Account not found',
+                error: 'ACCOUNT_NOT_FOUND'
+            }
+        }
         console.log('account', account)
 
         // local agent wallet?
@@ -283,8 +290,12 @@ export default {
         const sources = await getWalletsFromText(runtime, message)
         console.log('sources', sources)
         if (sources.length !== 1) {
-            callback(takeItPrivate(runtime, message, "Can't determine source wallet"))
-            return
+            callback?.(takeItPrivate(runtime, message, "Can't determine source wallet"))
+            return {
+                success: false,
+                text: "Can't determine source wallet",
+                error: 'SOURCE_WALLET_AMBIGUOUS'
+            }
         }
         const sourceResult = {
             sourceWalletAddress: sources[0]
@@ -302,7 +313,11 @@ export default {
 
         if (!sourceResult.sourceWalletAddress) {
             console.log('MULTIWALLET_SWAP cant determine source wallet address');
-            return false;
+            return {
+                success: false,
+                text: 'Could not determine source wallet address',
+                error: 'SOURCE_WALLET_NOT_FOUND'
+            };
         }
 
         // find this user's wallet
@@ -325,7 +340,7 @@ export default {
         const userMetawallets = account.metawallets;
 
         // confirm wallet is in this list
-        let found = [];
+        let found: any[] = [];
         for (const mw of userMetawallets) {
             const kp = mw.keypairs.solana;
             if (kp) {
@@ -338,7 +353,11 @@ export default {
 
         if (!found.length) {
             console.log('MULTIWALLET_SWAP did not find any local wallet with this source address', sourceResult);
-            return false;
+            return {
+                success: false,
+                text: 'No local wallet found with this source address',
+                error: 'WALLET_NOT_FOUND'
+            };
         }
         console.log('MULTIWALLET_SWAP found', found);
 
@@ -351,8 +370,8 @@ export default {
             // get wallet contents
             const pubKeyObj = new PublicKey(pubKey);
             const [balances, heldTokens] = await Promise.all([
-              solanaService.getBalancesByAddrs([pubKey]),
-              solanaService.getTokenAccountsByKeypair(pubKeyObj),
+                solanaService.getBalancesByAddrs([pubKey]),
+                solanaService.getTokenAccountsByKeypair(pubKeyObj),
             ]);
             const solBal = balances[pubKey]
             contextStr += '  Token Address (Symbol)\n';
@@ -400,8 +419,12 @@ export default {
         if (content === null) {
             //return this.handler(runtime, message, state, _options, callback, responses)
             console.log('no usable llm response')
-            callback({ text: 'Could not figure out the request' });
-            return false
+            callback?.({ text: 'Could not figure out the request' });
+            return {
+                success: false,
+                text: 'Could not figure out the request',
+                error: 'LLM_PARSE_ERROR'
+            }
         }
 
         console.log('MULTIWALLET_SWAP content', content);
@@ -411,8 +434,12 @@ export default {
         const sourceKp = found.find(kp => kp.publicKey === sourceResult.sourceWalletAddress);
         if (!sourceKp) {
             console.warn('MULTIWALLET_SWAP Could not find the specified wallet')
-            callback({ text: 'Could not find the specified wallet' });
-            return false;
+            callback?.({ text: 'Could not find the specified wallet' });
+            return {
+                success: false,
+                text: 'Could not find the specified wallet',
+                error: 'WALLET_NOT_FOUND'
+            };
         }
 
         // clean up symbols
@@ -457,8 +484,12 @@ export default {
 
         // check for input & output
         if (!isSwapWalletContent(content)) {
-            callback({ text: 'Invalid swap parameters provided' });
-            return false;
+            callback?.({ text: 'Invalid swap parameters provided' });
+            return {
+                success: false,
+                text: 'Invalid swap parameters provided',
+                error: 'INVALID_PARAMETERS'
+            };
         }
 
         const secretKey = bs58.decode(sourceKp.privateKey);
@@ -550,24 +581,27 @@ export default {
             };
             responses.push(memory);
             */
-            callback(takeItPrivate(runtime, message, responseText))
-            return true;
-        } catch (error) {
-            logger.error('Error during token swap:', error);
-            /*
-            responses.length = 0;
-            const memory: Memory = {
-                entityId: uuidv4() as UUID,
-                roomId: message.roomId,
-                text: `Swap failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-                content: {
-                    error: error instanceof Error ? error.message : 'Unknown error'
+            callback?.(takeItPrivate(runtime, message, responseText))
+            return {
+                success: true,
+                text: responseText,
+                data: {
+                    txid,
+                    amount: content.amount,
+                    inputToken: content.inputTokenSymbol,
+                    outputToken: content.outputTokenSymbol,
+                    outputAmount: outputAmount
                 }
             };
-            responses.push(memory);
-            */
-            callback(takeItPrivate(runtime, message, `Swap failed: ${error instanceof Error ? error.message : 'Unknown error'}`))
-            return false;
+        } catch (error) {
+            logger.error('Error during token swap:', error instanceof Error ? error.message : String(error));
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            callback?.(takeItPrivate(runtime, message, `Swap failed: ${errorMessage}`))
+            return {
+                success: false,
+                text: `Swap failed: ${errorMessage}`,
+                error: errorMessage
+            };
         }
     },
     examples: [
