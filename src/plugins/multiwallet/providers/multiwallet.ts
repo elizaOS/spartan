@@ -1,7 +1,7 @@
 import type { Action, IAgentRuntime, Memory, Provider, State } from '@elizaos/core';
 import { addHeader, composeActionExamples, formatActionNames, formatActions } from '@elizaos/core';
-import type { IToken } from '../types';
-import { getAccountFromMessage, solanaWalletToLLMString } from '../../autonomous-trader/utils'
+//import type { IToken } from '../types';
+import { getAccountFromMessage } from '../../autonomous-trader/utils'
 
 function formatYYMMDD_HHMMSS(date) {
   const pad2 = num => num.toString().padStart(2, '0');
@@ -173,6 +173,5 @@ export const multiwalletProvider: Provider = {
       values,
       text,
     };
-    return false;
   },
 };
