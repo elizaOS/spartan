@@ -5,6 +5,8 @@ import {
   type Memory,
   type State,
   type HandlerCallback,
+  type ActionResult,
+  type HandlerOptions,
 } from '@elizaos/core';
 import { HasEntityIdFromMessage, getAccountFromMessage, getWalletsFromText, takeItPrivate, takeItPrivate2, accountMockComponent } from '../../autonomous-trader/utils'
 import CONSTANTS from '../../autonomous-trader/constants'
@@ -18,7 +20,7 @@ export const userMetawalletDelete: Action = {
   validate: async (runtime: IAgentRuntime, message: Memory) => {
     //console.log('USER_METAWALLET_DELETE validate', message?.metadata?.fromId)
 
-    const traderChainService = runtime.getService('TRADER_CHAIN') as any;
+    const traderChainService = runtime.getService('INTEL_CHAIN') as any;
     if (!traderChainService) return false
     const traderStrategyService = runtime.getService('TRADER_STRATEGY') as any;
     if (!traderStrategyService) return false
@@ -38,17 +40,17 @@ export const userMetawalletDelete: Action = {
   handler: async (
     runtime: IAgentRuntime,
     message: Memory,
-    state: State,
-    _options: { [key: string]: unknown },
+    state?: State,
+    options?: HandlerOptions,
     callback?: HandlerCallback,
-    responses: any[]
-  ): Promise<boolean> => {
+    responses?: Memory[]
+  ): Promise<ActionResult | void | undefined> => {
     console.log('USER_METAWALLET_DELETE handler')
 
     const sources = await getWalletsFromText(runtime, message)
     //console.log('sources', sources)
     if (sources.length !== 1) {
-      callback(takeItPrivate(runtime, message, "Can't determine wallet to delete"))
+      callback?.(takeItPrivate(runtime, message, "Can't determine wallet to delete"))
       return
     }
 
