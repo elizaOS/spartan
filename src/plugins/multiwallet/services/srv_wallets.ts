@@ -1,4 +1,5 @@
-import { IAgentRuntime, getSalt, encryptStringValue, Service, logger } from '@elizaos/core';
+import {  getSalt, encryptStringValue, Service, logger } from '@elizaos/core';
+import type { IAgentRuntime, UUID } from '@elizaos/core';
 import { getWalletByUserEntityIds, getSpartanWallets, getMetaWallets } from '../interfaces/int_wallets';
 import { acquireService, accountMockComponent, walletContainsMinimum } from '../../autonomous-trader/utils';
 
@@ -73,7 +74,7 @@ export class InterfaceWalletService extends Service {
       }
     }
 
-    let meetsReq = false
+    let meetsReq: boolean | null = false
     if (account.holderCheck) {
       meetsReq = await walletContainsMinimum(this.runtime, account.holderCheck, 'Gu3LDkn7Vx3bmCzLafYNKcDxv2mH7YN44NJZFXnypump', 1_000_000)
       if (!meetsReq) {
@@ -155,34 +156,34 @@ export class InterfaceWalletService extends Service {
 
   async start(): Promise<void> {
     if (this.isRunning) {
-      logger.warn('Trading chain service is already running');
+      this.runtime.logger.warn('Trading chain service is already running');
       return;
     }
 
     try {
-      logger.info('Starting chain trading service...');
+      this.runtime.logger.info('Starting chain trading service...');
 
       this.isRunning = true;
       logger.info('Trading chain service started successfully');
     } catch (error) {
-      logger.error('Error starting trading chain service:', error);
+      this.runtime.logger.error({ error }, 'Error starting trading chain service');
       throw error;
     }
   }
 
   async stop(): Promise<void> {
     if (!this.isRunning) {
-      logger.warn('Trading service is not running');
+      this.runtime.logger.warn('Trading service is not running');
       return;
     }
 
     try {
-      logger.info('Stopping chain trading service...');
+      this.runtime.logger.info('Stopping chain trading service...');
 
       this.isRunning = false;
-      logger.info('Trading service stopped successfully');
+      this.runtime.logger.info('Trading service stopped successfully');
     } catch (error) {
-      logger.error('Error stopping trading service:', error);
+      this.runtime.logger.error({ error },'Error stopping trading service');
       throw error;
     }
   }
