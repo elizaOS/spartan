@@ -1,6 +1,5 @@
 import { Service, logger } from '@elizaos/core';
-
-import { IAgentRuntime, Service, logger } from '@elizaos/core';
+import type { IAgentRuntime } from '@elizaos/core';
 
 import { acquireService } from '../utils';
 
@@ -71,7 +70,7 @@ export class TradeLpService extends Service {
       this.isRunning = true;
       logger.info('Trading LP service started successfully');
     } catch (error) {
-      logger.error('Error starting trading LP service:', error);
+      logger.error('Error starting trading LP service:', error instanceof Error ? error.message : String(error));
       throw error;
     }
   }
@@ -88,7 +87,7 @@ export class TradeLpService extends Service {
       this.isRunning = false;
       logger.info('Trading service stopped successfully');
     } catch (error) {
-      logger.error('Error stopping trading service:', error);
+      logger.error('Error stopping trading service:', error instanceof Error ? error.message : String(error));
       throw error;
     }
   }
