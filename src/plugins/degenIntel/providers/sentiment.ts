@@ -1,5 +1,6 @@
-import type { Action, IAgentRuntime, Memory, Provider, State } from '@elizaos/core';
-import { addHeader, composeActionExamples, formatActionNames, formatActions } from '@elizaos/core';
+import type { Action, IAgentRuntime, Memory, Provider, State, ProviderResult } from '@elizaos/core';
+import { addHeader, composeActionExamples, formatActionNames, formatActions, logger } from '@elizaos/core';
+import type { Sentiment } from '../schemas';
 
 /**
  * Provider for Twitter Sentiment
@@ -25,12 +26,16 @@ export const sentimentProvider: Provider = {
   name: 'CRYPTOTWITTER_MARKET_SENTIMENT',
   description: 'Information about the current cryptocurrency twitter sentiment',
   dynamic: true,
-  get: async (runtime: IAgentRuntime, message: Memory, state: State) => {
+  get: async (runtime: IAgentRuntime, message: Memory, state: State): Promise<ProviderResult> => {
     // Get all sentiments
     const sentimentData = (await runtime.getCache<Sentiment[]>('sentiments')) || [];
     if (!sentimentData.length) {
       logger.warn('No sentiment data found');
-      return false;
+      return {
+        data: { sentimentData: [] },
+        values: {},
+        text: 'No sentiment data available at this time.',
+      };
     }
 
     let sentiments = '\nCurrent cryptocurrency market data:';
