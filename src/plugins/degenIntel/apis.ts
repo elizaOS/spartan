@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { Portfolio, SentimentContent, TransactionHistory } from './providers/birdeye';
+import type { Portfolio, SentimentContent, TransactionHistory } from './tasks/birdeye';
 import type { IToken } from './types';
 import ejs from 'ejs';
 
@@ -20,10 +20,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // from the package.json, find frontend/dist and host it statically
-const frontendDist = path.resolve(__dirname, './');
+const frontendDist = path.resolve(__dirname, '../../../dist');
 
-//const INDEX_PATH       = path.resolve(frontendDist, 'index.html');
-//const INDEX_TEMPLATE   = await fsp.readFile(INDEX_PATH, 'utf8');
+const INDEX_PATH = path.resolve(frontendDist, 'index.html');
+console.log('INDEX_PATH', INDEX_PATH)
+const INDEX_TEMPLATE = await fsp.readFile(INDEX_PATH, 'utf8');
 
 function injectBase(html: string, href: string) {
   // Put the tag right after <head …> so the browser sees it first
@@ -102,7 +103,7 @@ export const routes: Route[] = [
     path: '/emailToUUID',
     public: true,
     name: 'Email to UUID',
-    handler: async (req: any, res: any) => {
+    handler: async (req: any, res: any, runtime: IAgentRuntime) => {
       console.log('email', req.query.email)
       const entityId = createUniqueUuid(runtime, req.query.email);
       res.send(entityId)
@@ -135,24 +136,41 @@ export const routes: Route[] = [
         // ok we need to access spartan
         const agentEntityId = createUniqueUuid(runtime, runtime.agentId);
         const agentEntity = await runtime.getEntityById(agentEntityId);
-        const spartanData = agentEntity.components.find(c => c.type === 'spartan_services')
+
+        if (!agentEntity || !agentEntity.components) {
+          res.status(500).send('Agent entity not found');
+          return;
+        }
+
+        const spartanData = agentEntity.components.find(c => c.type === 'spartan_services');
+
+        if (!spartanData || !spartanData.data) {
+          res.status(500).send('Spartan data not found');
+          return;
+        }
+
         console.log('spartanData', spartanData)
 
-        const users = await runtime.getEntityByIds(spartanData.data.users)
-        const accounts = await runtime.getEntityByIds(spartanData.data.accounts)
+        const users = await Promise.all(
+          (spartanData.data.users as string[] || []).map(id => runtime.getEntityById(id as any))
+        );
+        const accounts = await Promise.all(
+          (spartanData.data.accounts as string[] || []).map(id => runtime.getEntityById(id as any))
+        );
 
         // users
         // how do we audit this...
         // use list of accounts to find users?
-        for(const a of accounts) {
+        for (const a of accounts) {
+          if (!a || !a.components) continue;
           const acctComp = a.components.find(c => c.type === 'component_account_v0')
           if (!acctComp) {
-            console.log('no component_account_v0 for', u)
+            console.log('no component_account_v0 for', a)
             continue
           }
           const acctData = acctComp.data
           const userId = acctComp.sourceEntityId
-          if (spartanData.data.users.indexOf(userId) === -1) {
+          if ((spartanData.data.users as string[] || []).indexOf(userId) === -1) {
             console.log('unlinked account', acctComp, 'was made by', userId)
           }
         }
@@ -160,7 +178,8 @@ export const routes: Route[] = [
         // accounts
         // how do we audit this...
         // use list of users to find accounts <- this works
-        for(const u of users) {
+        for (const u of users) {
+          if (!u || !u.components) continue;
           const userComp = u.components.find(c => c.type === 'component_user_v0')
           if (!userComp) {
             console.log('no component_user_v0 for', u)
@@ -169,11 +188,11 @@ export const routes: Route[] = [
           const userData = userComp.data
           // code, tries, addrss, verified
           if (userData.verified) {
-            const emailAddress = userData.address
+            const emailAddress = userData.address as string
             const emailEntityId = createUniqueUuid(runtime, emailAddress);
-            if (spartanData.data.accounts.indexOf(emailEntityId) === -1) {
-              console.log('emailEntityId', emailEntityId, 'is missing for', emailAddress)
-              spartanData.data.accounts.push(emailEntityId)
+            if ((spartanData.data.accounts as string[] || []).indexOf(emailEntityId) === -1) {
+              console.log('emailEntityId', emailEntityId, 'is missing for', emailAddress);
+              (spartanData.data.accounts as string[]).push(emailEntityId);
             }
           }
         }
@@ -181,7 +200,7 @@ export const routes: Route[] = [
         // save spartan data
         if (0) {
           await runtime.updateComponent({
-            id: spartanData.id,
+            ...spartanData,
             // do we need all these fields?
             //agentId: runtime.agentId,
             //worldId: roomDetails.worldId,
@@ -190,7 +209,7 @@ export const routes: Route[] = [
             //entityId: entityId,
             //type: CONSTANTS.SPARTAN_SERVICE_TYPE,
             data: spartanData.data,
-          });
+          } as any);
         }
 
         // this will leak privateKeys
@@ -208,23 +227,14 @@ export const routes: Route[] = [
   },
   {
     type: 'GET',
-    path: '/new',
-    //public: true,
-    handler: async (req: any, res: any) => {
-      const base = '/api/agents' + req.path.replace(/\/spartan-intel$/, '');
-      //console.log('base', base)
-      res.redirect(base + '/')
-    },
-  },
-  {
-    type: 'GET',
     path: '/new/',
     public: true,
     handler: async (req: any, res: any) => {
-      console.log('path', req.path, 'url', req.url)
+      //console.log('path', req.path, 'url', req.url)
       // path /new/ url /new/
       // .replace(/\/spartan-intel$/, '')
-      const base = '/api/agents/Spartan/plugins/spartan-intel' + req.path;
+      //const base = '/api/agents/Spartan/plugins/spartan-intel' + req.path;
+      const base = req.path
       console.log('base', base)
       try {
         //console.log('frontendDist', frontendDist)
@@ -251,6 +261,17 @@ export const routes: Route[] = [
       //res.sendFile(path.resolve(frontendDist, 'index.html'));
     },
   },
+  {
+    type: 'GET',
+    path: '/new',
+    //public: true,
+    handler: async (req: any, res: any) => {
+      //const base = '/api/agents' + req.path.replace(/\/spartan-intel$/, '');
+      const base = req.path
+      console.log('base', base)
+      res.redirect(base + '/')
+    },
+  },
   // redirector
   {
     type: 'GET',
@@ -258,7 +279,10 @@ export const routes: Route[] = [
     handler: async (req: any, res: any) => {
       //const base = '/api/agents' + req.path.split(/\/new\//, 2)[0]
       //  + req.path;
-      const base = '/api/agents/Spartan/plugins/spartan-intel'
+      //console.log('req.path', req.path) // has addresses in it
+      //const base = '/api/agents/Spartan/plugins/spartan-intel'
+      //
+      const base = req.path.split(/\/new\//, 2)[0]
       console.log('addresses base', base)
       const address = req.path.split(/\/addresses\//, 2)[1];
       console.log('address', address)
@@ -286,7 +310,8 @@ export const routes: Route[] = [
     path: '/new/wallets/*',
     handler: async (req: any, res: any, runtime) => {
       //const base = '/api/agents' + req.path.split(/\/new\//, 2)[0]
-      const base = '/api/agents/Spartan/plugins/spartan-intel' + req.path.split(/\/new\//, 2)[0];
+      //const base = '/api/agents/Spartan/plugins/spartan-intel' + req.path.split(/\/new\//, 2)[0];
+      const base = req.path.split(/\/new\//, 2)[0]
       //console.log('wallets base', base)
       const address = req.path.split(/\/wallets\//, 2)[1];
       //console.log('address', address)
@@ -329,7 +354,8 @@ export const routes: Route[] = [
     type: 'GET',
     path: '/new/json/wallets/*',
     handler: async (req: any, res: any, runtime) => {
-      const base = '/api/agents' + req.path.split(/\/new\//, 2)[0]
+      //const base = '/api/agents' + req.path.split(/\/new\//, 2)[0]
+      const base = req.path.split(/\/new\//, 2)[0]
       //console.log('base', base)
       const address = req.path.split(/\/wallets\//, 2)[1];
       //console.log('address', address)
@@ -420,7 +446,8 @@ export const routes: Route[] = [
     type: 'GET',
     path: '/new/json/tokens/*',
     handler: async (req: any, res: any, runtime) => {
-      const base = '/api/agents' + req.path.split(/\/new\//, 2)[0]
+      //const base = '/api/agents' + req.path.split(/\/new\//, 2)[0]
+      const base = req.path.split(/\/new\//, 2)[0]
       //console.log('base', base)
       const address = req.path.split(/\/tokens\//, 2)[1];
       //console.log('address', address)
@@ -444,7 +471,7 @@ export const routes: Route[] = [
           return
         }
         //console.log('birdeyeService', birdeyeService.lookupToken)
-        const tokenData = await birdeyeService.lookupToken('solana', address)
+        const tokenData = await (birdeyeService as any).lookupToken?.('solana', address) || {}
         console.log('tokenData', tokenData)
         // what do we need from birdeye?
         res.json({})
@@ -489,7 +516,7 @@ export const routes: Route[] = [
     type: 'GET',
     path: '/new/images/*',
     handler: async (req: any, res: any) => {
-      const frontendDist = path.resolve(__dirname, '../src/investmentManager/plugins/degen-intel/frontend_new');
+      const frontendDist = path.resolve(__dirname, '../src/plugins/degenIntel/frontend_new');
       //console.log('js frontendDist', frontendDist)
       //console.log('js uri', req.path.split('/new/')[1])
       const assetPath = frontendDist + '/' + req.path.split('/new/')[1]
@@ -505,7 +532,7 @@ export const routes: Route[] = [
     type: 'GET',
     path: '/new/js/*',
     handler: async (req: any, res: any) => {
-      const frontendDist = path.resolve(__dirname, '../src/investmentManager/plugins/degen-intel/frontend_new');
+      const frontendDist = path.resolve(__dirname, '../src/plugins/degenIntel/frontend_new');
       //console.log('js frontendDist', frontendDist)
       //console.log('js uri', req.path.split('/new/')[1])
       const assetPath = frontendDist + '/' + req.path.split('/new/')[1]
@@ -517,6 +544,7 @@ export const routes: Route[] = [
       }
     },
   },
+  // generic page handler
   {
     type: 'GET',
     path: '/new/*',
@@ -525,7 +553,7 @@ export const routes: Route[] = [
       // we want it to be /new/
       const base = '/api/agents' + req.path.replace(/\/degen-intel$/, '') + '/..';
       console.log('base', base)
-      const frontendDist = path.resolve(__dirname, '../src/investmentManager/plugins/degen-intel/frontend_new');
+      const frontendDist = path.resolve(__dirname, '../src/plugins/degenIntel/frontend_new');
       console.log('page frontendDist', frontendDist)
       console.log('page uri', req.path.split('/new/')[1])
       const assetPath = frontendDist + '/templates/' + req.path.split('/new/')[1]
@@ -543,7 +571,7 @@ export const routes: Route[] = [
         const html = await ejs.renderFile(assetPath + '.ejs', data);
         const basedHtml = injectBase(html, base + '/');
         res.type('html').send(basedHtml);
-      } catch(e) {
+      } catch (e) {
         res.status(404).send('File not found');
       }
     },
@@ -552,8 +580,10 @@ export const routes: Route[] = [
     type: 'GET',
     path: '/',
     handler: async (req: any, res: any) => {
-      //console.log('path', req.path, 'url', req.url)
-      const base = '/api/agents' + req.path.replace(/\/degen-intel$/, '');
+      console.log('path', req.path, 'url', req.url)
+      //  '/api/agents' +
+      // .replace(/\/degen-intel$/, '');
+      const base = req.path
       try {
         const html = injectBase(INDEX_TEMPLATE, base);
         res.type('html').send(html);
@@ -666,14 +696,14 @@ export const routes: Route[] = [
 
         const tweets = memories
           .filter((m) => m.content.source === 'twitter')
-          .sort((a, b) => b.createdAt - a.createdAt)
+          .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
           .map((m) => ({
             text: m.content.text,
-            username: m.content?.metadata.username,
-            retweets: m.content?.metadata.retweets,
-            likes: m.content?.metadata.likes,
-            timestamp: m.content?.metadata.timestamp || m.createdAt,
-            metadata: m.content.tweet || {},
+            username: (m.content?.metadata as any)?.username,
+            retweets: (m.content?.metadata as any)?.retweets,
+            likes: (m.content?.metadata as any)?.likes,
+            timestamp: (m.content?.metadata as any)?.timestamp || m.createdAt,
+            metadata: (m.content as any).tweet || {},
           }));
 
         const validatedData = TweetArraySchema.parse(tweets);
@@ -699,11 +729,11 @@ export const routes: Route[] = [
         const tweets = tweetMemories
           // we do really need to filter?
           .filter((m) => m.content.source === 'twitter')
-          .sort((a, b) => b.createdAt - a.createdAt)
+          .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
           .map((m) => ({
             text: m.content.text,
             timestamp: m.createdAt,
-            metadata: m.content.tweet || {},
+            metadata: (m.content as any).tweet || {},
           }));
 
         const sentimentMemories = await runtime.getMemories({
