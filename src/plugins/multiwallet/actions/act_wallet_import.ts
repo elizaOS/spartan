@@ -1,6 +1,13 @@
 import {
   createUniqueUuid,
   logger,
+  Action,
+  IAgentRuntime,
+  Memory,
+  State,
+  HandlerCallback,
+  ActionExample,
+  HandlerOptions,
 } from '@elizaos/core';
 import { v4 as uuidv4 } from 'uuid';
 import { HasEntityIdFromMessage, getAccountFromMessage, takeItPrivate, messageReply, getDataFromMessage, accountMockComponent } from '../../autonomous-trader/utils'
@@ -17,7 +24,7 @@ export const walletImportAction: Action = {
   validate: async (runtime: IAgentRuntime, message: Memory) => {
     //console.log('WALLET_IMPORT validate')
 
-    const traderChainService = runtime.getService('TRADER_CHAIN') as any;
+    const traderChainService = runtime.getService('INTEL_CHAIN') as any;
     if (!traderChainService) return false
     const traderStrategyService = runtime.getService('TRADER_STRATEGY') as any;
     if (!traderStrategyService) return false
@@ -41,18 +48,18 @@ export const walletImportAction: Action = {
   handler: async (
     runtime: IAgentRuntime,
     message: Memory,
-    state: State,
-    _options: { [key: string]: unknown },
+    state?: State,
+    options?: HandlerOptions,
     callback?: HandlerCallback,
-    responses: any[]
-  ): Promise<boolean> => {
+    responses?: Memory[]
+  ): Promise<void> => {
     console.log('WALLET_IMPORT handler')
 
     // using the service to get this/components might be good way
     //const email = await getDataFromMessage(runtime, message)
     const account = await getAccountFromMessage(runtime, message)
     if (!account) {
-      runtime.runtimeLogger.log('Not registered')
+      runtime.logger.info('Not registered')
       return
     }
 
@@ -61,7 +68,7 @@ export const walletImportAction: Action = {
     const traderStrategyService = runtime.getService('TRADER_STRATEGY') as any;
     const stratgiesList = await traderStrategyService.listActiveStrategies(account)
     // maybe we use an LLM call to get their exact meaning
-    const containsStrats = stratgiesList.filter(word => message.content.text.includes(word))
+    const containsStrats = stratgiesList.filter(word => message.content.text?.includes(word))
     console.log('containsStrats', containsStrats)
     //takeItPrivate(runtime, message, 'Hrm you\'ve selected a strategy, time to make a wallet')
 
@@ -73,7 +80,7 @@ export const walletImportAction: Action = {
     // or import into existing meta wallet?
 
     // which chains
-    const traderChainService = runtime.getService('TRADER_CHAIN') as any;
+    const traderChainService = runtime.getService('INTEL_CHAIN') as any;
     const chains = await traderChainService.listActiveChains()
     console.log('chains', chains)
 
@@ -108,7 +115,7 @@ export const walletImportAction: Action = {
     //str += '    Private key: ' + newWallet.keypairs.solana.privateKey + ' (Write this down/save it somewhere safe, we will not show this again. This key allows you to spend the funds)\n'
     str += '    Public key: ' + newWallet.keypairs.solana.publicKey + ' (This is the wallet address that you can publicly send to people)\n'
 
-    callback(takeItPrivate(runtime, message, 'Made a meta-wallet ' + str + ' please fund it to start trading'))
+    callback?.(takeItPrivate(runtime, message, 'Made a meta-wallet ' + str + ' please fund it to start trading'))
 
     account.metawallets.push(newWallet)
     // dev mode
