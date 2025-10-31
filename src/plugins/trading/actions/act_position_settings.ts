@@ -3,6 +3,7 @@ import {
     type ActionExample,
     type Content,
     type HandlerCallback,
+    type HandlerOptions,
     type IAgentRuntime,
     type Memory,
     type State,
@@ -56,7 +57,7 @@ export const positionSettings: Action = {
         'SET_VOLUME_THRESHOLD',
     ],
     description: 'Updates position settings for trading positions, including stop loss, take profit, position size limits, and other trading parameters',
-    validate: async (runtime: IAgentRuntime, message: Memory) => {
+    validate: async (runtime: IAgentRuntime, message: Memory, state?: State) => {
         if (!await HasEntityIdFromMessage(runtime, message)) {
             console.warn('POSITION_SETTINGS validate - author not found')
             return false
@@ -93,11 +94,11 @@ export const positionSettings: Action = {
     handler: async (
         runtime: IAgentRuntime,
         message: Memory,
-        state: State,
-        _options: { [key: string]: unknown },
+        state?: State,
+        _options?: HandlerOptions,
         callback?: HandlerCallback,
-        responses: Memory[] = []
-    ): Promise<boolean> => {
+        responses?: Memory[]
+    ) => {
         logger.log('POSITION_SETTINGS Starting handler...')
 
         // Extract wallet address from message using getWalletsFromText
@@ -165,14 +166,14 @@ export const positionSettings: Action = {
         const account = await getAccountFromMessage(runtime, message)
         if (!account) {
             callback?.(takeItPrivate(runtime, message, 'Account not found. Please make sure you are registered.'))
-            return false
+            return
         }
 
         // Get all positions for the account
         const res = await interface_positions_ByAccountIdPosIds(runtime, account.entityId, [])
         if (!res || Object.keys(res.list).length === 0) {
             callback?.(takeItPrivate(runtime, message, 'No positions found in your account.'))
-            return false
+            return
         }
 
         let positionsToUpdate: any[] = []
@@ -183,7 +184,7 @@ export const positionSettings: Action = {
             const position = res.list[content.positionId]
             if (!position) {
                 callback?.(takeItPrivate(runtime, message, `Position with ID ${content.positionId} not found.`))
-                return false
+                return
             }
             positionsToUpdate.push({ positionId: content.positionId, position: position.pos, mw: position.mw })
         } else if (content.walletAddress) {
@@ -195,7 +196,7 @@ export const positionSettings: Action = {
             }
             if (positionsToUpdate.length === 0) {
                 callback?.(takeItPrivate(runtime, message, `No positions found for wallet ${content.walletAddress}.`))
-                return false
+                return
             }
         } else {
             // Update all positions (apply settings globally)
@@ -214,7 +215,7 @@ export const positionSettings: Action = {
                 hasValidSettings = true
             } else {
                 callback?.(takeItPrivate(runtime, message, 'Stop loss percentage must be between 0 and 1 (0% to 100%).'))
-                return false
+                return
             }
         }
 
@@ -224,7 +225,7 @@ export const positionSettings: Action = {
                 hasValidSettings = true
             } else {
                 callback?.(takeItPrivate(runtime, message, 'Take profit percentage must be between 0 and 1 (0% to 100%).'))
-                return false
+                return
             }
         }
 
@@ -234,7 +235,7 @@ export const positionSettings: Action = {
                 hasValidSettings = true
             } else {
                 callback?.(takeItPrivate(runtime, message, 'Maximum position size must be between 0 and 1 (0% to 100%).'))
-                return false
+                return
             }
         }
 
@@ -244,7 +245,7 @@ export const positionSettings: Action = {
                 hasValidSettings = true
             } else {
                 callback?.(takeItPrivate(runtime, message, 'Slippage tolerance must be between 0 and 1 (0% to 100%).'))
-                return false
+                return
             }
         }
 
@@ -254,7 +255,7 @@ export const positionSettings: Action = {
                 hasValidSettings = true
             } else {
                 callback?.(takeItPrivate(runtime, message, 'Minimum liquidity must be greater than 0.'))
-                return false
+                return
             }
         }
 
@@ -264,7 +265,7 @@ export const positionSettings: Action = {
                 hasValidSettings = true
             } else {
                 callback?.(takeItPrivate(runtime, message, 'Minimum volume must be greater than 0.'))
-                return false
+                return
             }
         }
 
@@ -275,7 +276,7 @@ export const positionSettings: Action = {
 
         if (!hasValidSettings) {
             callback?.(takeItPrivate(runtime, message, 'No valid position settings found in your message. Please specify settings like stop loss, take profit, position size, etc.'))
-            return false
+            return
         }
 
         // Update positions
@@ -298,7 +299,7 @@ export const positionSettings: Action = {
                     failedCount++
                 }
             } catch (error) {
-                logger.error(`Failed to update position ${positionId}:`, error)
+                runtime.logger.error({ error }, `Failed to update position ${positionId}`)
                 failedCount++
             }
         }
@@ -340,7 +341,7 @@ export const positionSettings: Action = {
         }
 
         callback?.(takeItPrivate(runtime, message, responseText))
-        return true
+        return
     },
     examples: [
         [
