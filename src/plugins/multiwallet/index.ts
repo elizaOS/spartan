@@ -2,22 +2,25 @@ import type { Plugin } from '@elizaos/core';
 
 // actions
 import { walletCreate } from "./actions/act_wallet_create";
-import { userMetawalletDelete } from "./actions/act_wallet_delete";
+//import { userMetawalletDelete } from "./actions/act_wallet_delete";
 
 import { userMetawalletList } from "./actions/act_wallet_list";
 import { walletImportAction } from "./actions/act_wallet_import";
 import userMetawalletSwap from "./actions/act_wallet_swap";
 import userMetawalletSweep from "./actions/act_wallet_sweep";
 import userMetawalletXfer from "./actions/act_wallet_xfer";
-import userMetawalletBalance from "./actions/act_wallet_balance";
+//import userMetawalletBalance from "./actions/act_wallet_balance";
 
-import userMetawalletSwapAll from "./actions/act_wallet_swap_all";
+//import userMetawalletSwapAll from "./actions/act_wallet_swap_all";
 
 //import actionPositionList from "./actions/act_position_list";
 //import openPositionAction from "./actions/act_open_position";
 
 //import actionTokenScam from "./actions/act_token_scam";
 //import actionTokenRug from "./actions/act_token_rug";
+
+// in testing
+//import { actionConfirm } from "./actions/act_confirm";
 
 // Providers
 
@@ -41,6 +44,7 @@ export const multiwalletPlugin: Plugin = {
     // userMetawalletSwapAll, // need a confirmation or something
     userMetawalletList, // keep this enabled for the special formatting
     //userMetawalletBalance,
+    //actionConfirm,
     //actionPositionList,
     //openPositionAction,
     //actionTokenScam, actionTokenRug,
