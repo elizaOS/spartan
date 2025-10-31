@@ -18,7 +18,7 @@ export async function interface_accounts_ByIds(runtime: IAgentRuntime, ids: UUID
 
   // we should key this, each account can and should have only one COMPONENT_ACCOUNT_TYPE component
   const components = {}
-  for(const i in entities) {
+  for (const i in entities) {
     const entity = entities[i]
     const entityId = entity.id // ids[i]
     components[entityId] = false // key has to be set for the result, so we can iterate
@@ -34,7 +34,7 @@ export async function interface_accounts_ByIds(runtime: IAgentRuntime, ids: UUID
         // so it should match entityId
 
         // maybe instead of entityId, make it accountEntityId or emailEntityId
-        components[entityId] = {...email.data, entityId, componentId: email.id }
+        components[entityId] = { ...email.data, entityId, componentId: email.id }
       } else {
         // normal if they didn't sign up
         console.warn('interface_accounts_ByIds - user', entityId, 'no account component?', entity)
@@ -52,7 +52,7 @@ export async function interface_accounts_ByUserIds(runtime: IAgentRuntime, userI
   const users = await interface_users_ByIds(runtime, userIds)
   // a unique list of users
   const accountIds = {} // and their single account
-  for(const entityId in users) {
+  for (const entityId in users) {
     const email = users[entityId]
     console.log(entityId, 'wallets', email.metawallets)
     if (email.verified && email.address) {
@@ -70,7 +70,10 @@ export async function interface_accounts_ByUserIds(runtime: IAgentRuntime, userI
 // filter by X field (like notificatoin) + value?
 export async function interface_accounts_list(runtime: IAgentRuntime, options = {}): Promise<UUID[]> {
   const spartanData = await interface_spartan_get(runtime)
-  return spartanData.data.accounts // just a list of accountIds
+  if (!spartanData) {
+    return []
+  }
+  return spartanData.data.accounts as UUID[] // just a list of accountIds
 }
 
 // list of IDs vs list of users?
@@ -128,7 +131,7 @@ export async function getAccountIdsByPubkeys(runtime: IAgentRuntime, pubkeys: st
 
   const accountIds = {}
   const userIds = {} // revmap
-  for(const entityId in emails) {
+  for (const entityId in emails) {
     const email = emails[entityId]
     //console.log('getWalletByUserEntityIds_engine', entityId)
     if (email.verified && email.address) {
@@ -137,7 +140,7 @@ export async function getAccountIdsByPubkeys(runtime: IAgentRuntime, pubkeys: st
       accountIds[entityId] = emailEntityId
       userIds[emailEntityId] = entityId
       //userWallets[entityId] = email.metawallets
-    //} else {
+      //} else {
       //console.log('getWalletByUserEntityIds_engine - waiting on verification', entityId, email)
     }
   }
@@ -145,7 +148,7 @@ export async function getAccountIdsByPubkeys(runtime: IAgentRuntime, pubkeys: st
   //const accountComponents = interface_accounts_ByIds(runtime, Object.values(accountIds))
   const list = {}
   // accountId is just 0, wtf...
-  for(const idx in accounts) {
+  for (const idx in accounts) {
     const account = accounts[idx]
     if (account) {
       //console.log('getAccountIdsByPubkeys - account', account)
@@ -153,8 +156,8 @@ export async function getAccountIdsByPubkeys(runtime: IAgentRuntime, pubkeys: st
       const component = account.components.find(c => c.type === CONSTANTS.COMPONENT_ACCOUNT_TYPE)
       if (component) {
         // const mw = component.data.metawallets.find(mw => mw.keypairs[pos.chain]?.publicKey === pos.publicKey)
-        for(const mw of component.data.metawallets) {
-          for(const chain in mw.keypairs) {
+        for (const mw of component.data.metawallets) {
+          for (const chain in mw.keypairs) {
             const kp = mw.keypairs[chain]
             //console.log('looking at', accountId, kp.publicKey)
             if (pubkeys.includes(kp.publicKey)) {
@@ -178,10 +181,10 @@ export async function getAccountIdsByPubkeys(runtime: IAgentRuntime, pubkeys: st
 }
 
 export async function getAccountIdsByPubkey_engine(runtime: IAgentRuntime, pubkeys: string[]): Promise<{
-    pubkey2accountId: Record<UUID, UUID[]>, accountId2Component: Record<UUID, unknown>,
-    accountId2userIds: Record<UUID, UUID[]>, userId2Component: Record<UUID, unknown>,
-    userId2accountId: Record<UUID, UUID>
-  } | false> {
+  pubkey2accountId: Record<UUID, UUID[]>, accountId2Component: Record<UUID, unknown>,
+  accountId2userIds: Record<UUID, UUID[]>, userId2Component: Record<UUID, unknown>,
+  userId2accountId: Record<UUID, UUID>
+} | false> {
   if (!runtime) {
     console.trace('WHAT ARE YOU DOING?')
     return false
@@ -195,7 +198,7 @@ export async function getAccountIdsByPubkey_engine(runtime: IAgentRuntime, pubke
   const list = {}
   const account2Component = {}
   // accountId is just 0, wtf...
-  for(const idx in accounts) {
+  for (const idx in accounts) {
     const account = accounts[idx]
     if (account) {
       //console.log('getAccountIdsByPubkey_engine - account', account)
@@ -204,8 +207,8 @@ export async function getAccountIdsByPubkey_engine(runtime: IAgentRuntime, pubke
       if (component) {
         account2Component[accountId] = component.data
         // const mw = component.data.metawallets.find(mw => mw.keypairs[pos.chain]?.publicKey === pos.publicKey)
-        for(const mw of component.data.metawallets) {
-          for(const chain in mw.keypairs) {
+        for (const mw of component.data.metawallets) {
+          for (const chain in mw.keypairs) {
             const kp = mw.keypairs[chain]
             //console.log('looking at', accountId, kp.publicKey)
             if (pubkeys.includes(kp.publicKey)) {
@@ -237,7 +240,10 @@ export async function getAccountIdsByPubkey_engine(runtime: IAgentRuntime, pubke
 // new version
 export async function getAccountIdsByPubkeys2(runtime: IAgentRuntime, pubkeys: string[]): Promise<Record<UUID, UUID[]> | undefined> {
   const map = await getAccountIdsByPubkey_engine(runtime, pubkeys)
-  return map?.pubkey2accountId
+  if (!map) {
+    return undefined
+  }
+  return map.pubkey2accountId
 }
 
 
@@ -258,6 +264,9 @@ export async function interface_account_upsert(runtime: IAgentRuntime, message: 
 
 export async function interface_account_create(runtime: IAgentRuntime, message: Content, account): Promise<void> {
   const roomDetails = await runtime.getRoom(message.roomId as UUID);
+  if (!roomDetails) {
+    throw new Error('Room not found')
+  }
   const entityId: UUID = account.accountEntityId
   //console.log('entityId', entityId)
   // create the EMAILTYPE component
@@ -266,10 +275,11 @@ export async function interface_account_create(runtime: IAgentRuntime, message: 
     agentId: runtime.agentId as UUID,
     worldId: roomDetails.worldId as UUID,
     roomId: message.roomId as UUID,
-    sourceEntityId: message.entityId,
+    sourceEntityId: message.entityId as UUID,
     entityId,
     type: CONSTANTS.COMPONENT_ACCOUNT_TYPE,
     data: account,
+    createdAt: Date.now(),
   });
 }
 
@@ -304,14 +314,15 @@ export async function interface_account_update(runtime: IAgentRuntime, component
   // const res =
   // missing: entityId, roomId, worldId, sourceEntityId, createdAt
   await runtime.updateComponent({
-    id: component.id,
+    ...component,
+    //id: component.id,
     //worldId: roomDetails.worldId,
     //roomId: message.roomId,
     //sourceEntityId: message.entityId,
     //entityId,
-    type: CONSTANTS.COMPONENT_ACCOUNT_TYPE,
-    data: component.data,
-    agentId: runtime.agentId,
+    //type: CONSTANTS.COMPONENT_ACCOUNT_TYPE,
+    //data: component.data,
+    //agentId: runtime.agentId,
   });
   //console.log('interface_account_update - updateComponent result', res)
   return true
