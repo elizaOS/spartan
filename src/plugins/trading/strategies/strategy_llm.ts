@@ -1,10 +1,12 @@
-import { parseBooleanFromText, logger, type IAgentRuntime, createUniqueUuid } from '@elizaos/core';
+import { ModelType, parseBooleanFromText, logger, createUniqueUuid } from '@elizaos/core';
+import type { Memory, UUID, IAgentRuntime } from '@elizaos/core';
 import { v4 as uuidv4 } from 'uuid';
 import { acquireService, askLlmObject, setCacheTimed, getCacheTimed } from '../../autonomous-trader/utils';
 //import { getTokenBalance } from '../wallet';
 //import { getSpartanWallets } from '../interfaces/int_wallets'
 import { PublicKey } from '@solana/web3.js';
 import BigNumber from 'bignumber.js';
+import { IToken } from '../../degenIntel/types'
 
 // agentic personal application? separate strategy
 
@@ -78,6 +80,7 @@ If you’re not sufficiently confident that a purchase opportunity exists, possi
 ONLY return the following JSON and nothing else (NO EXCEPTIONS!):
 {
   market_assessment: "across all tokens presented, what patterns do you see. Do not mention any specific token.",
+  news_segment: "If you were going live on TV what would you say about this market.",
   picked_nothing: "true or false",
   recommend_buy_index: "the index of the token to purchase if any, for example: 1",
   reason: "the reason why you think selecting nothing or this specific token is a good buy, and why you chose the specific buy_amount. don't include the token number. ",
@@ -118,7 +121,7 @@ const STRATEGY_NAME = 'LLM trading strategy'
 
 export async function llmStrategy(runtime: IAgentRuntime) {
   const service = await acquireService(runtime, 'TRADER_STRATEGY', 'llm trading strategy');
-  const infoService = await acquireService(runtime, 'TRADER_DATAPROVIDER', 'llm trading info');
+  const infoService = await acquireService(runtime, 'INTEL_DATAPROVIDER', 'llm trading info');
   //const solanaService = await acquireService(runtime, 'CHAIN_SOLANA', 'solana service info');
 
   const me = {
@@ -129,26 +132,41 @@ export async function llmStrategy(runtime: IAgentRuntime) {
   // we want trending
   await infoService.interested_trending(async (results) => {
     /*
-          name: 'Extractor-91',
-          rank: 1,
-          chain: 'solana',
-          price: 0.0010685977861034897,
-          symbol: 'E91',
-          address: 'GD8nFZrqEaXkNzPJAmA4ULjMmftoVfBfoGduWGEFpump',
-          logoURI: 'https://ipfs.io/ipfs/QmW5LnbEEL3iCoCvg2hmqSt8QGqfN6sg27TVvDLrckjADs',
-          decimals: 6,
-          provider: 'birdeye',
-          liquidity: 232302.83250444,
-          marketcap: 0,
-          last_updated: '2025-06-04T22:21:32.000Z',
-          volume24hUSD: 11520275.236061923,
-          price24hChangePercent: 8393.576124948027
+    name: 'Extractor-91',
+    rank: 1,
+    chain: 'solana',
+    price: 0.0010685977861034897,
+    symbol: 'E91',
+    address: 'GD8nFZrqEaXkNzPJAmA4ULjMmftoVfBfoGduWGEFpump',
+    logoURI: 'https://ipfs.io/ipfs/QmW5LnbEEL3iCoCvg2hmqSt8QGqfN6sg27TVvDLrckjADs',
+    decimals: 6,
+    provider: 'birdeye',
+    liquidity: 232302.83250444,
+    marketcap: 0,
+    last_updated: '2025-06-04T22:21:32.000Z',
+    volume24hUSD: 11520275.236061923,
+    price24hChangePercent: 8393.576124948027
     */
-    console.log('LLM trading strategy, got trending', results.length);
+    // just use first data provider result
+    //console.log('LLM trading strategy, got trending', results);
+    const chains = Object.keys(results[0])
+    //console.log('LLM trading strategy, got trending', results[0].solana.data.length);
+    runtime.logger.info('LLM trading strategy, got trending')
+    for(const c of chains) {
+      runtime.logger.info(c + ' has ' + results[0][c].data.length + ' trending tokens')
+    }
     // update our cache?
 
     // temp hack
-    await generateBuySignal(runtime, service, hndl);
+    if (0) {
+      console.log('buying is off')
+      return false;
+    }
+    try {
+      await generateBuySignal(runtime, service, hndl);
+    } catch(e) {
+      console.error('generateBuySignal err', e)
+    }
     console.log('interested_trending - generateBuySignal done')
   });
   // sentiment update
@@ -199,13 +217,26 @@ async function generateBuyPrompt(runtime) {
 8|odi-dev  |   price24hChangePercent: 57.556499266748204,
 8|odi-dev  | }
 */
+  // ask chain service about what chains
+  const chainService = await acquireService(runtime, 'INTEL_CHAIN', 'llm trading strategy');
+  const services = chainService.forEachRegWithReg('service')
+  // make a unique list of available chain types...
+  const chains = [...new Set(services.map(i => i.registry.chainType).filter(s => !!s))]
+  console.log('chains', chains)
+  // and then we need supply & trending from INTEL_DATAPROVIDER
+  const infoService = await acquireService(runtime, 'INTEL_DATAPROVIDER', 'llm trading strategy');
+  const trendingResults = await infoService.getTrendingWSupply(chains)
+  //console.log('trendingResults', trendingResults)
+
   const solanaService = await acquireService(runtime, 'chain_solana', 'llm trading strategy');
   // Get all trending tokens
-  const trendingData = (await runtime.getCache<IToken[]>('tokens_solana')) || [];
+  const wrapper = await runtime.getCache('tokens_v2_solana') || [];
   const indexLookup = {}
-  if (!trendingData.length) {
-    logger.warn('No trending tokens found in cache');
+  const index2Lookup = {}
+  if (!wrapper) {
+    logger.warn('No solana trending tokens found in cache');
   } else {
+    const trendingData = wrapper.data
     // we need MCAP so we can price appropriately
     tokens += 'index, price (in USD), Market Capitalization, 24h volume, 24h change %, liquidity (in USD)\n'
     //trendingData.length = 25
@@ -215,6 +246,7 @@ async function generateBuyPrompt(runtime) {
     //console.log('supplies', supplies)
     let index = 1;
     // NEVER USED CA or SYMBOL to avoid training attacks
+    trendingData.length = 25
     for (const token of trendingData) {
       // has a marketcap but seems to always be 0
       //console.log('token', token)
@@ -234,12 +266,14 @@ async function generateBuyPrompt(runtime) {
       const supplyData = supplies[token.address]
       const supply = supplyData.human
       const mcap = supply.multipliedBy(token.price)
+      index2Lookup[index] = {...token, marketcap: mcap, supply }
       //console.log('Hum supply', supply.toFormat(), 'price', token.price, 'mcap', mcap.toFormat(2))
       //console.log('Mac supply', supply, 'price', token.price, 'mcap', mcap.toFixed(0))
       tokens += [index, token.price.toFixed(4), mcap.toFixed(0), token.volume24hUSD.toFixed(0), token.price24hChangePercent.toFixed(2), token.liquidity.toFixed(2)].join(',') + '\n'
       index++;
     }
   }
+  console.log('indexLookup', indexLookup)
   //console.log('tokens', tokens)
 
   // is this sorted by rev chrono? looks like it
@@ -275,7 +309,7 @@ async function generateBuyPrompt(runtime) {
     // get token #5 from thought
     // they don't always mention it, we just asked the llm nicely not to
     // it's expensive if it gets into the pick
-    const cleanThought = c.thought.replace(/Token\s+#(\d+)/, '')
+    const cleanThought = c.thought.replace(/Token\s+(?:#|at index\s+)\d+/, '');
 
     // get index
     if (index) {
@@ -284,7 +318,7 @@ async function generateBuyPrompt(runtime) {
       picksStr += "trending token #" + index + " at " + m.createdAt + " because of " + cleanThought
     } else {
       // if not in index, what do we say, "a non trending token"
-      picksStr += "a previous trending token no longer on the list because of " + cleanThought
+      picksStr += "a previous trending token no longer on the list at " + m.createdAt + ", was picked because of " + cleanThought
     }
     // knowing the 24h vol, mcap and liquid would be good here
     if (c.metadata.increaseReason) {
@@ -292,7 +326,7 @@ async function generateBuyPrompt(runtime) {
     }
     picksStr += ".\n"
   }
-  console.log('picksStr', picksStr)
+  //console.log('picksStr', picksStr)
 
 
 /*
@@ -323,26 +357,94 @@ async function generateBuyPrompt(runtime) {
     .replace('{{trending_tokens}}', tokens)
     .replace('{{previousPicks}}', picksStr)
   //console.log('llm_start prompt', prompt)
-  return prompt
+
+  //if (runtime.generateObject) {
+    const shortPrompt = `You are a degenSpartan a tradfi/cryptocurrency INTJ analyst/trader.
+Task: decide whether to issue a buy signal based on trending tokens.
+First analyze market context and token fundamentals, then give a rating before providing final recommendations.
+Please determine how good of an opportunity this is (how rare and how much potential).
+Also let me know what a good amount would be to buy. Buy amount should be a range between 1 and 15% of available balance.
+Ensure exit_price_drop is less than the token price and exit_target_price is above the current price.
+
+Why we value consistent reasoning, it's complete ok to flip the script, here's where we're at
+
+Previous Position Picks & Reasons:
+{{previousPicks}}
+
+Trending Solana tokens:
+
+{{trending_tokens}}
+
+Only pick something if you really think there's a good chance to make money after tx fees.
+It is ok to say nothing is worth buying, only move if you see an probable opportunity to make some money
+Include all relative contextual information in all reasoning and conditions fields as they may be viewed on their own out of context
+If you’re not sufficiently confident that a purchase opportunity exists, possible because we already have a position, you must explicitly state that you have low conviction and return nulls or zeros for all recommendation fields.
+`.replace('{{trending_tokens}}', tokens).replace('{{previousPicks}}', picksStr)
+
+    //return shortPrompt
+  //}
+  //return prompt
+  return {
+    prompt,
+    shortPrompt,
+    // make it the reverse lookup
+    indexLookup: index2Lookup
+  }
 }
 
-async function pickToken(runtime, prompt, retries = 3) {
+async function pickToken(runtime, prompt, indexLookup, retries = 3) {
   if (retries !== 3) console.log('pickToken retries left', retries)
   const requiredFields = ['recommend_buy_index', 'buy_amount', 'exit_target_price', 'exit_price_drop_threshold', 'exit_liquidity_threshold', 'exit_24hvolume_threshold'];
   // we have additional checks
+  //console.log('pickToken prompt', prompt)
 
-  console.log('pickToken prompt', prompt)
+  let response
+  if (runtime.generateObject) {
 
-  // this will retry up to 3 times * 3
-  const response = await askLlmObject(
-    runtime,
-    { prompt, system: 'You are a buy signal analyzer.' },
-    requiredFields
-  );
+    const schema = [
+      { field: 'market_assessment', description: 'across all tokens presented, what patterns do you see. Do not mention any specific token.' },
+      { field: 'news_segment', description: 'If you were going live on TV what would you say about this market.' },
+      { field: 'picked_nothing', description: 'true or false' },
+      { field: 'recommend_buy_index', description: 'the index of the token to purchase if any, for example: 1' },
+      { field: 'reason', description: 'the reason why you think selecting nothing or this specific token is a good buy, and why you chose the specific buy_amount. don\'t include the token number.' },
+      { field: 'existing_position', description: 'If you already have a position, explain why you are increasing position.' },
+      { field: 'token_strengths', description: 'Why is this token strong' },
+      { field: 'token_weaknesses', description: 'What\'s weak about this token' },
+      { field: 'token_opportunities', description: 'What are the opportunities you see with this new position in this token' },
+      { field: 'token_threats', description: 'What are the threats we have based on our positions in this token' },
+      { field: 'opportunity_score', description: 'number between 0-100, for example 1' },
+      { field: 'opportunity_reason', description: 'the reason why you think this token is not too much of a risk' },
+      { field: 'risk_score', description: 'number between 0-100, for example 100' },
+      { field: 'risk_reason', description: 'the reason why you think this token is not too much of a risk' },
+      { field: 'buy_amount', description: 'number between 1 and 15 (meaning to be a percentage of available funds), for example: 1' },
+      { field: 'increase_conditions', description: 'what conditions in which you\'d increase your position on this token' },
+      { field: 'exit_conditions', description: 'what conditions in which you\'d exit your position on this token' },
+      { field: 'exit_liquidity_threshold', description: 'if liquidity drops below this number, you\'d change your position on this token' },
+      { field: 'exit_24hvolume_threshold', description: 'if 24h volume dropped to this number, you\'d change your position on this token' },
+      { field: 'current_price', description: 'What\'s the current price (in USD)' },
+      { field: 'exit_price_drop_threshold', description: 'what absolute price (in USD, not relative, decimal only, no $) in which you\'d change your position on this token. Should be less than it\'s current token price (in USD)' },
+      { field: 'exit_price_drop_threshold_reasoning', description: 'the reason why you think this is a good stop loss threshold' },
+      { field: 'exit_target_price', description: 'what absolute target price (in USD, not relative, decimal only, no $) do you think we take profits at. Should be more than it\'s current token price (in USD)' },
+      { field: 'exit_target_price_reasoning', description: 'the reason why you think this is a good take profit threshold' },
+    ]
+
+    response = await runtime.generateObject(ModelType.TEXT_LARGE, {
+      system: 'You are a buy signal analyzer.',
+      prompt,
+    }, schema, '', { type: 'json', requiredFields })
+  } else {
+    // this will retry up to 3 times * 3
+    response = await askLlmObject(
+      runtime,
+      { prompt, system: 'You are a buy signal analyzer.' },
+      requiredFields
+    );
+  }
+
   if (!response) {
     // 9 llm calls
     if (retries) {
-      return pickToken(runtime, prompt, retries - 1);
+      return pickToken(runtime, prompt, indexLookup, retries - 1);
     }
     return false;
   }
@@ -376,7 +478,7 @@ async function pickToken(runtime, prompt, retries = 3) {
   await runtime.createMemory(marketMemory, "trendingConditions", true); // 3rd parameter means unique
 
   const picked_nothing = parseBooleanFromText(response.picked_nothing)
-  if (!picked_nothing) {
+  if (picked_nothing) {
     // all good
     return false;
   }
@@ -390,7 +492,7 @@ async function pickToken(runtime, prompt, retries = 3) {
       // dev mode
       console.log('llm_strat Bad buy amount');
       if (retries) {
-        return pickToken(runtime, prompt, retries - 1);
+        return pickToken(runtime, prompt, indexLookup, retries - 1);
       }
       return false;
     }
@@ -399,35 +501,48 @@ async function pickToken(runtime, prompt, retries = 3) {
   if (response.buy_amount > 15) {
     console.log('llm_strat - Bad buy amount, too high');
     if (retries) {
-      return pickToken(runtime, prompt, retries - 1);
+      return pickToken(runtime, prompt, indexLookup, retries - 1);
     }
     return false;
   }
 
   // translate recommend_buy_index into recommend_buy_address && recommend_buy_chain
-  const trendingData = (await runtime.getCache<IToken[]>('tokens_solana')) || [];
+  //const trendingDataWrapper = (await runtime.getCache<IToken[]>('tokens_v2_solana')) || [];
+  //const trendingData = trendingDataWrapper.data // setAt
   //console.log('trendingData', trendingData)
+  //console.log('trendingData', trendingData.length, 'count')
   //console.log('selected', trendingData[response.recommend_buy_index - 1])
   const selectedIndex = parseInt(response.recommend_buy_index)
+  //console.log('selectedIndex', typeof(selectedIndex), selectedIndex)
   // if it's 0 that's ok
   if (isNaN(selectedIndex)) {
     console.log('llm_strat selectedIndex is invalid')
     if (retries) {
-      return pickToken(runtime, prompt, retries - 1);
+      return pickToken(runtime, prompt, indexLookup, retries - 1);
     }
     return false;
   }
 
-  // name, chain, price, symbol, address, logoURI, decimals, provider, liquidity, markertcap (0), volume24hUSD, price24hChangePercent
-  response.recommend_buy_address = trendingData[selectedIndex - 1].address
-  response.recommend_buy_chain = trendingData[selectedIndex - 1].chain //.toLowerCase()
+  // name, chain, price, symbol, address, logoURI, decimals, provider, liquidity, marketcap (0), volume24hUSD, price24hChangePercent
+  /*
+  const adjSelectIdx = selectedIndex - 1
+  //console.log('selectedIndex', typeof(selectedIndex), selectedIndex, adjSelectIdx)
+  response.recommend_buy_address = trendingData[adjSelectIdx].address
+  response.recommend_buy_chain = trendingData[adjSelectIdx].chain //.toLowerCase()
+  */
+
+  // name, rank, chain, price, symbol, address, logoURI, decimals, provider, liquidity, marketcap, volume24hUSD, price24hChangePercent, supply
+  console.log('selected index details', indexLookup[selectedIndex]) // we start at 1
+  response.recommend_buy_address = indexLookup[selectedIndex].address
+  response.recommend_buy_chain = indexLookup[selectedIndex].chain //.toLowerCase()
+
   console.log('index', selectedIndex, 'became', response.recommend_buy_address, 'on', response.recommend_buy_chain)
 
   // verify address for this chain (plugin-solana)
   if (response.recommend_buy_chain.toLowerCase() !== 'solana') {
     console.log('llm_strat chain not solana', response.recommend_buy_chain);
     if (retries) {
-      return pickToken(runtime, prompt, retries - 1);
+      return pickToken(runtime, prompt, indexLookup, retries - 1);
     }
     return false;
   }
@@ -436,7 +551,7 @@ async function pickToken(runtime, prompt, retries = 3) {
   if (!lowPrice) {
     console.log('zero lowPrice')
     if (retries) {
-      return pickToken(runtime, prompt, retries - 1);
+      return pickToken(runtime, prompt, indexLookup, retries - 1);
     }
     return false
   }
@@ -445,7 +560,7 @@ async function pickToken(runtime, prompt, retries = 3) {
   if (!solanaService.validateAddress(response.recommend_buy_address)) {
     console.log('llm_strat no a valid address', response.recommend_buy_address)
     if (retries) {
-      return pickToken(runtime, prompt, retries - 1);
+      return pickToken(runtime, prompt, indexLookup, retries - 1);
     }
     return false
   }
@@ -472,13 +587,14 @@ async function generateBuySignal(runtime, strategyService, hndl, retries = gener
     worldId: roomId,
   });
 
-  const prompt = await generateBuyPrompt(runtime)
+  const { prompt, shortPrompt, indexLookup } = await generateBuyPrompt(runtime)
   //console.log('prompt', prompt)
-  const response = await pickToken(runtime, prompt)
+  const response = await pickToken(runtime, runtime.generateObject ? shortPrompt : prompt, indexLookup)
   // ask will expose this with think tags
-  //console.log('llm_strat trending response', response);
+  console.log('llm_strat trending response', response);
 
   if (!response) {
+    console.log('no response')
     // false is valid no buy response
     //console.log('strat_llm:generateBuySignal: no response')
     /*
@@ -504,6 +620,7 @@ async function generateBuySignal(runtime, strategyService, hndl, retries = gener
     worldName: message.guild?.name,
   });
   */
+  console.log('picked something')
 
   // log it
   const ts = Date.now()
@@ -528,6 +645,8 @@ async function generateBuySignal(runtime, strategyService, hndl, retries = gener
         chain: response.recommend_buy_chain.toLowerCase(),
         tokenAddress: response.recommend_buy_address,
         increaseReason: response.increase_conditions,
+        // we just really wanted positions memory not picks...
+        //amount: response.buy_amount
         type: 'pick',
       },
     },
@@ -539,15 +658,18 @@ async function generateBuySignal(runtime, strategyService, hndl, retries = gener
     createdAt: parseInt('' + (ts / 1000)),
   };
   //console.log('ts', ts, 'createdAt', memory.createdAt)
+  // not sure we should save this until we pass ALL the checks
   await runtime.createMemory(memory, "picks", true); // 3rd parameter means unique
+  console.log('remembered pick')
 
   const fid = runtime.getSetting('FARCASTER_FID')
   const fcWorldId = createUniqueUuid(runtime, fid.toString());
   const fcRoomId = createUniqueUuid(runtime, `${fid}-home`);
+  console.log("FC'd it")
 
 
   // if looks good, get token(s) info (birdeye?) (infoService)
-  const infoService = await acquireService(runtime, 'TRADER_DATAPROVIDER', 'llm trading info');
+  const infoService = await acquireService(runtime, 'INTEL_DATAPROVIDER', 'llm trading info');
   //console.log('infoService', infoService)
 
   // ask data provider for data
@@ -730,11 +852,13 @@ async function generateBuySignal(runtime, strategyService, hndl, retries = gener
     }
   }
 
+  const chainService = await acquireService(runtime, 'INTEL_CHAIN', 'llm trading strategy');
   const solanaService = await acquireService(runtime, 'chain_solana', 'llm trading strategy');
 
   // now it's a signal
 
-  // log it to memories
+  // log it to positions memories
+  // then we can track how we're doing
   const positionMemory: Memory = {
     id: uuidv4() as UUID,
     entityId: runtime.agentId,
@@ -767,7 +891,7 @@ async function generateBuySignal(runtime, strategyService, hndl, retries = gener
     },
     createdAt: ts,
   };
-  //await runtime.createMemory(positionMemory, "positions", true); // 3rd parameter means unique
+  await runtime.createMemory(positionMemory, "positions", true); // 3rd parameter means unique
 
   // log it to disk; do we really need it on disk? we have it in memories
 
@@ -835,12 +959,30 @@ async function generateBuySignal(runtime, strategyService, hndl, retries = gener
       const rawToUi = 1/uiToRaw
       */
 
+      // FIXME: how do we get our base pair for this chain
+      const basePair = 'So11111111111111111111111111111111111111112'
+      const res1 = await chainService.executeSwaps([{
+        signal: {
+          inToken: response.recommend_buy_chain + '/' + basePair,
+          outToken: response.recommend_buy_chain + '/' + response.recommend_buy_address,
+        },
+        wallets: [{
+          inKeypair: w.privateKey,
+          outKeypair: w.privateKey,
+          inAmount: Math.round(amt * 1e9),
+          slippage: 200,
+        }]
+      }])
+      const res = res1[0]
+
+      /*
       const res = await solanaService.executeSwap([{
         // we get a quote based on the sol amount
         amount: Math.round(amt * 1e9), // amount of input Token in atomic units
         keypair: kp
       }], response)
-      //console.log('buy res', res)
+      */
+      console.log('buy res', res)
 
       if (!res) {
         console.warn('Bad response', res)
@@ -896,8 +1038,12 @@ async function generateBuySignal(runtime, strategyService, hndl, retries = gener
         await strategyService.open_position(hndl, position);
 
         const walletIntService = await acquireService(runtime, 'AUTONOMOUS_TRADER_INTERFACE_WALLETS', 'llm trading strategy');
+        //console.log('response.recommend_buy_address', response.recommend_buy_address)
         const kpObj = new PublicKey(response.recommend_buy_address)
-        const symbol = await solanaService.getTokenSymbol(kpObj)
+        const symbols = await solanaService.getTokensSymbols([response.recommend_buy_address])
+        //console.log('symbols', symbols)
+        const symbol = symbols[response.recommend_buy_address]
+        console.log('notification', response.recommend_buy_address, '=>', symbol)
         const msg = 'we bought ' + tokenAmountUi + ' ' + symbol + ' (worth $' + positionInUsd.toFixed(2) + ')'
         await walletIntService.notifyWallet(kp.publicKey, msg)
       } else {
