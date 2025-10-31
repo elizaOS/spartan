@@ -22,7 +22,7 @@ export async function interface_users_ByIds(runtime: IAgentRuntime, ids: UUID[])
 
   // we should key this, each user can and should have only one COMPONENT_USER_TYPE component
   const components = {}
-  for(const i in entities) {
+  for (const i in entities) {
     const entity = entities[i]
     //console.log('interface_users_ByIds - entity', entity)
     const entityId = entity.id // ids[i]
@@ -32,7 +32,7 @@ export async function interface_users_ByIds(runtime: IAgentRuntime, ids: UUID[])
       if (email) {
         //components.push({...email.data, entityId: entity.id, names: entity.names })
         //entityId: entity.id,
-        components[entityId] = {...email.data, componentId: email.id, names: entity.names }
+        components[entityId] = { ...email.data, componentId: email.id, names: entity.names }
       } else {
         // normal if they didn't sign up
         // wow gets spammed a lot
@@ -56,7 +56,7 @@ export async function getUserIdsByPubkeys(runtime: IAgentRuntime, pubkeys): Prom
 
   const accountIds = {}
   const userIds = {} // revmap
-  for(const entityId in emails) {
+  for (const entityId in emails) {
     const email = emails[entityId]
     //console.log('getUserIdsByPubkeys', entityId)
     if (email.verified && email.address) {
@@ -76,14 +76,14 @@ export async function getUserIdsByPubkeys(runtime: IAgentRuntime, pubkeys): Prom
 
   const accounts = await runtime.getEntitiesByIds(Object.values(accountIds))
   const list = {}
-  for(const accountId in accounts) {
+  for (const accountId in accounts) {
     const account = accounts[accountId]
     if (account) {
       const component = account.components.find(c => c.type === CONSTANTS.COMPONENT_ACCOUNT_TYPE)
       if (component) {
         // const mw = component.data.metawallets.find(mw => mw.keypairs[pos.chain]?.publicKey === pos.publicKey)
-        for(const mw of component.data.metawallets) {
-          for(const chain in mw.keypairs) {
+        for (const mw of component.data.metawallets) {
+          for (const chain in mw.keypairs) {
             const kp = mw.keypairs[chain]
             if (pubkeys.includes(kp.publicKey)) {
               // put userid in list for this pubkey
@@ -133,8 +133,11 @@ export async function getUserIdsByPubkeys(runtime: IAgentRuntime, pubkeys): Prom
 
 export async function getUseridsByAccountId(runtime: IAgentRuntime, accountIds: UUID[]) {
   const res = await interface_users_listVerified(runtime)
+  if (!res) {
+    return {}
+  }
   const out = {}
-  for(const acctId of accountIds) {
+  for (const acctId of accountIds) {
     const userIds = res.accountId2userIds[acctId]
     out[acctId] = userIds
   }
@@ -147,7 +150,10 @@ export async function getUseridsByAccountId(runtime: IAgentRuntime, accountIds: 
 export async function interface_users_list(runtime: IAgentRuntime, options = {}): Promise<UUID[]> {
   const spartanData = await interface_spartan_get(runtime)
   //console.log('interface_users_list - got spartanData')
-  return spartanData.data.users
+  if (!spartanData) {
+    return []
+  }
+  return spartanData.data.users as UUID[]
 }
 
 // really good for accounts
@@ -160,11 +166,14 @@ export async function interface_users_listVerified(runtime: IAgentRuntime, optio
   }
   // we don't just use interface_users_list because overhead
   const spartanData = await interface_spartan_get(runtime) // get list of userIds
-  const emails = await interface_users_ByIds(runtime, spartanData.data.users) // get entities
+  if (!spartanData) {
+    return false
+  }
+  const emails = await interface_users_ByIds(runtime, spartanData.data.users as UUID[]) // get entities
 
   const userId2accountId = {}
   const accountId2userIds = {} // revmap
-  for(const entityId in emails) {
+  for (const entityId in emails) {
     const email = emails[entityId]
     //console.log('interface_users_listVerified', entityId)
     if (email.verified && email.address) {
@@ -175,7 +184,7 @@ export async function interface_users_listVerified(runtime: IAgentRuntime, optio
       if (accountId2userIds[emailEntityId] === undefined) accountId2userIds[emailEntityId] = []
       accountId2userIds[emailEntityId].push(entityId)
       //userWallets[entityId] = email.metawallets
-    //} else {
+      //} else {
       //console.log('interface_users_listVerified - waiting on verification', entityId, email)
     }
   }
@@ -202,13 +211,14 @@ export async function interface_user_update(runtime: IAgentRuntime, componentDat
   // const res =
   await runtime.updateComponent({
     id,
-    //worldId: roomDetails.worldId,
-    //roomId: message.roomId,
-    //sourceEntityId: message.entityId,
-    //entityId,
+    entityId: componentData.entityId || createUniqueUuid(runtime, 'unknown-entity'),
+    roomId: componentData.roomId || createUniqueUuid(runtime, 'default-room'),
+    worldId: componentData.worldId || createUniqueUuid(runtime, 'default-world'),
+    sourceEntityId: componentData.sourceEntityId || createUniqueUuid(runtime, 'unknown-source'),
     type: CONSTANTS.COMPONENT_USER_TYPE,
     data: componentData,
     agentId: runtime.agentId,
+    createdAt: Date.now(),
   });
   // seems to be undefined
   //console.log('interface_user_update - updateComponent result', res)
