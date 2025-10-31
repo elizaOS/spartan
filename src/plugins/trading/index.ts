@@ -38,7 +38,7 @@ export const traderPlugin: Plugin = {
   actions: [
     setStrategy, changeStrategy,
     //actionPositionList,
-    openPositionAction, positionSettings,
+    //openPositionAction, positionSettings,
     //userMetawalletPnl
   ],
   services: [InterfacePositionsService],
@@ -46,7 +46,7 @@ export const traderPlugin: Plugin = {
     // register strategies (are async)
     noneStrategy(runtime);
     llmStrategy(runtime);
-    copyStrategy(runtime);
+    //copyStrategy(runtime);
   }
 };
 

@@ -307,13 +307,14 @@ export class TradeDataProviderService extends Service {
       const amountRaw = tokenSolanaInfo.account.data.parsed.info.tokenAmount.amount;
       const tokenToUi = 1 / (10 ** decimals);
       const tokenBalanceUi = Number(amountRaw) * tokenToUi; // how much they're holding
-      console.log('tokenAmount', p.tokenAmount)
+      //console.log('tokenAmount', p.tokenAmount)
       const positionTokenAmountUi = p.tokenAmount * tokenToUi
       const exitUsd = positionTokenAmountUi * ud.price
       console.log('position', positionTokenAmountUi, 'balance', tokenBalanceUi, 'value', exitUsd.toFixed(2))
 
       let sellAmount = Math.round(p.tokenAmount || (p.entryPrice * p.amount)) // in raw (like lamports)
-      console.log('sellAmount', sellAmount, 'from', p.tokenAmount, 'or', p.entryPrice * p.amount, p.entryPrice, p.amount)
+      // , 'or', p.entryPrice * p.amount, p.entryPrice, p.amount
+      console.log('sellAmount', sellAmount.toLocaleString(), 'from', p.tokenAmount)
 
       if (positionTokenAmountUi > tokenBalanceUi) {
         console.log('We no longer hold', positionTokenAmountUi, 'of', p.token, 'adjusting to', tokenBalanceUi)

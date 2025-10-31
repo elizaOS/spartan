@@ -605,6 +605,7 @@ async function generateBuySignal(runtime, strategyService, hndl, retries = gener
     */
     return false
   }
+  //console.debug('strat_llm:generateBuySignal: have response')
 
   /*
   await this.runtime.ensureConnection({
@@ -663,10 +664,16 @@ async function generateBuySignal(runtime, strategyService, hndl, retries = gener
   console.log('remembered pick')
 
   const fid = runtime.getSetting('FARCASTER_FID')
-  const fcWorldId = createUniqueUuid(runtime, fid.toString());
-  const fcRoomId = createUniqueUuid(runtime, `${fid}-home`);
-  console.log("FC'd it")
+  if (fid) {
+    const fcWorldId = createUniqueUuid(runtime, fid.toString());
+    const fcRoomId = createUniqueUuid(runtime, `${fid}-home`);
+    //console.log("FC'd it")
+    // but we didn't
+    // we need to update roomId and worldId
+    // or are we just use a provider to inject it now?
+  }
 
+  //console.debug('stored pick, checking price')
 
   // if looks good, get token(s) info (birdeye?) (infoService)
   const infoService = await acquireService(runtime, 'INTEL_DATAPROVIDER', 'llm trading info');
