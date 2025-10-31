@@ -1,16 +1,24 @@
 import {
+  type Action,
+  type ActionExample,
+  type ActionResult,
+  type HandlerCallback,
+  type IAgentRuntime,
+  type Memory,
+  type State,
   createUniqueUuid,
   logger,
 } from '@elizaos/core';
 import { v4 as uuidv4 } from 'uuid';
 import { HasEntityIdFromMessage, takeItPrivate, messageReply, getAccountFromMessage } from '../../autonomous-trader/utils'
+import CONSTANTS from '../../autonomous-trader/constants'
 
 // handle starting new form and collecting first field
 export const userMetawalletList: Action = {
   name: 'USER_METAWALLET_LIST',
   similes: [
   ],
-  description: 'Allows a user to list all wallet addresses they have',
+  description: 'Allows a user to list all wallet addresses they have ' + CONSTANTS.DESCONLYCALLME,
   validate: async (runtime: IAgentRuntime, message: Memory) => {
     //console.log('USER_METAWALLET_LIST validate', message?.metadata?.fromId)
     if (!await HasEntityIdFromMessage(runtime, message)) {
@@ -18,7 +26,7 @@ export const userMetawalletList: Action = {
       return false
     }
 
-    const traderChainService = runtime.getService('TRADER_CHAIN') as any;
+    const traderChainService = runtime.getService('INTEL_CHAIN') as any;
     if (!traderChainService) return false
     const traderStrategyService = runtime.getService('TRADER_STRATEGY') as any;
     if (!traderStrategyService) return false
@@ -31,11 +39,11 @@ export const userMetawalletList: Action = {
   handler: async (
     runtime: IAgentRuntime,
     message: Memory,
-    state: State,
-    _options: { [key: string]: unknown },
+    state: State | undefined,
+    _options: { [key: string]: unknown } | undefined,
     callback?: HandlerCallback,
-    responses: any[]
-  ): Promise<boolean> => {
+    responses?: any[]
+  ): Promise<ActionResult | void | undefined> => {
     //console.log('USER_METAWALLET_LIST handler')
 
     // should we check to see if we already a wallet with this strategy? no
@@ -45,8 +53,11 @@ export const userMetawalletList: Action = {
 
     if (!account.metawallets) {
       const output = takeItPrivate(runtime, message, 'You don\'t have any wallets, do you want to make one?')
-      callback(output)
-      return
+      callback?.(output)
+      return {
+        success: true,
+        text: 'You don\'t have any wallets, do you want to make one?'
+      }
     }
 
     // metawallet
@@ -58,22 +69,22 @@ export const userMetawalletList: Action = {
       wStr += '  None'
     }
 
-    async function flushString() {
+    async function flushString(wStr: string) {
       if (wStr.trim().length) {
         console.log('trying to send', wStr)
         const output = takeItPrivate(runtime, message, wStr)
-        await callback(output)
+        await callback?.(output)
       }
       wStr = ''
     }
 
-    for(const mw of account.metawallets) {
+    for (const mw of account.metawallets) {
       //console.log('mw', mw)
       wStr += 'Wallet:\n'
       wStr += '  Strategy: ' + mw.strategy + '\n'
       // mw.keypairs [{ chain, keypair {publicKey, privateKey} }]
       wStr += '  Keypairs: \n'
-      for(const c in mw.keypairs) {
+      for (const c in mw.keypairs) {
         const kp = mw.keypairs[c]
         //console.log('c', c, 'kp', kp)
         wStr += '    Chain: ' + c + ' Address:' + "\n"
@@ -93,6 +104,10 @@ export const userMetawalletList: Action = {
 
     //const output = takeItPrivate(runtime, message, wStr)
     //callback(output)
+    return {
+      success: true,
+      text: 'Wallet list completed'
+    }
   },
   examples: [
     [
