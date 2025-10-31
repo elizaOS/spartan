@@ -2,7 +2,7 @@
 // non-llm fuzzer choice matcher
 
 // Jaro-Winkler similarity algorithm
-function jaroWinkler(s1, s2) {
+function jaroWinkler(s1: string, s2: string): number {
   if (s1 === s2) return 1.0;
 
   const len1 = s1.length;
@@ -52,9 +52,9 @@ function jaroWinkler(s1, s2) {
 }
 
 // Cosine similarity using n-grams
-function cosineSimilarity(s1, s2, n = 2) {
-  function getNGrams(str, n) {
-    const ngrams = new Set();
+function cosineSimilarity(s1: string, s2: string, n: number = 2): number {
+  function getNGrams(str: string, n: number): Set<string> {
+    const ngrams = new Set<string>();
     for (let i = 0; i <= str.length - n; i++) {
       ngrams.add(str.substring(i, i + n));
     }
@@ -64,28 +64,28 @@ function cosineSimilarity(s1, s2, n = 2) {
   const ngrams1 = getNGrams(s1, n);
   const ngrams2 = getNGrams(s2, n);
 
-  const intersection = new Set([...ngrams1].filter(x => ngrams2.has(x)));
-  const union = new Set([...ngrams1, ...ngrams2]);
+  const intersection = new Set(Array.from(ngrams1).filter(x => ngrams2.has(x)));
+  const union = new Set([...Array.from(ngrams1), ...Array.from(ngrams2)]);
 
   if (union.size === 0) return 0;
   return intersection.size / Math.sqrt(ngrams1.size * ngrams2.size);
 }
 
 // Jaccard similarity
-function jaccardSimilarity(s1, s2) {
-  const set1 = new Set(s1.split(''));
-  const set2 = new Set(s2.split(''));
+function jaccardSimilarity(s1: string, s2: string): number {
+  const set1 = new Set<string>(s1.split(''));
+  const set2 = new Set<string>(s2.split(''));
 
-  const intersection = new Set([...set1].filter(x => set2.has(x)));
-  const union = new Set([...set1, ...set2]);
+  const intersection = new Set(Array.from(set1).filter(x => set2.has(x)));
+  const union = new Set([...Array.from(set1), ...Array.from(set2)]);
 
   return intersection.size / union.size;
 }
 
 // Dice coefficient (Sørensen-Dice)
-function diceCoefficient(s1, s2) {
-  function getBigrams(str) {
-    const bigrams = [];
+function diceCoefficient(s1: string, s2: string): number {
+  function getBigrams(str: string): string[] {
+    const bigrams: string[] = [];
     for (let i = 0; i < str.length - 1; i++) {
       bigrams.push(str.substring(i, i + 2));
     }
@@ -103,7 +103,7 @@ function diceCoefficient(s1, s2) {
 }
 
 // Metaphone algorithm (improved phonetic matching)
-function metaphone(word) {
+function metaphone(word: string): string {
   const vowels = 'AEIOU';
   let metaph = '';
   let current = 0;
@@ -142,7 +142,7 @@ function metaphone(word) {
           metaph += 'S';
         } else if (original[current + 1] === 'H') {
           metaph += ((current === 0 && !vowels.includes(original[current + 2])) ||
-                     original[current - 1] === 'S') ? 'K' : 'X';
+            original[current - 1] === 'S') ? 'K' : 'X';
           current++;
         } else {
           metaph += 'K';
@@ -222,7 +222,7 @@ function metaphone(word) {
         break;
       case 'T':
         if (original.substring(current, current + 3) === 'TIA' ||
-            original.substring(current, current + 3) === 'TIO') {
+          original.substring(current, current + 3) === 'TIO') {
           metaph += 'X';
         } else if (original[current + 1] === 'H') {
           metaph += '0';
@@ -263,7 +263,7 @@ function metaphone(word) {
 }
 
 // Advanced fuzzy matching with weighted scoring
-function advancedFuzzyMatch(input, target) {
+function advancedFuzzyMatch(input: string, target: string): number {
   const inputLower = input.toLowerCase();
   const targetLower = target.toLowerCase();
 
@@ -289,7 +289,7 @@ function advancedFuzzyMatch(input, target) {
 }
 
 // Token-based matching for multi-word strings
-function tokenBasedMatch(input, target) {
+function tokenBasedMatch(input: string, target: string): number {
   const inputTokens = input.toLowerCase().split(/\s+/).filter(t => t.length > 0);
   const targetTokens = target.toLowerCase().split(/\s+/).filter(t => t.length > 0);
 
@@ -316,7 +316,7 @@ function tokenBasedMatch(input, target) {
 }
 
 // Main matching function
-export function matchOption(input, list) {
+export function matchOption(input: string | null | undefined, list: string[]): string | null {
 
   if (!input || typeof input !== 'string') {
     return null;
@@ -332,7 +332,7 @@ export function matchOption(input, list) {
   }
 
   // Advanced fuzzy matching
-  let bestMatch = null;
+  let bestMatch: string | null = null;
   let bestScore = 0;
 
   for (const strategy of list) {
