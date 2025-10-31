@@ -1,4 +1,4 @@
-import type { Plugin } from '@elizaos/core';
+import type { Plugin, IAgentRuntime } from '@elizaos/core';
 
 // actions
 import { setStrategy } from "./actions/act_wallet_setstrategy";
@@ -11,7 +11,10 @@ import openPositionAction from "./actions/act_open_position";
 //import userMetawalletPnl from "./actions/act_wallet_pnl";
 
 // Providers
-import { analyticsProvider } from "./providers/analytics";
+
+// plugin-analytics replaces all this
+//import { analyticsProvider } from "./providers/analytics";
+
 import { positionProvider } from "./providers/position";
 import { marketProvider } from "./providers/market";
 
@@ -28,9 +31,9 @@ export const traderPlugin: Plugin = {
   description: 'Agent trading plugin',
   evaluators: [],
   providers: [
-    positionProvider,
+    positionProvider, // data about our positions
     //analyticsProvider,
-    marketProvider,
+    marketProvider, // last analysis of trending tokens
   ],
   actions: [
     setStrategy, changeStrategy,
