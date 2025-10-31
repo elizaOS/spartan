@@ -1,106 +1,83 @@
-import { type Memory, type TargetInfo, Service, logger } from '@elizaos/core';
+import { Service, logger } from '@elizaos/core';
+import type { IAgentRuntime, ServiceTypeName } from '@elizaos/core';
 import { PublicKey } from '@solana/web3.js';
 //import { listPositions } from '../interfaces/int_positions'
 
 export class TradeDataProviderService extends Service {
   private isRunning = false;
 
-  static serviceType = 'TRADER_DATAPROVIDER';
+  static serviceType = 'INTEL_DATAPROVIDER';
   capabilityDescription = 'The agent is able to get information about blockchains';
 
   // config (key/string)
+  private registry: Record<number, any> = {};
+  private pIntPositions: Promise<void>;
+  private pIntWallets: Promise<void>;
+  private pIntAccounts: Promise<void>;
+  private pSrvStrat: Promise<void>;
+  private pSrvSolana: Promise<void>;
+  private pSrvChain: Promise<void>;
+  private chains: string[];
+  private events: Map<string, any[]>;
+  private timer?: NodeJS.Timeout;
+  private checkPosTimer?: NodeJS.Timeout;
 
   positionIntService: any;
   walletIntService: any;
   accountIntService: any;
   solanaService: any;
+  strategyService: any;
+  chainService: any;
 
   constructor(public runtime: IAgentRuntime) {
     super(runtime); // sets this.runtime
     this.registry = {};
-    console.log('TRADER_DATAPROVIDER cstr');
+
+    //
+    // Interfaces (data acccess)
+    //
 
     // bad smell
     // AUTONOMOUS_TRADER_INTERFACE_POSITIONS should register with me...
-    const asking = 'Trader information Service'
-    const serviceType = 'AUTONOMOUS_TRADER_INTERFACE_POSITIONS'
-    this.positionIntService = this.runtime.getService(serviceType) as any;
-    new Promise(async resolve => {
-      while (!this.positionIntService) {
-        console.log(asking, 'waiting for', serviceType, 'service...');
-        this.positionIntService = this.runtime.getService(serviceType) as any;
-        if (!this.positionIntService) {
-          await new Promise((waitResolve) => setTimeout(waitResolve, 1000));
-        } else {
-          console.log(asking, 'Acquired', serviceType, 'service...');
-        }
-      }
-      resolve()
+    this.pIntPositions = runtime.getServiceLoadPromise('AUTONOMOUS_TRADER_INTERFACE_POSITIONS' as ServiceTypeName).then(() => {
+      // used to list positions
+      this.positionIntService = this.runtime.getService('AUTONOMOUS_TRADER_INTERFACE_POSITIONS' as ServiceTypeName);
     })
 
-    const serviceType2 = 'AUTONOMOUS_TRADER_INTERFACE_WALLETS'
-    this.walletIntService = this.runtime.getService(serviceType2) as any;
-    new Promise(async resolve => {
-      while (!this.walletIntService) {
-        console.log(asking, 'waiting for', serviceType2, 'service...');
-        this.walletIntService = this.runtime.getService(serviceType2) as any;
-        if (!this.walletIntService) {
-          await new Promise((waitResolve) => setTimeout(waitResolve, 1000));
-        } else {
-          console.log(asking, 'Acquired', serviceType2, 'service...');
-        }
-      }
-      resolve()
+    this.pIntWallets = runtime.getServiceLoadPromise('AUTONOMOUS_TRADER_INTERFACE_WALLETS' as ServiceTypeName).then(() => {
+      // used for wallet notifications
+      this.walletIntService = this.runtime.getService('AUTONOMOUS_TRADER_INTERFACE_WALLETS' as ServiceTypeName);
     })
 
-    // not really used
-    const serviceType5 = 'AUTONOMOUS_TRADER_INTERFACE_ACCOUNTS'
-    this.accountIntService = this.runtime.getService(serviceType5) as any;
-    new Promise(async resolve => {
-      while (!this.accountIntService) {
-        console.log(asking, 'waiting for', serviceType5, 'service...');
-        this.accountIntService = this.runtime.getService(serviceType5) as any;
-        if (!this.accountIntService) {
-          await new Promise((waitResolve) => setTimeout(waitResolve, 1000));
-        } else {
-          console.log(asking, 'Acquired', serviceType5, 'service...');
-        }
-      }
-      resolve()
+    this.pIntAccounts = runtime.getServiceLoadPromise('AUTONOMOUS_TRADER_INTERFACE_ACCOUNTS' as ServiceTypeName).then(() => {
+      // used to get all accountIds for notifcations
+      this.accountIntService = this.runtime.getService('AUTONOMOUS_TRADER_INTERFACE_ACCOUNTS' as ServiceTypeName);
     })
+
+    //
+    // Services
+    //
 
     // should be available by now, since it's in the same plugin
-    // but it's not?
-    const serviceType3 = 'TRADER_STRATEGY'
-    this.strategyService = this.runtime.getService(serviceType3) as any;
-    new Promise(async resolve => {
-      while (!this.strategyService) {
-        console.log(asking, 'waiting for', serviceType3, 'service...');
-        this.strategyService = this.runtime.getService(serviceType3) as any;
-        if (!this.strategyService) {
-          await new Promise((waitResolve) => setTimeout(waitResolve, 1000));
-        } else {
-          console.log(asking, 'Acquired', serviceType3, 'service...');
-        }
-      }
-      resolve()
+    this.pSrvStrat = runtime.getServiceLoadPromise('TRADER_STRATEGY' as ServiceTypeName).then(() => {
+      // close/open positions & get handle by strat name
+      this.strategyService = this.runtime.getService('TRADER_STRATEGY' as ServiceTypeName);
     })
 
-    // const solanaService = this.runtime.getService('chain_solana') as any;
-    const serviceType4 = 'chain_solana'
-    this.solanaService = this.runtime.getService(serviceType4) as any;
-    new Promise(async resolve => {
-      while (!this.solanaService) {
-        console.log(asking, 'waiting for', serviceType4, 'service...');
-        this.solanaService = this.runtime.getService(serviceType4) as any;
-        if (!this.solanaService) {
-          await new Promise((waitResolve) => setTimeout(waitResolve, 1000));
-        } else {
-          console.log(asking, 'Acquired', serviceType4, 'service...');
-        }
-      }
-      resolve()
+    // bad smell, should be intel-chain
+    this.pSrvSolana = runtime.getServiceLoadPromise('chain_solana' as ServiceTypeName).then(() => {
+      this.solanaService = this.runtime.getService('chain_solana' as ServiceTypeName);
     })
+
+    // shouldn't this exist by now? order
+    this.pSrvChain = runtime.getServiceLoadPromise('INTEL_CHAIN' as ServiceTypeName).then(() => {
+      // close/open positions & get handle by strat name
+      this.chainService = this.runtime.getService('INTEL_CHAIN' as ServiceTypeName);
+    })
+
+    // which "birdeye" chains to watch...
+    // fixme configurable
+    this.chains = ['solana', 'base', 'ethereum']
 
     this.events = new Map();
   }
@@ -109,19 +86,22 @@ export class TradeDataProviderService extends Service {
   async registerDataProvder(dataProvider: any) {
     // add to registry
     const id = Object.values(this.registry).length + 1;
-    console.log('registered', dataProvider.name, 'as trading data provider #' + id);
+    this.runtime.logger.success('registered', dataProvider.name, 'as trading data provider #' + id);
     this.registry[id] = dataProvider;
     return id;
   }
 
   // interested in trending updates
-  async interested_trending(handler) {
+  async interested_trending(handler: any) {
     const event = 'trending';
     if (!this.events.has(event)) {
       this.events.set(event, []);
     }
     // add to our local eventHandlers
-    this.events.get(event).push(handler);
+    const eventHandlers = this.events.get(event);
+    if (eventHandlers) {
+      eventHandlers.push(handler);
+    }
   }
 
   // should be a task and not here
@@ -138,22 +118,30 @@ export class TradeDataProviderService extends Service {
     console.log('DP:checkPositions - checking positions');
     // get a list of positions (chains -> wallets -> positions)
 
+    // need positionIntService, solanaService working
+    await Promise.all([this.pSrvSolana, this.pIntPositions])
+
     // need to get autotrader service
 
-    const positions = await this.positionIntService.list()
+    const positions = await this.positionIntService?.list()
+    if (!positions) {
+      console.log('DP:checkPositions - no positions available');
+      return;
+    }
     // filter thru, what token do we need to get information on?
-    const tokens = []
-    const ca2Positions = []
-    const solanaWallets = {}
+    const tokens: string[] = []
+    const ca2Positions: Record<string, any[]> = {}
+    const solanaWallets: Record<string, boolean> = {}
     let openPositions = 0
-    for(const p of positions) {
+    console.log('DP:checkPositions - reviewing', positions.length, 'positions');
+    for (const p of positions) {
       const ca = p.position.token
 
       // COULD_NOT_FIND_ANY_ROUTE
       if (ca === '84ea5vxsJuf98CRNuVuZYDPjoY4HNjTTCcYY65urxW4V'
-          || ca === '6P8EmVEfAicPdyFLpS5GHBeh87EMCk6pRHDDcQFjJXNS'
-          || ca === 'METAewgxyPbgwsseH8T16a39CQ5VyVxZi9zXiDPY18m'
-          || ca === '9ETrUMXSoVUXzATaBEyg5P6jX4jv69m76pC8B6uFzE1R'
+        || ca === '6P8EmVEfAicPdyFLpS5GHBeh87EMCk6pRHDDcQFjJXNS'
+        || ca === 'METAewgxyPbgwsseH8T16a39CQ5VyVxZi9zXiDPY18m'
+        || ca === '9ETrUMXSoVUXzATaBEyg5P6jX4jv69m76pC8B6uFzE1R'
       ) {
         continue
       }
@@ -211,14 +199,14 @@ export class TradeDataProviderService extends Service {
     }
 
     // we're going to be tracking less tokens than the number of wallets we have
-    for(const ca of tokens) {
+    for (const ca of tokens) {
       const mintObj = new PublicKey(ca)
       const decimals = await this.solanaService.getDecimal(mintObj)
       const tokenBalances = await this.solanaService.getTokenBalanceForWallets(mintObj, Object.keys(solanaWallets))
       //console.log(ca, 'tokenBalances', tokenBalances)
       // adjust positions accordingly to balances
       const positions = ca2Positions[ca]
-      for(const idx in positions) {
+      for (const idx in positions) {
         const p = positions[idx]
         // find wallet
         const wa = p.position.publicKey
@@ -244,7 +232,7 @@ export class TradeDataProviderService extends Service {
     // take list of CA and get token information
     const services = this.forEachReg('lookupService')
     // seems to be always fresh
-    const results = await Promise.all(services.map(service => service.getTokensMarketData('solana', tokens)))
+    const results = await Promise.all(services.map((service: any) => service.getTokensMarketData('solana', tokens)))
     // an array of list of tokens (keyed by token)
     console.log('results', results)
 
@@ -409,7 +397,7 @@ export class TradeDataProviderService extends Service {
           await this.walletIntService.notifyWallet(pubKey, result.signature)
 
         }
-      } catch(e) {
+      } catch (e) {
         console.error('failure to close position', e)
         // is it because of balance?!?
         // retry?
@@ -418,9 +406,9 @@ export class TradeDataProviderService extends Service {
     }
 
     // this type of monitoring should be refactored out
-    for(const r of results) { // for each look up service (rn just BE)
+    for (const r of results) { // for each look up service (rn just BE)
       //console.log('r', r)
-      for(const ca of tokens) {
+      for (const ca of tokens) {
         //console.log('ca', ca)
         const td = r[ca]
         if (!td) {
@@ -430,7 +418,7 @@ export class TradeDataProviderService extends Service {
         }
 
         // get volume
-        const results2 = await Promise.all(services.map(service => service.getTokenTradeData('solana', ca)))
+        const results2 = await Promise.all(services.map((service: any) => service.getTokenTradeData('solana', ca)))
         //console.log('results2', results2)
         const beData = results2[0].data // only birdeye atm
         //console.log('beData', beData)
@@ -442,8 +430,8 @@ export class TradeDataProviderService extends Service {
         console.log('DP:checkPositions -', ca, 'current', '$' + td.priceUsd, 'curLiq', '$' + curLiq.toLocaleString(), 'curVol24h', '$' + Number(curVol24h.toFixed(0)).toLocaleString(), ca2Positions[ca]?.length, 'positions')
 
         // do these checks in the background
-        new Promise(async (resolve) => {
-          for(const ud of ca2Positions[ca]) {
+        new Promise<void>(async (resolve) => {
+          for (const ud of ca2Positions[ca]) {
             //console.log('ud', ud)
             if (!ud) continue
             const p = ud.position
@@ -478,19 +466,19 @@ export class TradeDataProviderService extends Service {
               await closePosition(ud, 'loss')
               continue
             } else
-            if (td.priceUsd >= p.exitConditions.targetPrice) {
-              // win
-              console.log('KICK ASS')
-              await closePosition(ud, 'win')
-              continue
-            }
+              if (td.priceUsd >= p.exitConditions.targetPrice) {
+                // win
+                console.log('KICK ASS')
+                await closePosition(ud, 'win')
+                continue
+              }
 
             //console.log('pLiq min', minLiq.toLocaleString(), 'cur', curLiq.toLocaleString())
             if (curLiq < minLiq) {
               console.log('liqiduity too low')
               // if current price is less than what we paid for it, it's a loss
               const type = td.priceUsd < p.tokenPriceUsd ? 'loss_liq' : 'win_liq'
-              if (type === 'loss') {
+              if (type === 'loss_liq') {
                 console.log('I has a sad')
               } else {
                 console.log('Win!')
@@ -503,7 +491,7 @@ export class TradeDataProviderService extends Service {
               console.log('24h volume too low')
               // if current price is less than what we paid for it, it's a loss
               const type = td.priceUsd < p.tokenPriceUsd ? 'loss_vol' : 'win_vol'
-              if (type === 'loss') {
+              if (type === 'loss_vol') {
                 console.log('I has a sad')
               } else {
                 console.log('Win!')
@@ -521,19 +509,23 @@ export class TradeDataProviderService extends Service {
     console.log('DP:checkPositions - done checking open positions, took', diff.toLocaleString() + 'ms')
   }
 
-  forEachReg(key) {
-    const results = [];
+  forEachReg(key: string): any[] {
+
+    //const testService = this.runtime.getService('birdeye');
+    //console.log('forEachReg runtime test', testService)
+
+    const results: any[] = [];
     // foreach provider
     for (const dp of Object.values(this.registry)) {
       // do they have this type of service
-      if (dp[key]) {
+      if ((dp as any)[key]) {
         // if so get service handle
-        const infoService = this.runtime.getService(dp[key]);
+        const infoService = this.runtime.getService((dp as any)[key]);
         if (infoService) {
           //console.log('updateTrending - result', result)
           results.push(infoService);
         } else {
-          console.warn('Registered data provider service not found', key, dp[key]);
+          console.warn('Registered data provider service not found', key, 'on', (dp as any)[key]);
         }
       } else {
         console.warn('registered service does not support', key, ':', dp)
@@ -547,11 +539,20 @@ export class TradeDataProviderService extends Service {
     console.log('checking trending');
     // collect all
     const services = this.forEachReg('trendingService')
+
+    // how fresh do we want the data? 10mins
+    const inMs10Mins = 10 * 60 * 1000 // 10 mins
+    const results = await Promise.all(services.map((service: any) => service.getTrendingTokens(this.chains, { notOlderThan: inMs10Mins })))
+
     // birdeye just reads the cache built from the task
-    const results = await Promise.all(services.map(service => service.getTrending()))
+    //const results = await Promise.all(services.map(service => service.getTrending()))
 
     // process results
     //console.log('srv_dataprov::updateTrending - results', results);
+    // strategies consume these but usually just read the cache directly
+
+    // probably need to merge all the results into map keyed by token
+    // how do we resolve differences
 
     // emit event
     const event = 'trending';
@@ -560,9 +561,29 @@ export class TradeDataProviderService extends Service {
     }
     console.log('trending registered handlers', this.events.get(event));
     const eventHandlers = this.events.get(event);
-    for (const handler of eventHandlers) {
-      handler(results);
+    if (eventHandlers) {
+      for (const handler of eventHandlers) {
+        handler(results);
+      }
     }
+  }
+
+  // maybe option for freshness/notOlderThan
+  async getTrendingWSupply(chains) {
+    const inMs10Mins = 10 * 60 * 1000 // 10 mins
+    const services = this.forEachReg('trendingService')
+    const results = await Promise.all(services.map((service: any) => service.getTrendingTokens(chains, { notOlderThan: inMs10Mins })))
+    const result = results[0] // only need one
+
+    console.log('getTrendingWSupply result', result)
+    // loop on results and check?
+    // INTEL_CHAINS get supply?
+    //const supplies = await this.chainService.getSupply(ChainsWCAs)
+
+    // solana needs a separate call for supply
+    // ...
+    //const wrapper = (await runtime.getCache<IToken[]>('tokens_v2_' + chain)) || [];
+    return result
   }
 
   // interested in price delta events
@@ -575,10 +596,13 @@ export class TradeDataProviderService extends Service {
     // for each provider in register
     for (const dp of Object.values(this.registry)) {
       // do they have this type of service
-      if (dp.hasPriceDelta) {
+      if ((dp as any).hasPriceDelta) {
         // if so register handler with event
         // add to our local eventHandlers
-        this.events.get(event).push(handler);
+        const eventHandlers = this.events.get(event);
+        if (eventHandlers) {
+          eventHandlers.push(handler);
+        }
       }
     }
   }
@@ -605,6 +629,8 @@ export class TradeDataProviderService extends Service {
   }
   */
 
+  // deprecate (SINGLE chain/address)
+  // or mutliple chains: groups per chain
   async getTokenInfo(chain, address) {
     // don't need to cache the cached
     let token
@@ -613,19 +639,33 @@ export class TradeDataProviderService extends Service {
     //console.log('dataProvider - getTokenInfo for token', chain, address);
     if (!token) {
     */
-      // not cache, go fetch realtime
-      //console.log('dataProvider::getTokenInfo - MISS')
-      const services = this.forEachReg('lookupService')
-      // this is also heavily cached
-      const results = await Promise.all(services.map(service => service.lookupToken(chain.toLowerCase(), address)))
-      //console.log('dataprovider - results', results)
+    // not cache, go fetch realtime
+    //console.log('dataProvider::getTokenInfo - MISS')
+    const services = this.forEachReg('lookupService')
+    // this is also heavily cached
+    const options = { notOlderThan: 30 * 1000 }
+    const results = await Promise.all(services.map((service: any) => service.lookupToken(chain.toLowerCase(), address, options)))
+    //console.log('dataprovider - results', results)
 
-      // how to convert results into token better?
-      token = results[0] // reduce
-      //await this.runtime.setCache<IToken>(`token_${chain}_${address}`, token);
+    // how to convert results into token better?
+    token = results[0] // reduce
+    //await this.runtime.setCache<IToken>(`token_${chain}_${address}`, token);
     //}
     // needs to include liquidity, 24h volume, suspicous atts
-    return token;
+    // needs to include symbol
+    // probably should remember it too...
+    return token; // priceSol, priceUsd, liquidity, priceChange24h
+  }
+
+  // we should gather everything since we have good caching
+  // chainAndAddresses is { chain, address }
+  async getTokensInfo(chainAndAddresses) {
+    const services = this.forEachReg('lookupService')
+    // get price data
+    const options = { notOlderThan: 30 * 1000 }
+    const results = await Promise.all(services.map((service: any) => service.lookupTokens(chainAndAddresses, options)))
+    console.log('dataProvider::getTokensInfo - out', results)
+    return results
   }
 
   /**
@@ -634,7 +674,7 @@ export class TradeDataProviderService extends Service {
    * @returns {Promise<ScenarioService>} - The started scenario service
    */
   static async start(runtime: IAgentRuntime) {
-    console.log('TRADER_DATAPROVIDER trying to start');
+    console.log('INTEL_DATAPROVIDER trying to start');
     const service = new TradeDataProviderService(runtime);
     service.start();
     return service;
@@ -653,6 +693,7 @@ export class TradeDataProviderService extends Service {
     service.stop();
   }
 
+  // requires this.accountIntService && this.walletIntService && this.solanaService
   async doSubs() {
     try {
 
@@ -670,12 +711,12 @@ export class TradeDataProviderService extends Service {
       //console.log('one', componentDatas[accountIds[0]])
 
       // do notifications filtering and conver to special format
-      const ws = []
-      for(const accountId in componentDatas) {
+      const ws: Array<{ chain: string; publicKey: string }> = []
+      for (const accountId in componentDatas) {
         const componentData = componentDatas[accountId]
         //console.log(accountId, 'componentData', componentData)
         if (componentData.notifications) {
-          for(const mw of componentData.metawallets) {
+          for (const mw of componentData.metawallets) {
             if (mw.keypairs.solana) {
               ws.push({ chain: 'solana', publicKey: mw.keypairs.solana.publicKey })
             }
@@ -689,7 +730,7 @@ export class TradeDataProviderService extends Service {
       // not account here...
       //console.log('wallet0', wallets[0])
       console.log('intel:DPsrv - boot wallets', wallets.length)
-      const pubKeys = Array.from(new Set(wallets.filter(w => w.chain === 'solana').map(w => w.publicKey)))
+      const pubKeys = Array.from(new Set(wallets.filter((w: { chain: string; publicKey: string }) => w.chain === 'solana').map((w: { chain: string; publicKey: string }) => w.publicKey)))
       console.log('intel:DPsrv - pubKeys', pubKeys)
 
       // we're looking for initial funding event mainly here...
@@ -728,7 +769,7 @@ export class TradeDataProviderService extends Service {
 
       logger.info('Trading info service started successfully');
     } catch (error) {
-      logger.error('Error starting trading info service:', error);
+      logger.error('Error starting trading info service:', error as string);
       throw error;
     }
   }
@@ -738,14 +779,14 @@ export class TradeDataProviderService extends Service {
       logger.warn('Trading info service is already running');
       return;
     }
-    console.log('TRADER_DATAPROVIDER starting');
+    //this.runtime.logger.debug('INTEL_DATAPROVIDER starting');
 
     // can't start until we have all the services available
 
     // maybe we don't need to do this under the first registers
     this.timer = setInterval(
       () => {
-        console.log('TRADER_DATAPROVIDER Updating Trending')
+        this.runtime.logger.debug('INTEL_DATAPROVIDER Updating Trending')
         this.updateTrending();
       },
       10 * 60 * 1000
@@ -754,24 +795,31 @@ export class TradeDataProviderService extends Service {
     // separate timer for sell signal
     this.checkPosTimer = setInterval(
       () => {
-        console.log('TRADER_DATAPROVIDER Checking positions')
+        this.runtime.logger.debug('INTEL_DATAPROVIDER Checking positions')
         this.checkPositions();
       },
       10 * 60 * 1000
     );
 
-    // immediate is actually too soon
-    setTimeout(async () => {
-      await this.updateTrending()
-      this.checkPositions();
-    }, 15 * 1000) //was 30s
-
-    logger.info('Starting info trading service...');
+    this.runtime.logger.info('Starting info trading service...');
     this.isRunning = true;
 
-    setTimeout(async () => {
+    // wait for service aquisition
+    Promise.all([this.pIntAccounts, this.pIntWallets, this.pSrvSolana]).then(async () => {
       this.doSubs()
-    }, 4 * 1000) // wait for 4 seconds for service aquisition
+      // phase 2 (plus TRADER_STRATEGY, positions, wallets)
+      Promise.all([this.pSrvChain, this.pSrvStrat, this.pIntPositions, this.pIntWallets]).then(async () => {
+        // now start more
+        // do sells
+        // this.pSrvSolana, this.pIntPositions
+        await this.checkPositions(); // awaiting this for additional delay for strats to reg
+        // better for the output too
+        this.runtime.logger.log('positions checked, evaluating immediate buys')
+        setTimeout(() => {
+          this.updateTrending() // do buys
+        }, 5 * 1000)
+      })
+    })
   }
 
   async stop(): Promise<void> {
@@ -786,7 +834,7 @@ export class TradeDataProviderService extends Service {
       this.isRunning = false;
       logger.info('Trading info service stopped successfully');
     } catch (error) {
-      logger.error('Error stopping trading info service:', error);
+      logger.error('Error stopping trading info service:', error as string);
       throw error;
     }
   }
