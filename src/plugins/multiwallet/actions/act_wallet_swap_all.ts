@@ -1,6 +1,7 @@
 import {
     type Action,
     type ActionExample,
+    type ActionResult,
     type Content,
     type HandlerCallback,
     type IAgentRuntime,
@@ -36,7 +37,7 @@ interface SwapAllWalletContent extends Content {
  * Checks if the given swap all content is valid.
  */
 function isSwapAllWalletContent(content: SwapAllWalletContent): boolean {
-    logger.log('Content for swap all', content);
+    logger.log('Content for swap all', JSON.stringify(content));
 
     if (!content.senderWalletAddress || typeof content.senderWalletAddress !== 'string') {
         console.warn('bad senderWalletAddress')
@@ -90,11 +91,11 @@ async function swapToken(
         const amountBN = new BigNumber(amount);
         const adjustedAmount = amountBN.multipliedBy(new BigNumber(10).pow(decimals));
 
-        logger.log('Fetching quote with params:', {
+        logger.log('Fetching quote with params:', JSON.stringify({
             inputMint: inputTokenCA,
             outputMint: outputTokenCA,
-            amount: adjustedAmount,
-        });
+            amount: adjustedAmount.toString(),
+        }));
 
         const jupiterService = runtime.getService('JUPITER_SERVICE') as any;
 
@@ -133,7 +134,7 @@ async function swapToken(
 
         return swapData;
     } catch (error) {
-        logger.error('Error in swapToken:', error);
+        logger.error('Error in swapToken:', error instanceof Error ? error.message : String(error));
         throw error;
     }
 }
@@ -190,12 +191,18 @@ export default {
         state: State,
         _options: { [key: string]: unknown },
         callback?: HandlerCallback,
-        responses: any[] = []
-    ): Promise<boolean> => {
+        responses?: Memory[]
+    ): Promise<ActionResult | void | undefined> => {
         logger.log('MULTIWALLET_SWAP_ALL Starting handler...');
 
         const account = await getAccountFromMessage(runtime, message)
-        if (!account) return false; // shouldn't hit here
+        if (!account) {
+            return {
+                success: false,
+                text: 'Account not found',
+                error: 'ACCOUNT_NOT_FOUND'
+            }
+        }
 
         const sources = await getWalletsFromText(runtime, message)
         console.log('sources', sources)
@@ -212,7 +219,11 @@ export default {
 
         if (!sourceResult.sourceWalletAddress) {
             console.log('MULTIWALLET_SWAP_ALL cant determine source wallet address');
-            return false;
+            return {
+                success: false,
+                text: 'Could not determine source wallet address',
+                error: 'SOURCE_WALLET_NOT_FOUND'
+            };
         }
 
         // find this user's wallet
@@ -238,7 +249,11 @@ export default {
         //console.log('userMetawallet', userMetawallet)
         if (!userMetawallet) {
             callback?.({ text: 'The requested wallet is not registered in your account.' });
-            return false;
+            return {
+                success: false,
+                text: 'The requested wallet is not registered in your account.',
+                error: 'WALLET_NOT_REGISTERED'
+            };
         }
         let found = [userMetawallet.keypairs.solana];
 
@@ -253,8 +268,8 @@ export default {
             // get wallet contents
             const pubKeyObj = new PublicKey(pubKey);
             const [balances, heldTokens] = await Promise.all([
-              solanaService.getBalancesByAddrs([pubKey]),
-              solanaService.getTokenAccountsByKeypair(pubKeyObj),
+                solanaService.getBalancesByAddrs([pubKey]),
+                solanaService.getTokenAccountsByKeypair(pubKeyObj),
             ]);
             const solBal = balances[pubKey]
             contextStr += '  Token Address (Symbol)\n';
@@ -282,7 +297,11 @@ export default {
 
         if (!isSwapAllWalletContent(content)) {
             callback?.({ text: 'Invalid swap all parameters provided' });
-            return false;
+            return {
+                success: false,
+                text: 'Invalid swap all parameters provided',
+                error: 'INVALID_PARAMETERS'
+            };
         }
 
         // find source keypair
@@ -291,7 +310,11 @@ export default {
         if (!sourceKp) {
             console.warn('MULTIWALLET_SWAP_ALL Could not find the specified wallet')
             callback?.({ text: 'Could not find the specified wallet' });
-            return false;
+            return {
+                success: false,
+                text: 'Could not find the specified wallet',
+                error: 'WALLET_NOT_FOUND'
+            };
         }
         console.log('sourceKp', sourceKp.publicKey)
 
@@ -320,7 +343,11 @@ export default {
 
             if (tokenAccountsWithBalances.length === 0) {
                 callback?.({ text: 'No tokens found to swap to SOL' });
-                return false;
+                return {
+                    success: false,
+                    text: 'No tokens found to swap to SOL',
+                    error: 'NO_TOKENS_TO_SWAP'
+                };
             }
 
             const SOL_MINT = 'So11111111111111111111111111111111111111111';
@@ -388,13 +415,17 @@ export default {
                 } catch (error) {
                     failedSwaps++;
                     console.error(`❌ Failed to swap token ${tokenInfo.mint}:`, error);
-                    logger.error(`Error swapping token ${tokenInfo.mint}:`, error);
+                    logger.error(`Error swapping token ${tokenInfo.mint}:`, error instanceof Error ? error.message : String(error));
                 }
             }
 
             if (successfulSwaps === 0) {
                 callback?.({ text: 'No tokens were successfully swapped to SOL' });
-                return false;
+                return {
+                    success: false,
+                    text: 'No tokens were successfully swapped to SOL',
+                    error: 'NO_SUCCESSFUL_SWAPS'
+                };
             }
 
             const summary = [
@@ -406,12 +437,25 @@ export default {
             ].join('\n');
 
             callback?.({ text: summary });
-            return true;
+            return {
+                success: true,
+                text: summary,
+                data: {
+                    successfulSwaps,
+                    failedSwaps,
+                    signatures
+                }
+            };
 
         } catch (error) {
-            logger.error('Error during swap all:', error);
-            callback?.({ text: `Swap all failed: ${error instanceof Error ? error.message : 'Unknown error'}` });
-            return false;
+            logger.error('Error during swap all:', error instanceof Error ? error.message : String(error));
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            callback?.({ text: `Swap all failed: ${errorMessage}` });
+            return {
+                success: false,
+                text: `Swap all failed: ${errorMessage}`,
+                error: errorMessage
+            };
         }
     },
     examples: [
