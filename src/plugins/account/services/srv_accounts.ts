@@ -1,4 +1,4 @@
-import { IAgentRuntime, getSalt, encryptStringValue, Service, logger } from '@elizaos/core';
+import { IAgentRuntime, Service, logger, TargetInfo, Memory, Content, ChannelType, UUID } from '@elizaos/core';
 import { getAccountIdsByPubkey_engine, interface_accounts_list, interface_accounts_ByIds, getAccountIdsByPubkeys, interface_account_update, interface_account_upsert } from '../interfaces/int_accounts'
 import { getUseridsByAccountId } from '../interfaces/int_users'
 
@@ -13,7 +13,7 @@ export class InterfaceAccountService extends Service {
 
   constructor(public runtime: IAgentRuntime) {
     super(runtime); // sets this.runtime
-    logger.log(this.serviceType, 'constructor');
+    logger.log(InterfaceAccountService.serviceType, 'constructor');
   }
 
   // get a list of accounts
@@ -21,19 +21,19 @@ export class InterfaceAccountService extends Service {
     return interface_accounts_list(this.runtime)
   }
 
-  async interface_accounts_ByIds(accountIds) {
+  async interface_accounts_ByIds(accountIds: UUID[]) {
     return interface_accounts_ByIds(this.runtime, accountIds)
   }
 
-  async getAccountIdsByPubkey_engine(pubKeys) {
+  async getAccountIdsByPubkey_engine(pubKeys: string[]) {
     return getAccountIdsByPubkey_engine(this.runtime, pubKeys)
   }
 
-  async interface_account_upsert(message, componentData) {
+  async interface_account_upsert(message: Content, componentData: any) {
     return interface_account_upsert(this.runtime, message, componentData)
   }
 
-  async interface_account_update(componentData) {
+  async interface_account_update(componentData: any) {
     return interface_account_update(this.runtime, componentData)
   }
 
@@ -41,7 +41,7 @@ export class InterfaceAccountService extends Service {
     return getAccountIdsByPubkeys(this.runtime, pubkeys)
   }
 
-  async turnOnNotes(accountId) {
+  async turnOnNotes(accountId: number) {
     // get pks
     // await this.solanaService.subscribeToAccount(pk, async (accountAddress, accountInfo, context) => {
     //    const msg = accountAddress + ' $SOL balance change: ' + (accountInfo.lamports / 1e9).toFixed(4)
@@ -49,27 +49,28 @@ export class InterfaceAccountService extends Service {
     // })
   }
 
-  async turnOffNotes(accountId) {
+  async turnOffNotes(accountId: number) {
     // unsub?
     // await solanaService.unsubscribeFromAccount(accountAddress)
   }
 
-  async notifyAccount(accountIds, msg) {
+  async notifyAccount(accountIds: UUID[], msg: string) {
 
     const accountId2userIds = await getUseridsByAccountId(this.runtime, accountIds)
     const accountId2ComponentData = await interface_accounts_ByIds(this.runtime, accountIds)
     // a list of users to notify
-    const userIds = []
-    for(const acctId in accountId2userIds) {
+    const userIds: UUID[] = []
+    for (const acctId in accountId2userIds) {
       const accountComponentData = accountId2ComponentData[acctId]
       //console.log('notifyAccount account.notifications', accountComponentData.notifications)
+      // only send if notifications are on
       if (accountComponentData.notifications) {
-        for(const userId of accountId2userIds[acctId]) {
+        for (const userId of accountId2userIds[acctId]) {
           if (userIds.indexOf(userId) === -1) {
             userIds.push(userId)
           }
         }
-      //} else {
+        //} else {
         //console.log('account not getting notified')
       }
     }
@@ -94,13 +95,21 @@ export class InterfaceAccountService extends Service {
 
     // reget it all again
     const entities = await this.runtime.getEntitiesByIds(userIds)
+    if (!entities) {
+      console.log('No entities found for user IDs:', userIds)
+      return
+    }
     console.log('sending', Object.keys(entities).length, 'notifications')
     //for(const userId of userIds) {
-    for(const e of entities) {
+    for (const e of Object.values(entities)) {
       const userId = e.id
       //const componentData = res.userId2Component[userId]
       //console.log('need to notify', userId, e)
-      const component = e.components.find(c => c.type === 'component_user_v0')
+      const component = e.components?.find(c => c.type === 'component_user_v0')
+      if (!component) {
+        console.log('No user component found for entity:', userId)
+        continue
+      }
       //console.log('component', component)
       const source = e.metadata.telegram ? 'telegram' : 'discord'
       const worldId = component.worldId
@@ -113,14 +122,14 @@ export class InterfaceAccountService extends Service {
         entityId: userId,
         // threadId
       }
-      const content: Memory = {
+      const content: Content = {
         // thought
         text: msg,
         // actions, providers
         source,
         // target
         // url, inReplyTo, attachments
-        channelType: 'DM',
+        channelType: ChannelType.DM,
       }
       if (source === 'telegram') {
         const sendRes = await this.runtime.sendMessageToTarget(target, content)
@@ -128,68 +137,68 @@ export class InterfaceAccountService extends Service {
         // entityId is good enough for discord
         //console.log('discord component', component.data)
         // we need channelId or entityId
-        if (component.data.discordUserId) {
-          target.entityId = component.data.discordUserId
+        if (component.data?.discordUserId) {
+          target.entityId = component.data.discordUserId as UUID
           const sendRes = await this.runtime.sendMessageToTarget(target, content)
         } else {
-/*
-6|staging  | [2025-07-22 02:23:33] DEBUG: [Bootstrap] Message sent: 6WNLbwhaPyusZnV9ReLq6LURXGZXBDztGtMVzwDJHHiy $SOL balance change: 0.0484
-6|staging  | [2025-07-22 02:23:33] INFO: [Telegram SendHandler] Message sent to chat ID: 418984751
-6|staging  | 578 |    * @param method - The method of the request that erred
-6|staging  | 579 |    * @param url - The url of the request that erred
-6|staging  | 580 |    * @param bodyData - The unparsed data for the request that errored
-6|staging  | 581 |    *
-6|staging  | 582 |   constructor(rawError, code, status, method, url, bodyData) {
-6|staging  | 583 |     super(_DiscordAPIError.getMessage(rawError));
-6|staging  |           ^
-6|staging  | error: Invalid Form Body
-6|staging  | user_id[NUMBER_TYPE_COERCE]: Value "36ab9481-0939-0d2e-be06-f2ba5bf3a917" is not snowflake.
-6|staging  |  requestBody: {
-6|staging  |   files: undefined,
-6|staging  |   json: undefined,
-6|staging  | },
-6|staging  |    rawError: {
-6|staging  |   message: "Invalid Form Body",
-6|staging  |   code: 50035,
-6|staging  |   errors: [Object ...],
-6|staging  | },
-6|staging  |        code: 50035,
-6|staging  |      status: 400,
-6|staging  |      method: "GET",
-6|staging  |         url: "https://discord.com/api/v10/users/36ab9481-0939-0d2e-be06-f2ba5bf3a917",
-6|staging  |       at new DiscordAPIError (/root/spartan-06-11-staging/node_modules/@discordjs/rest/dist/index.js:583:5)
-6|staging  | [2025-07-22 02:23:33] INFO: Starting graceful shutdown of PGlite client...
-6|staging  | [2025-07-22 02:23:33.328 +0000] ERROR: [Discord SendHandler] Error sending message: Invalid Form Body
-6|staging  | user_id[NUMBER_TYPE_COERCE]: Value "36ab9481-0939-0d2e-be06-f2ba5bf3a917" is not snowflake.
-6|staging  |     agentName: "Spartan"
-6|staging  |     target: {
-6|staging  |       "source": "discord",
-6|staging  |       "roomId": "183e4fe4-ccf1-09d9-8b24-e75553e3b1be",
-6|staging  |       "entityId": "36ab9481-0939-0d2e-be06-f2ba5bf3a917"
-6|staging  |     }
-6|staging  |     content: {
-6|staging  |       "text": "6WNLbwhaPyusZnV9ReLq6LURXGZXBDztGtMVzwDJHHiy $SOL balance change: 0.0484",
-6|staging  |       "source": "discord",
-6|staging  |       "channelType": "DM"
-6|staging  |     }
-6|staging  | [2025-07-22 02:23:33.332 +0000] ERROR: Error executing send handler for source discord:
-6|staging  |     agentName: "Spartan"
-6|staging  |     message: "(DiscordAPIError[50035]) Invalid Form Body\nuser_id[NUMBER_TYPE_COERCE]: Value \"36ab9481-0939-0d2e-be06-f2ba5bf3a917\" is not snowflake."
-6|staging  |     stack: [
-6|staging  |       "Error: Invalid Form Body",
-6|staging  |       "user_id[NUMBER_TYPE_COERCE]: Value \"36ab9481-0939-0d2e-be06-f2ba5bf3a917\" is not snowflake.",
-6|staging  |       "at new DiscordAPIError (/root/spartan-06-11-staging/node_modules/@discordjs/rest/dist/index.js:583:5)",
-6|staging  |       "at handleErrors (/root/spartan-06-11-staging/node_modules/@discordjs/rest/dist/index.js:727:17)",
-6|staging  |       "at processTicksAndRejections (native:7:39)"
-6|staging  |     ]
-6|staging  | [2025-07-22 02:23:34] INFO: PGlite client shutdown completed successfully
-6|staging  |  Tasks:    2 successful, 2 total
-6|staging  | Cached:    0 cached, 2 total
-6|staging  |   Time:    3m12.28s
-6|staging  | $ turbo run start --filter=./packages/spartan --log-prefix=none --force
-6|staging  | turbo 2.5.4
-6|staging  | • Packages in scope: @
-*/
+          /*
+          6|staging  | [2025-07-22 02:23:33] DEBUG: [Bootstrap] Message sent: 6WNLbwhaPyusZnV9ReLq6LURXGZXBDztGtMVzwDJHHiy $SOL balance change: 0.0484
+          6|staging  | [2025-07-22 02:23:33] INFO: [Telegram SendHandler] Message sent to chat ID: 418984751
+          6|staging  | 578 |    * @param method - The method of the request that erred
+          6|staging  | 579 |    * @param url - The url of the request that erred
+          6|staging  | 580 |    * @param bodyData - The unparsed data for the request that errored
+          6|staging  | 581 |    *
+          6|staging  | 582 |   constructor(rawError, code, status, method, url, bodyData) {
+          6|staging  | 583 |     super(_DiscordAPIError.getMessage(rawError));
+          6|staging  |           ^
+          6|staging  | error: Invalid Form Body
+          6|staging  | user_id[NUMBER_TYPE_COERCE]: Value "36ab9481-0939-0d2e-be06-f2ba5bf3a917" is not snowflake.
+          6|staging  |  requestBody: {
+          6|staging  |   files: undefined,
+          6|staging  |   json: undefined,
+          6|staging  | },
+          6|staging  |    rawError: {
+          6|staging  |   message: "Invalid Form Body",
+          6|staging  |   code: 50035,
+          6|staging  |   errors: [Object ...],
+          6|staging  | },
+          6|staging  |        code: 50035,
+          6|staging  |      status: 400,
+          6|staging  |      method: "GET",
+          6|staging  |         url: "https://discord.com/api/v10/users/36ab9481-0939-0d2e-be06-f2ba5bf3a917",
+          6|staging  |       at new DiscordAPIError (/root/spartan-06-11-staging/node_modules/@discordjs/rest/dist/index.js:583:5)
+          6|staging  | [2025-07-22 02:23:33] INFO: Starting graceful shutdown of PGlite client...
+          6|staging  | [2025-07-22 02:23:33.328 +0000] ERROR: [Discord SendHandler] Error sending message: Invalid Form Body
+          6|staging  | user_id[NUMBER_TYPE_COERCE]: Value "36ab9481-0939-0d2e-be06-f2ba5bf3a917" is not snowflake.
+          6|staging  |     agentName: "Spartan"
+          6|staging  |     target: {
+          6|staging  |       "source": "discord",
+          6|staging  |       "roomId": "183e4fe4-ccf1-09d9-8b24-e75553e3b1be",
+          6|staging  |       "entityId": "36ab9481-0939-0d2e-be06-f2ba5bf3a917"
+          6|staging  |     }
+          6|staging  |     content: {
+          6|staging  |       "text": "6WNLbwhaPyusZnV9ReLq6LURXGZXBDztGtMVzwDJHHiy $SOL balance change: 0.0484",
+          6|staging  |       "source": "discord",
+          6|staging  |       "channelType": "DM"
+          6|staging  |     }
+          6|staging  | [2025-07-22 02:23:33.332 +0000] ERROR: Error executing send handler for source discord:
+          6|staging  |     agentName: "Spartan"
+          6|staging  |     message: "(DiscordAPIError[50035]) Invalid Form Body\nuser_id[NUMBER_TYPE_COERCE]: Value \"36ab9481-0939-0d2e-be06-f2ba5bf3a917\" is not snowflake."
+          6|staging  |     stack: [
+          6|staging  |       "Error: Invalid Form Body",
+          6|staging  |       "user_id[NUMBER_TYPE_COERCE]: Value \"36ab9481-0939-0d2e-be06-f2ba5bf3a917\" is not snowflake.",
+          6|staging  |       "at new DiscordAPIError (/root/spartan-06-11-staging/node_modules/@discordjs/rest/dist/index.js:583:5)",
+          6|staging  |       "at handleErrors (/root/spartan-06-11-staging/node_modules/@discordjs/rest/dist/index.js:727:17)",
+          6|staging  |       "at processTicksAndRejections (native:7:39)"
+          6|staging  |     ]
+          6|staging  | [2025-07-22 02:23:34] INFO: PGlite client shutdown completed successfully
+          6|staging  |  Tasks:    2 successful, 2 total
+          6|staging  | Cached:    0 cached, 2 total
+          6|staging  |   Time:    3m12.28s
+          6|staging  | $ turbo run start --filter=./packages/spartan --log-prefix=none --force
+          6|staging  | turbo 2.5.4
+          6|staging  | • Packages in scope: @
+          */
           console.log('cant notify discord rn', target)
         }
       }
@@ -224,34 +233,34 @@ export class InterfaceAccountService extends Service {
 
   async start(): Promise<void> {
     if (this.isRunning) {
-      logger.warn('Trading chain service is already running');
+      this.runtime.logger.warn('Trading chain service is already running');
       return;
     }
 
     try {
-      logger.info('Starting chain trading service...');
+      this.runtime.logger.info('Starting chain trading service...');
 
       this.isRunning = true;
-      logger.info('Trading chain service started successfully');
+      this.runtime.logger.info('Trading chain service started successfully');
     } catch (error) {
-      logger.error('Error starting trading chain service:', error);
+      this.runtime.logger.error('Error starting trading chain service:', String(error));
       throw error;
     }
   }
 
   async stop(): Promise<void> {
     if (!this.isRunning) {
-      logger.warn('Trading service is not running');
+      this.runtime.logger.warn('Trading service is not running');
       return;
     }
 
     try {
-      logger.info('Stopping chain trading service...');
+      this.runtime.logger.info('Stopping chain trading service...');
 
       this.isRunning = false;
-      logger.info('Trading service stopped successfully');
+      this.runtime.logger.info('Trading service stopped successfully');
     } catch (error) {
-      logger.error('Error stopping trading service:', error);
+      this.runtime.logger.error('Error stopping trading service:', String(error));
       throw error;
     }
   }
