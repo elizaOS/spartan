@@ -8,7 +8,7 @@ import { parseDateFilterFromMessage, applyDateFilterToAccount, formatDateFilterT
  * Provides account-level information including all metawallets
  */
 export const marketProvider: Provider = {
-    name: 'TRENDING_ASSESSMENT',
+    name: 'TRENDING_ASSESSMENT', // market analysis
     description: 'Assessment of trending market',
     // always there for posts
     //dynamic: true,
