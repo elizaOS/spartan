@@ -1,11 +1,13 @@
-import {
-  createUniqueUuid,
-  logger,
+import { createUniqueUuid, logger, } from '@elizaos/core';
+import type {
+  Action, IAgentRuntime, Memory, State, HandlerCallback, HandlerOptions, ActionExample
 } from '@elizaos/core';
 import { v4 as uuidv4 } from 'uuid';
 import { takeItPrivate, messageReply, HasEntityIdFromMessage, getDataFromMessage, getAccountFromMessage, accountMockComponent } from '../../autonomous-trader/utils'
 import { matchOption } from '../../autonomous-trader/util_matcher'
 //import { interface_account_upsert } from '../interfaces/int_accounts'
+
+import type { Metawallet } from '../../multiwallet/types'
 
 // handle starting new form and collecting first field
 export const setStrategy: Action = {
@@ -19,9 +21,9 @@ export const setStrategy: Action = {
       return false
     }
 
-    const traderChainService = runtime.getService('TRADER_CHAIN') as any;
+    const traderChainService = runtime.getService('INTEL_CHAIN') as any;
     if (!traderChainService) {
-      //console.warn('WALLET_SETSTRAT validate - TRADER_CHAIN not found')
+      //console.warn('WALLET_SETSTRAT validate - INTEL_CHAIN not found')
       return false
     }
     const traderStrategyService = runtime.getService('TRADER_STRATEGY') as any;
@@ -50,11 +52,11 @@ export const setStrategy: Action = {
   handler: async (
     runtime: IAgentRuntime,
     message: Memory,
-    state: State,
-    _options: { [key: string]: unknown },
+    state?: State,
+    options?: HandlerOptions,
     callback?: HandlerCallback,
-    responses: any[]
-  ): Promise<boolean> => {
+    responses?: any[]
+  ) => {
     console.log('WALLET_SETSTRAT handler')
 
     // using the service to get this/components might be good way
@@ -69,7 +71,7 @@ export const setStrategy: Action = {
     const bestOption = matchOption(message.content.text, stratgiesList)
     //console.log('bestOption', bestOption)
     if (!bestOption) {
-      callback(takeItPrivate(runtime, message, "I don't understand which strategy you're asking for"))
+      callback?.(takeItPrivate(runtime, message, "I don't understand which strategy you're asking for"))
       return
     }
 
@@ -82,13 +84,14 @@ export const setStrategy: Action = {
     // create meta wallet container on this registration
 
     // which chains
-    const traderChainService = runtime.getService('TRADER_CHAIN') as any;
+    const traderChainService = runtime.getService('INTEL_CHAIN') as any;
     const chains = await traderChainService.listActiveChains()
     //console.log('chains', chains)
 
     if (componentData.metawallets === undefined) componentData.metawallets = []
-    const newWallet = {
+    const newWallet: Metawallet = {
       strategy: bestOption,
+      keypairs: {},
     }
     const keypairs = await traderChainService.makeKeypairs()
     const ts = Date.now()
@@ -104,7 +107,7 @@ export const setStrategy: Action = {
     //responses.length = 0 // just clear them all
     if (!newWallet.strategy) {
       const output = takeItPrivate(runtime, message, 'Something went wrong')
-      callback(output)
+      callback?.(output)
       return
     }
 
@@ -117,7 +120,7 @@ export const setStrategy: Action = {
     }
 
     const output = takeItPrivate(runtime, message, 'Made a meta-wallet\n' + str + ' please fund it with SOL to start trading.')
-    callback(output)
+    callback?.(output)
 
     componentData.metawallets.push(newWallet)
     // dev mode
