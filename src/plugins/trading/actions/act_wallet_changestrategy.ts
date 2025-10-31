@@ -1,33 +1,28 @@
-import {
-    type Action,
-    type ActionExample,
-    type Content,
-    type HandlerCallback,
-    type IAgentRuntime,
-    type Memory,
-    type State,
-    logger,
-    createUniqueUuid,
+import { logger, createUniqueUuid } from '@elizaos/core';
+import type {
+  Action, ActionExample, Content, HandlerCallback, IAgentRuntime, Memory, State,
+  HandlerOptions,
 } from '@elizaos/core';
 import { v4 as uuidv4 } from 'uuid';
 import { takeItPrivate, messageReply, HasEntityIdFromMessage, getDataFromMessage, getAccountFromMessage, accountMockComponent, getWalletsFromText } from '../../autonomous-trader/utils'
 import { matchOption } from '../../autonomous-trader/util_matcher'
+import type { Metawallet } from '../../multiwallet/types'
 
 // handle changing strategy of an existing wallet
 export const changeStrategy: Action = {
     name: 'WALLET_CHANGESTRAT',
     similes: [],
     description: 'Replies to user and changes the strategy of an existing wallet',
-    validate: async (runtime: IAgentRuntime, message: Memory) => {
+    validate: async (runtime: IAgentRuntime, message: Memory, state?: State): Promise<boolean> => {
         //console.log('WALLET_CHANGESTRAT validate', message?.metadata?.fromId)
         if (!await HasEntityIdFromMessage(runtime, message)) {
             console.warn('WALLET_CHANGESTRAT validate - author not found')
             return false
         }
 
-        const traderChainService = runtime.getService('TRADER_CHAIN') as any;
+        const traderChainService = runtime.getService('INTEL_CHAIN') as any;
         if (!traderChainService) {
-            //console.warn('WALLET_CHANGESTRAT validate - TRADER_CHAIN not found')
+            //console.warn('WALLET_CHANGESTRAT validate - INTEL_CHAIN not found')
             return false
         }
         const traderStrategyService = runtime.getService('TRADER_STRATEGY') as any;
@@ -61,22 +56,24 @@ export const changeStrategy: Action = {
 
         // Return true if either a strategy is mentioned OR if they're asking to change strategy
         // This allows for both scenarios: "change strategy" (show list) and "change to X strategy" (direct change)
-        return bestOption !== null || message.content.text.toLowerCase().includes('change') && message.content.text.toLowerCase().includes('strategy')
+        return bestOption !== null ||
+          (Boolean(message.content.text?.toLowerCase().includes('change')) &&
+           Boolean(message.content.text?.toLowerCase().includes('strategy')))
     },
     handler: async (
         runtime: IAgentRuntime,
         message: Memory,
-        state: State,
-        _options: { [key: string]: unknown },
+        state?: State,
+        _options?: HandlerOptions,
         callback?: HandlerCallback,
-        responses: Memory[] = []
-    ): Promise<boolean> => {
+        responses?: Memory[]
+    ) => {
         console.log('WALLET_CHANGESTRAT handler')
 
         const componentData = await getAccountFromMessage(runtime, message)
         if (!componentData) {
-            callback(takeItPrivate(runtime, message, "Account not found"))
-            return false
+            callback?.(takeItPrivate(runtime, message, "Account not found"))
+            return
         }
 
         const traderStrategyService = runtime.getService('TRADER_STRATEGY') as any;
@@ -94,22 +91,22 @@ export const changeStrategy: Action = {
             responseText += "\nPlease specify which strategy you'd like to change to."
 
             const output = takeItPrivate(runtime, message, responseText)
-            callback(output)
-            return true
+            callback?.(output)
+            return
         }
 
         // Get the wallet address from the message
         const sources = await getWalletsFromText(runtime, message)
         if (sources.length === 0) {
-            callback(takeItPrivate(runtime, message, "I couldn't find a wallet address in your message. Please specify which wallet you want to change the strategy for."))
-            return false
+            callback?.(takeItPrivate(runtime, message, "I couldn't find a wallet address in your message. Please specify which wallet you want to change the strategy for."))
+            return
         }
 
         const targetWalletAddress = sources[0]
         console.log('WALLET_CHANGESTRAT targetWalletAddress', targetWalletAddress)
 
         // Find the wallet in the user's metawallets
-        let targetWallet = null
+        let targetWallet: Metawallet | null = null
         let walletIndex = -1
 
         for (let i = 0; i < componentData.metawallets.length; i++) {
@@ -122,8 +119,8 @@ export const changeStrategy: Action = {
         }
 
         if (!targetWallet) {
-            callback(takeItPrivate(runtime, message, `I couldn't find a wallet with address ${targetWalletAddress} in your account. Please make sure you're using one of your own wallets.`))
-            return false
+            callback?.(takeItPrivate(runtime, message, `I couldn't find a wallet with address ${targetWalletAddress} in your account. Please make sure you're using one of your own wallets.`))
+            return
         }
 
         // Store the old strategy for the response
@@ -142,9 +139,7 @@ export const changeStrategy: Action = {
         let responseText = `Successfully changed the strategy for wallet ${targetWalletAddress} from "${oldStrategy}" to "${bestOption}".\n\n`
 
         const output = takeItPrivate(runtime, message, responseText)
-        callback(output)
-
-        return true
+        callback?.(output)
     },
     examples: [
         [
