@@ -1,16 +1,37 @@
 import type { UUID, IAgentRuntime } from '@elizaos/core';
 import { createUniqueUuid } from '@elizaos/core';
 import { acquireService } from '../../autonomous-trader/utils'
+import type { Metawallet } from '../types'
 
 // look up by Ids
 
 // list/search
 
+// Extended Metawallet type with additional properties for this interface
+export interface ExtendedMetawallet extends Metawallet {
+  entitiesId?: UUID[];
+  names?: string[];
+  entityId?: UUID;
+}
+
+export interface WalletOptions {
+  strategy?: string;
+  chain?: string;
+}
+
+export interface WalletByUserEntityIdsResult {
+  userWallets: Record<UUID, any>;
+  accountIds: Record<UUID, UUID>;
+  userEntityData: Record<UUID, any>;
+  accountWallets: Record<UUID, any>;
+  accountId2userIds: Record<UUID, UUID[]>;
+}
+
 // return strategy, keypairs[chain] = { privateKey, publicKey }, entityId, names
-export async function getMetaWallets(runtime: IAgentRuntime): Promise<any[] | false> {
+export async function getMetaWallets(runtime: IAgentRuntime): Promise<ExtendedMetawallet[]> {
   if (!runtime) {
     console.trace('WHAT ARE YOU DOING?')
-    return false
+    return []
   }
   //console.log('getMetaWallets')
   //interface_accounts_list is available
@@ -23,7 +44,7 @@ export async function getMetaWallets(runtime: IAgentRuntime): Promise<any[] | fa
   //const map = await intUserService.interface_users_listVerified()
   //const users = map.
   console.log('getMetaWallets - users', users.length)
-  const mws = []
+  const mws: ExtendedMetawallet[] = []
 
   const res = await getWalletByUserEntityIds_engine(runtime, users)
   //console.log('getMetaWallets - res', res)
@@ -34,22 +55,24 @@ export async function getMetaWallets(runtime: IAgentRuntime): Promise<any[] | fa
 
   // there can be two users with the same account/wallet
   // accountId is the only unique id for MWs
-  for(const accountId in res.accountWallets) {
+  for (const accountId in res.accountWallets) {
     const accountMws = res.accountWallets[accountId]
     // ok what user is this?
     const userIds = res.accountId2userIds[accountId]
     //console.log(accountId, userIds, 'have', accountMws)
-    const names = []
-    for(const userEntityId of userIds) {
+    const names: string[] = []
+    for (const userEntityId of userIds) {
       const email = res.userEntityData[userEntityId]
-      for(const n of email.names) {
-        if (names.indexOf(n) === -1) {
-          names.push(n)
+      if (email && email.names) {
+        for (const n of email.names) {
+          if (names.indexOf(n) === -1) {
+            names.push(n)
+          }
         }
       }
     }
-    for(const amw of accountMws) {
-      mws.push({...amw, entitiesId: userIds, names })
+    for (const amw of accountMws) {
+      mws.push({ ...amw, entitiesId: userIds, names })
     }
   }
 
@@ -116,12 +139,12 @@ export async function getWalletsByPubkey(runtime: IAgentRuntime, pubkeys: string
 */
 
 // filter by chain or strategy
-export async function getSpartanWallets(runtime: IAgentRuntime, options = {}): Promise<any[]> {
-  const wallets = []
+export async function getSpartanWallets(runtime: IAgentRuntime, options: WalletOptions = {}): Promise<any[]> {
+  const wallets: any[] = []
 
   const metaWallets = await getMetaWallets(runtime)
   //console.log('getSpartanWallets - metaWallets', metaWallets)
-  for(const mw of metaWallets) {
+  for (const mw of metaWallets) {
     // keypairs, strategy, positions
     let toAdd = !options.strategy
     if (options.strategy && options.strategy === mw.strategy) {
@@ -133,9 +156,9 @@ export async function getSpartanWallets(runtime: IAgentRuntime, options = {}): P
       // for each chain in metawallet
       const addWallets = options.chain ? { [options.chain]: mw.keypairs[options.chain] } : mw.keypairs
       //console.log('getSpartanWallets - adding', addWallets)
-      for(const chain in addWallets) {
+      for (const chain in addWallets) {
         const w = addWallets[chain]
-        wallets.push({...w, chain })
+        wallets.push({ ...w, chain })
       }
     }
   }
@@ -146,10 +169,16 @@ export async function getSpartanWallets(runtime: IAgentRuntime, options = {}): P
 // list metawallets by userId
 export async function getWalletByUserEntityIds_engine(
   runtime: IAgentRuntime, userEntityIds: UUID[]
-): Promise<{ userWallets: Record<UUID, any>, accountIds: Record<UUID, UUID>, userEntityData: Record<UUID, any> }> {
+): Promise<WalletByUserEntityIdsResult> {
   if (!runtime) {
     console.trace('WHAT ARE YOU DOING?')
-    return false
+    return {
+      userWallets: {},
+      accountIds: {},
+      userEntityData: {},
+      accountWallets: {},
+      accountId2userIds: {}
+    }
   }
   //console.log('getting users')
   const intUserService = runtime.getService('AUTONOMOUS_TRADER_INTERFACE_USERS') as any;
@@ -165,7 +194,7 @@ export async function getWalletByUserEntityIds_engine(
 
   // translate it to being keyed by userEntityId
   const userWallets = {}
-  for(const userEntityId in accounts) {
+  for (const userEntityId in accounts) {
     const accountEntityId = accounts[userEntityId]
     const metawallets = accountWallets[accountEntityId]
     //console.log('getWalletByUserEntityIds_engine - userEntityId', userEntityId, '=>', accountEntityId)
@@ -197,7 +226,7 @@ export async function getMetaWalletsByEmailEntityIds(runtime: IAgentRuntime, ema
   //console.log('have accounts', emailEntityIds)
   const accounts = await intAccountService.interface_accounts_ByIds(emailEntityIds)
   //console.log('got interface_accounts_ByIds - accounts', accounts)
-  for(const entityId in accounts) {
+  for (const entityId in accounts) {
     const account = accounts[entityId]
     //console.log('getMetaWalletsByEmailEntityIds', entityId, 'wallets', account.metawallets)
     //console.log('getMetaWalletsByEmailEntityIds', entityId, 'account', account)
