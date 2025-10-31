@@ -4,13 +4,21 @@
     "rootDir": "./src",
     "outDir": "./dist",
     "strict": true,
+    "skipLibCheck": true,
     "sourceMap": true,
     "inlineSources": true,
     "declaration": true,
     "emitDeclarationOnly": true,
-    "composite": true,             // optional (nice for CI/incremental)
+    "composite": true, // optional (nice for CI/incremental)
     "tsBuildInfoFile": ".tsbuildinfo/build"
   },
-  "include": ["src/index.ts"],
-  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"]
+  "include": [
+    "src/index.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.test.ts",
+    "**/*.spec.ts"
+  ]
 }
