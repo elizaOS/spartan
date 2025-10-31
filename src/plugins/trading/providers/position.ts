@@ -1,6 +1,23 @@
-import type { IAgentRuntime, Memory, Provider, State } from '@elizaos/core';
+import type { IAgentRuntime, Memory, Provider, State, Content, Metadata } from '@elizaos/core';
+import { createUniqueUuid } from '@elizaos/core';
+import type { Position } from '../types'
 import { getAccountFromMessage } from '../../autonomous-trader/utils'
 import { parseDateFilterFromMessage, applyDateFilterToAccount, formatDateFilterText } from '../../autonomous-trader/providers/date_filter'
+
+/*
+const positionWithContext = {
+    ...p,
+    chain,
+    strategy: mw.strategy,
+    walletAddress: kp.publicKey
+}
+*/
+
+type posWCtx = Position & {
+  chain: string;
+  strategy: string;
+  walletAddress: string;
+}
 
 /**
  * Provider for position details and summaries
@@ -9,9 +26,10 @@ import { parseDateFilterFromMessage, applyDateFilterToAccount, formatDateFilterT
 export const positionProvider: Provider = {
     name: 'POSITION_DETAILS',
     description: 'Detailed position information including summaries, individual positions, and performance metrics',
+    // too much data to be static
     dynamic: true,
     get: async (runtime: IAgentRuntime, message: Memory, state: State) => {
-        console.log('POSITION_DETAILS')
+        console.log('POSITION_DETAILS handler')
 
         let positionStr = ''
 
@@ -40,9 +58,9 @@ export const positionProvider: Provider = {
             }
 
             // Collect all positions across all metawallets
-            const allPositions = []
-            const openPositions = []
-            const closedPositions = []
+            const allPositions: posWCtx[] = []
+            const openPositions: posWCtx[] = []
+            const closedPositions: posWCtx[] = []
             let totalPnL = 0
             let totalPnLPercentage = 0
             let closedCount = 0
@@ -108,14 +126,14 @@ export const positionProvider: Provider = {
                 positionStr += `Token,Chain,Strategy,Wallet,SOL Amount,Close Amount,Open Time,Close Time,Status,PnL\n`
                 for (const p of closedPositions) {
                     const openTime = new Date(p.timestamp).toISOString().split('T')[0]
-                    const closeTime = p.close.timestamp ? new Date(p.close.timestamp).toISOString().split('T')[0] : ''
-                    const closeAmount = p.close.outAmount ? (parseFloat(p.close.outAmount) / 1e9).toFixed(6) : ''
-                    const status = p.close.type || 'unknown'
+                    const closeTime = p.close!.timestamp ? new Date(p.close!.timestamp).toISOString().split('T')[0] : ''
+                    const closeAmount = p.close!.outAmount ? (parseFloat(p.close!.outAmount) / 1e9).toFixed(6) : ''
+                    const status = p.close!.type || 'unknown'
 
                     let pnl = ''
-                    if (p.close.type !== 'unknown' && p.close.type !== 'unknwon') {
+                    if (p.close!.type !== 'unknown' && p.close!.type !== 'unknwon') {
                         const initialSol = parseFloat(p.solAmount)
-                        const finalSol = parseFloat(p.close.outAmount) / 1e9
+                        const finalSol = parseFloat(p.close!.outAmount) / 1e9
                         const pnlAbsolute = finalSol - initialSol
                         const pnlPercentage = (pnlAbsolute / initialSol) * 100
                         pnl = `${pnlAbsolute.toFixed(6)} SOL (${pnlPercentage > 0 ? '+' : ''}${pnlPercentage.toFixed(2)}%)`
@@ -157,7 +175,64 @@ export const positionProvider: Provider = {
             }
 
         } else {
-            positionStr = 'Position details are only available in private messages.'
+          //positionStr = 'Position details are only available in private messages.'
+
+          // from strat llm, get what positions you'd want to open
+          const roomId = createUniqueUuid(runtime, 'strategy_llm');
+
+          // like 13 of one token and 12 of the next
+          // might be more interesting getting it per token...
+          // linking the date filter would be good
+          const memories: Memory[] = await runtime.getMemories({
+            agentId: runtime.agentId,
+            // entityId is agentId
+            roomId,
+            count: 1000,
+            unique: true,
+            tableName: 'positions',
+          });
+          if (memories.length) {
+            // should we get their current prices?
+            // group by chain
+            const byChain = {}
+            const byKey = {}
+            for(const m of memories) {
+              const c = m.content
+              const md = c.metadata as Metadata & { chain: string; tokenAddress: string; }
+              if (byChain[md.chain] === undefined) byChain[md.chain] = []
+              byChain[md.chain].push(md.tokenAddress)
+              const key = md.chain + '_' + md.tokenAddress
+              if (byKey[key] === undefined) byKey[key] = []
+              byKey[key].push(c)
+            }
+            console.log('chain group', byChain, Object.keys(byChain))
+            // dispatch
+            positionStr = "# My recent opened positions\n"
+            positionStr += 'when, chain, token, exitPrice, amount (% of available funds)' + "\n"
+            // INTEL_CHAIN . detectAddressesFromString
+            //const solanaService = runtime.getService('chain_solana')
+            for(const m of memories) {
+              const c = m.content
+              //console.log('c', c)
+              // content.text / content.thought
+              /*
+              // extract ca from Text
+              const pubkeys = await solanaService.detectPubkeysFromString(c.text)
+              //console.log('pubkeys', pubkeys)
+              let pubkey = ''
+              if (pubkeys.length) {
+                pubkey = pubkeys[0]
+              } else {
+                console.log('no pubkeys?', pubkeys)
+              }
+              */
+              //const date = new Date(m.createdAt)
+              //console.log(date, 'pubkey', pubkey, 'index', index)
+
+              const md = c.metadata as Metadata & { chain: string; tokenAddress: string; exitPrice: string; amount: string; }
+              positionStr += [m.createdAt, md.chain, md.tokenAddress, md.exitPrice, md.amount].join(',') + "\n"
+            }
+          }
         }
         console.log('positionStr', positionStr)
 
