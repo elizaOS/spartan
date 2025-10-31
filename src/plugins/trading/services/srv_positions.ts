@@ -1,4 +1,5 @@
-import { IAgentRuntime, getSalt, encryptStringValue, Service, logger } from '@elizaos/core';
+import { Service, getSalt, encryptStringValue, logger, ServiceTypeName } from '@elizaos/core';
+import type { IAgentRuntime } from '@elizaos/core';
 import { listPositions, createPosition, updatePosition } from '../interfaces/int_positions';
 import { acquireService } from '../../autonomous-trader/utils';
 
@@ -10,16 +11,16 @@ export class InterfacePositionsService extends Service {
   capabilityDescription = 'The agent serves multiple user trading positions';
 
   // config (key/string)
-
+  private pIntAccounts: Promise<void>;
   intAccountService: any;
 
   constructor(public runtime: IAgentRuntime) {
     super(runtime); // sets this.runtime
-    logger.log('AUTONOMOUS_TRADER_INTERFACE_POSITIONS constructor');
-    const asking = 'Position service'
+    //runtime.logger.log('AUTONOMOUS_TRADER_INTERFACE_POSITIONS constructor');
 
-    acquireService(this.runtime, 'AUTONOMOUS_TRADER_INTERFACE_ACCOUNTS', asking).then(service => {
-      this.intAccountService = service
+    this.pIntAccounts = runtime.getServiceLoadPromise('AUTONOMOUS_TRADER_INTERFACE_ACCOUNTS' as ServiceTypeName).then(() => {
+      // used to get all accountIds for notifcations
+      this.intAccountService = this.runtime.getService('AUTONOMOUS_TRADER_INTERFACE_ACCOUNTS' as ServiceTypeName);
     })
   }
 
@@ -92,7 +93,7 @@ export class InterfacePositionsService extends Service {
       this.isRunning = true;
       logger.info('AUTONOMOUS_TRADER_INTERFACE_POSITIONS service started successfully');
     } catch (error) {
-      logger.error('Error starting AUTONOMOUS_TRADER_INTERFACE_POSITIONS service:', error);
+      logger.error({ error }, 'Error starting AUTONOMOUS_TRADER_INTERFACE_POSITIONS service');
       throw error;
     }
   }
@@ -109,7 +110,7 @@ export class InterfacePositionsService extends Service {
       this.isRunning = false;
       logger.info('AUTONOMOUS_TRADER_INTERFACE_POSITIONS stopped successfully');
     } catch (error) {
-      logger.error('Error stopping AUTONOMOUS_TRADER_INTERFACE_POSITIONS service:', error);
+      logger.error({ error }, 'Error stopping AUTONOMOUS_TRADER_INTERFACE_POSITIONS service');
       throw error;
     }
   }
