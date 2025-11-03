@@ -1,0 +1,94 @@
+<header class="bg-white dark:bg-gray-800 shadow-sm">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="flex items-center h-16">
+      <div class="flex items-center flex-shrink-0">
+        <!-- Mobile sidebar toggle - hidden on md and larger screens -->
+        <button id="sidebar-toggle" class="md:hidden p-2 rounded-md text-gray-500 hover:text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary-500">
+          <svg class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+
+        <!-- Logo -->
+        <a href="." class="flex-shrink-0 flex items-center ml-3">
+          <div class="bg-gradient-to-r from-primary-500 to-secondary-500 rounded-lg p-1.5">
+            <!-- svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg -->
+          </div>
+          <span class="ml-2 text-xl font-bold text-gray-900 dark:text-white hidden sm:block">SpartanOS</span>
+        </a>
+
+        <!-- Top Navigation -->
+        <nav class="hidden md:ml-6 md:flex md:space-x-6">
+          <!-- a href="." class="<%= page === 'home' ? 'border-primary-500 text-gray-900 dark:text-white' : 'border-transparent text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200' %> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+            Home
+          </a>
+          <a href="trending" class="<%= page === 'trending' ? 'border-primary-500 text-gray-900 dark:text-white' : 'border-transparent text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200' %> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+            Trending
+          </a>
+          <a href="about" class="<%= page === 'about' ? 'border-primary-500 text-gray-900 dark:text-white' : 'border-transparent text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200' %> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+            About
+          </a -->
+        </nav>
+      </div>
+      <div class="flex flex-1 items-center justify-center px-2">
+        <!-- Search -->
+        <div class="flex-1 flex items-center justify-center px-2 lg:ml-6 lg:justify-end" x-data="{
+          q: '',
+          isValidSolanaAddress(address) {
+            // Basic validation for Ethereum-like addresses
+            // This is a simple check, in a real app you'd want more robust validation
+            // (0x)?
+            return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address);
+          },
+          handleSearch() {
+            const q = this.q.trim()
+            if (q === '') return
+            console.log('len', q.length)
+            if (this.isValidSolanaAddress(q)) {
+              console.log('search for', q)
+              window.location = 'addresses/' + q
+            } else {
+              alert('invalid address')
+            }
+          },
+        }">
+          <div class="max-w-lg w-full lg:max-w-[34rem]">
+            <label for="search" class="sr-only">Search</label>
+            <div class="relative flex items-center">
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <svg class="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
+                </svg>
+              </div>
+              <input @keydown.enter="handleSearch" x-model="q" id="search" name="search" class="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-l-md leading-5 bg-white dark:text-white dark:bg-gray-700 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:placeholder-gray-400 dark:focus:placeholder-gray-500 focus:ring-1 focus:ring-primary-500 focus:border-primary-500 sm:text-sm" placeholder="Search wallet or token..." type="search">
+              <button @click.prevent="handleSearch" type="button" class="px-4 py-2 border border-l-0 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-r-md hover:bg-gray-100 dark:hover:bg-gray-500 focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                Search
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-center flex-shrink-0">
+       <!-- Theme toggle -->
+        <button id="theme-toggle" class="ml-3 p-2 rounded-full text-gray-500 dark:text-gray-400 hover:text-primary-500 dark:hover:text-primary-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+          <!-- Sun icon -->
+          <svg id="theme-toggle-light-icon" class="hidden h-5 w-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+            <path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" fill-rule="evenodd" clip-rule="evenodd"></path>
+          </svg>
+          <!-- Moon icon -->
+          <svg id="theme-toggle-dark-icon" class="hidden h-5 w-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+            <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path>
+          </svg>
+        </button>
+
+        <!-- Connect Wallet button -->
+        <!-- button id="connect-wallet" class="ml-4 px-4 py-2 text-sm font-medium rounded-md text-white bg-gradient-to-r from-primary-600 to-secondary-600 hover:from-primary-700 hover:to-secondary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors duration-200">
+          Connect Wallet
+        </button -->
+      </div>
+    </div>
+  </div>
+</header>

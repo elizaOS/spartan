@@ -16,6 +16,7 @@ import {
 
 interface TwitterService extends Service {
   getClientKey(clientId: UUID, agentId: UUID): string;
+  getClient(clientId: string, agentId: UUID): any;
   clients: Map<string, any>;
 }
 
@@ -31,7 +32,7 @@ export default class Twitter {
 
   async syncRawTweets(): Promise<boolean> {
     const users = [
-      'shawmakesmagic',
+      //'shawmakesmagic',
       'aixbt_agent',
       '0x_nomAI',
       'mobyagent',
@@ -117,7 +118,7 @@ export default class Twitter {
 
     for (const u of users) {
       try {
-        // fetches my tweets
+        // fetches u's tweets
         const list = twitterClient.getTweets(u as string, 200);
         // fetch my following feed
         //const list = twitterClient.fetchFollowingTimeline(200, []);
@@ -164,7 +165,7 @@ export default class Twitter {
         logger.info(`Raw tweet sync [username: ${u}] synced ${syncCount} new tweets`);
         await new Promise((resolve) => setTimeout(resolve, 10_000)); // 10s delay
       } catch (error) {
-        logger.error('Error syncing tweets:', error);
+        logger.error('Error syncing tweets:', error instanceof Error ? error.message : String(error));
         await new Promise((resolve) => setTimeout(resolve, 10_000)); // 10s delay
       }
     }

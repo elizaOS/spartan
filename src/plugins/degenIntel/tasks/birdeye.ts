@@ -184,12 +184,12 @@ export default class Birdeye {
         await this.runtime.setCache<TransactionHistory[]>('transaction_history', transactions);
         logger.debug(`Updated transaction history with ${transactions.length} transactions`);
       } catch (error) {
-        logger.debug('Failed to set transaction cache, continuing without caching', error);
+        logger.debug('Failed to set transaction cache, continuing without caching', String(error));
       }
 
       return transactions;
     } catch (error) {
-      logger.error('Failed to sync wallet history from Birdeye', error);
+      logger.error('Failed to sync wallet history from Birdeye', String(error));
       // Return empty array if everything fails
       return [];
     }
@@ -252,7 +252,7 @@ export default class Birdeye {
         );
         const resp = await res.json();
         const data = resp?.data;
-        const last_updated = new Date(data?.updateUnixTime * 1000);
+        const last_updated = new Date(data?.updateUnixTime * 1000).toISOString();
         const newTokens = data?.tokens;
 
         if (!newTokens) {
@@ -263,6 +263,7 @@ export default class Birdeye {
             (t) => t.provider === 'birdeye' && t.rank === token.rank && t.chain === chain
           );
 
+          const now = new Date().toISOString();
           const tokenData: IToken = {
             address: token.address,
             chain: chain,
@@ -278,6 +279,9 @@ export default class Birdeye {
             price: token.price || 0,
             price24hChangePercent: token.price24hChangePercent || 0,
             last_updated,
+            __v: 0,
+            createdAt: now,
+            updatedAt: now,
           };
 
           if (existingIndex >= 0) {
@@ -296,7 +300,7 @@ export default class Birdeye {
 
       return true;
     } catch (error) {
-      logger.error('Failed to sync trending tokens', error);
+      logger.error('Failed to sync trending tokens', String(error));
       throw error;
     }
   }

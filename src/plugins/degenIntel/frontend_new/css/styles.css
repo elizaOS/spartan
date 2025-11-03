@@ -1,0 +1,137 @@
+/* Custom styles beyond Tailwind */
+
+/* Smooth animations */
+.transition-all {
+  transition-property: all;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 300ms;
+}
+
+/* Sidebar animation */
+#sidebar {
+  transition: transform 0.3s ease-in-out;
+}
+
+/* Search input focus animation */
+input[type="search"]:focus {
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
+}
+
+/* Custom scrollbar for webkit browsers */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(229, 231, 235, 0.5);
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: rgba(55, 65, 81, 0.5);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.7);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(107, 114, 128, 0.8);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(75, 85, 99, 0.7);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(107, 114, 128, 0.8);
+}
+
+/* Wallet connect button hover effect */
+#connect-wallet {
+  position: relative;
+  overflow: hidden;
+}
+
+#connect-wallet::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.1) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  transition: left 0.8s ease-in-out;
+}
+
+#connect-wallet:hover::before {
+  left: 100%;
+}
+
+/* Card hover animation */
+/*
+.card:hover,
+.rounded-lg:hover {
+  transform: translateY(-2px);
+  transition: transform 0.2s ease-in-out;
+}
+*/
+
+/* Make full-height layout */
+html, body {
+  height: 100%;
+}
+
+/* Gradient text */
+.gradient-text {
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  background-image: linear-gradient(to right, var(--tw-gradient-stops));
+  --tw-gradient-from: #3b82f6;
+  --tw-gradient-to: #8b5cf6;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+}
+
+/* Create aspect ratio containers */
+.aspect-w-1,
+.aspect-w-2,
+.aspect-w-3,
+.aspect-w-4 {
+  position: relative;
+}
+
+.aspect-w-1 > *,
+.aspect-w-2 > *,
+.aspect-w-3 > *,
+.aspect-w-4 > * {
+  position: absolute;
+  height: 100%;
+  width: 100%;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+}
+
+.aspect-w-1 {
+  padding-bottom: 100%;
+}
+
+.aspect-w-2 {
+  padding-bottom: 50%;
+}
+
+.aspect-w-3 {
+  padding-bottom: 75%;
+}
+
+.aspect-w-4 {
+  padding-bottom: 56.25%;
+}

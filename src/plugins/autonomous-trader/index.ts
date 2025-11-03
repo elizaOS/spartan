@@ -1,35 +1,62 @@
-import type { Plugin } from '@elizaos/core';
+import type { Plugin, IAgentRuntime } from '@elizaos/core';
 
-// actions
-import { userRegistration }  from "./actions/act_reg_start";
-import { checkRegistration } from "./actions/act_reg_query";
-import { checkRegistrationCode } from "./actions/act_reg_confirmemail";
-import { deleteRegistration } from "./actions/act_reg_delete";
-import { servicesMenu } from "./actions/act_menu";
-import { walletCreate } from "./actions/act_wallet_create";
-import { setStrategy } from "./actions/act_wallet_setstrategy";
-import { userMetawalletList } from "./actions/act_wallet_list";
-import { devFix } from "./actions/devfix";
+import { verifyHolder } from "./actions/act_holder_verify";
+//import { verifyDiscord } from "./actions/act_discord_verify";
+// FIXME: remove/change holder address
 
-// Strategies
-import { llmStrategy } from './strategies/strategy_llm';
-import { copyStrategy } from './strategies/strategy_copy';
+// convert to providers
+//import { servicesMenu } from "./actions/act_menu";
+//import { actionFrequentlyAsked } from "./actions/act_faq";
+//import { actionLinks } from "./actions/act_links";
+//import spartanNews from "./actions/act_spartan_news";
+
+// odi utility
+//import { devFix } from "./actions/devfix";
+
+// account provider had this
+import { holderProvider } from "./providers/holder";
+import { instructionsProvider } from "./providers/instructions";
+//import { newsProvider } from "./providers/spartan_news";
+import { linksProvider } from "./providers/links";
 
 export const autonomousTraderPlugin: Plugin = {
   name: 'autonomous-trader',
   description: 'Spartan Autonomous trading agent plugin',
   evaluators: [],
-  providers: [],
+  // newsProvider,
+  providers: [instructionsProvider, holderProvider, linksProvider],
+  // spartanNews
   actions: [
-    userRegistration, checkRegistrationCode, checkRegistration, deleteRegistration,
-    servicesMenu, walletCreate, setStrategy, userMetawalletList, devFix
+    verifyHolder,
+    //verifyDiscord
   ],
   services: [],
   init: async (_, runtime: IAgentRuntime) => {
-    console.log('autonomous-trader init');
-    // register strategies
-    llmStrategy(runtime); // is async
-    copyStrategy(runtime); // is async
+    //console.log('autonomous-trader init');
+
+    /*
+    //
+    // MARK: tasks init
+    //
+
+    const worldId = runtime.agentId; // this is global data for the agent
+    // wait for this.adapter is available
+    const taskReadyPromise = new Promise(resolve => {
+      runtime.initPromise.then(async () => {
+
+        // first, get all tasks with all tags and delete them
+        const tasks = await runtime.getTasks({
+          tags: ['queue', 'repeat', 'autonomous-trader'],
+        });
+        for (const task of tasks) {
+          if (task.id) {
+            await runtime.deleteTask(task.id);
+          }
+        }
+        resolve(void 0)
+      })
+    })
+    */
   }
 };
 

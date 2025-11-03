@@ -2,13 +2,16 @@
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": "src",
-    "lib": ["ESNext", "dom"],
+    "lib": [
+      "ESNext",
+      "dom"
+    ],
     "target": "ESNext",
     "module": "Preserve",
     "moduleResolution": "Bundler",
     "strict": true,
     "esModuleInterop": true,
-    "skipLibCheck": true,
+    "skipLibCheck": false,
     "forceConsistentCasingInFileNames": false,
     "allowImportingTsExtensions": true,
     "declaration": true,
@@ -20,11 +23,35 @@
     "noEmitOnError": false,
     "moduleDetection": "force",
     "allowArbitraryExtensions": true,
-    "baseUrl": ".",
+    "baseUrl": "../..",
+    "typeRoots": [
+      "../node_modules/@types"
+    ],
     "paths": {
-      "@elizaos/core": ["../../core/src"],
-      "@elizaos/core/*": ["../../core/src/*"]
+      "@elizaos/core": [
+        "../core/src"
+      ],
+      "@elizaos/core/*": [
+        "../core/src/*"
+      ],
+      "discord.js": [
+        "packages/spartan/src/discord-types.d.ts"
+      ],
+      "discord-api-types": [
+        "node_modules/discord-api-types"
+      ],
+      "discord-api-types/*": [
+        "node_modules/discord-api-types/*"
+      ]
     }
   },
-  "include": ["src/**/*.ts"]
+  "include": [
+    "src/index.ts"
+  ],
+  "exclude": [
+    "**/node_modules/**",
+    "dist/**",
+    "**/*.test.ts",
+    "**/*.spec.ts"
+  ]
 }
