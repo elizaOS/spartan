@@ -1,0 +1,131 @@
+services:
+  # MySQL 9 Database Service
+  mysql:
+    image: mysql:9.1.0
+    container_name: spartan-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootsecret}
+      MYSQL_DATABASE: ${DB_NAME:-spartan_db}
+      MYSQL_USER: ${DB_USER:-spartan_user}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-spartan_secret}
+      TZ: UTC
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d
+    ports:
+      - '3307:3306'
+    command: >
+      --innodb-buffer-pool-size=1G --log-bin=spartan-binlog --binlog-format=ROW --innodb-file-per-table=1 --innodb-log-file-size=256M --max-connections=200 --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$$MYSQL_ROOT_PASSWORD" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # Spartan Application Service
+  spartan:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: spartan-app
+    restart: unless-stopped
+    environment:
+      # AI API Keys
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+
+      # Discord Configuration
+      CHANNEL_IDS: ${CHANNEL_IDS}
+      INVESTMENT_MANAGER_DISCORD_APPLICATION_ID: ${INVESTMENT_MANAGER_DISCORD_APPLICATION_ID}
+      INVESTMENT_MANAGER_DISCORD_API_TOKEN: ${INVESTMENT_MANAGER_DISCORD_API_TOKEN}
+
+      # Telegram Configuration
+      INVESTMENT_MANAGER_TELEGRAM_BOT_TOKEN: ${INVESTMENT_MANAGER_TELEGRAM_BOT_TOKEN}
+
+      # Twitter Configuration
+      INVESTMENT_MANAGER_TWITTER_EMAIL: ${INVESTMENT_MANAGER_TWITTER_EMAIL}
+      INVESTMENT_MANAGER_TWITTER_USERNAME: ${INVESTMENT_MANAGER_TWITTER_USERNAME}
+      INVESTMENT_MANAGER_TWITTER_PASSWORD: ${INVESTMENT_MANAGER_TWITTER_PASSWORD}
+
+      # Blockchain RPC URLs
+      SOLANA_RPC_URL: ${SOLANA_RPC_URL}
+      RPC_URL: ${RPC_URL}
+      HELIUS_RPC_URL: ${HELIUS_RPC_URL}
+
+      # API Keys
+      BIRDEYE_API_KEY: ${BIRDEYE_API_KEY}
+      HELIUS_API_KEY: ${HELIUS_API_KEY}
+      COINMARKETCAP_API_KEY: ${COINMARKETCAP_API_KEY}
+      COINGECKO_API_KEY: ${COINGECKO_API_KEY}
+      TAAPI_API_KEY: ${TAAPI_API_KEY}
+      ZEROEX_API_KEY: ${ZEROEX_API_KEY}
+
+      # SMTP Configuration
+      SMTP_HOST: ${SMTP_HOST:-smtp.sendgrid.net}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_FROM: ${SMTP_FROM:-no-reply@elizaos.ai}
+
+      # Application Configuration
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:3002}
+      BOOTSTRAP_KEEP_RESP: ${BOOTSTRAP_KEEP_RESP:-true}
+      SERVER_PORT: ${SERVER_PORT:-2096}
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: ${PORT:-3000}
+
+      # Database configuration
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-spartan_db}
+      DB_USER: ${DB_USER:-spartan_user}
+      DB_PASSWORD: ${DB_PASSWORD:-spartan_secret}
+      DB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootsecret}
+
+      # Eliza configuration
+      ELIZA_ENV: ${ELIZA_ENV:-production}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - '3002:3000'
+      - '50000-50100:50000-50100/udp'
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:3000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Redis for caching (optional but recommended for Eliza)
+  redis:
+    image: redis:7-alpine
+    container_name: spartan-redis
+    restart: unless-stopped
+    ports:
+      - '6380:6379'
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  mysql_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  default:
+    name: spartan-network
+    driver: bridge
