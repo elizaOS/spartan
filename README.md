@@ -85,7 +85,7 @@ npm install -g @elizaos/cli
 npx @elizaos/cli
 
 # Clone Spartan
-git clone <your-spartan-repository-url>
+git clone https://github.com/elizaOS/spartan.git
 cd spartan
 
 # Install dependencies
@@ -264,7 +264,7 @@ The fastest way to get Spartan running with all dependencies:
 
 ```bash
 # Clone and navigate to directory
-git clone <repository-url>
+git clone https://github.com/elizaOS/spartan.git
 cd spartan
 
 # Start with Docker Compose
@@ -880,6 +880,8 @@ MIT License - see LICENSE file for details
 
 ## Links & Resources
 
+- **Spartan Homepage**: https://spartan.elizaos.ai
+- **GitHub Repository**: https://github.com/elizaOS/spartan
 - **ElizaOS Framework**: https://github.com/elizaos/eliza
 - **Spartan Twitter**: @SpartanVersus
 - **Token ($degenai)**: `Gu3LDkn7Vx3bmCzLafYNKcDxv2mH7YN44NJZFXnypump`

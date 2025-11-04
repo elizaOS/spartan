@@ -8,6 +8,14 @@
   "publishConfig": {
     "access": "public"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/elizaOS/spartan.git"
+  },
+  "homepage": "https://spartan.elizaos.ai/",
+  "bugs": {
+    "url": "https://github.com/elizaOS/spartan/issues"
+  },
   "scripts": {
     "start": "bun ../cli/dist/index.js start",
     "build": "bun run build.ts",
