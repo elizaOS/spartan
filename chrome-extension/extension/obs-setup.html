@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>OBS Virtual Camera Setup for Google Meet</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 40px 20px;
+      line-height: 1.6;
+      color: #333;
+    }
+    
+    h1 {
+      color: #4285f4;
+      border-bottom: 3px solid #4285f4;
+      padding-bottom: 10px;
+    }
+    
+    h2 {
+      color: #5f6368;
+      margin-top: 30px;
+    }
+    
+    h3 {
+      color: #5f6368;
+    }
+    
+    .step {
+      background: #f8f9fa;
+      border-left: 4px solid #4285f4;
+      padding: 15px 20px;
+      margin: 20px 0;
+      border-radius: 4px;
+    }
+    
+    .code {
+      background: #263238;
+      color: #aed581;
+      padding: 15px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      overflow-x: auto;
+    }
+    
+    .warning {
+      background: #fff3cd;
+      border-left: 4px solid #ffc107;
+      padding: 15px 20px;
+      margin: 20px 0;
+      border-radius: 4px;
+    }
+    
+    .info {
+      background: #d1ecf1;
+      border-left: 4px solid #17a2b8;
+      padding: 15px 20px;
+      margin: 20px 0;
+      border-radius: 4px;
+    }
+    
+    img {
+      max-width: 100%;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      margin: 15px 0;
+    }
+    
+    a {
+      color: #4285f4;
+      text-decoration: none;
+    }
+    
+    a:hover {
+      text-decoration: underline;
+    }
+    
+    ul {
+      padding-left: 30px;
+    }
+    
+    li {
+      margin: 8px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎥 OBS Virtual Camera Setup for Google Meet</h1>
+  
+  <p>This guide will help you set up OBS Studio as a virtual camera for Google Meet, allowing you to:</p>
+  <ul>
+    <li>Use custom backgrounds and overlays</li>
+    <li>Apply filters and effects</li>
+    <li>Share your screen with annotations</li>
+    <li>Create professional presentations</li>
+    <li>Capture high-quality recordings</li>
+  </ul>
+  
+  <h2>📋 Prerequisites</h2>
+  
+  <div class="step">
+    <h3>Step 1: Install OBS Studio</h3>
+    <p>Download and install OBS Studio from the official website:</p>
+    <p><a href="https://obsproject.com/download" target="_blank">https://obsproject.com/download</a></p>
+    <p>Choose the version for your operating system (Windows, macOS, or Linux).</p>
+  </div>
+  
+  <div class="warning">
+    <strong>macOS Users:</strong> After installation, you'll need to grant OBS permission to access your camera and microphone in System Preferences → Security & Privacy.
+  </div>
+  
+  <h2>🔧 OBS Configuration</h2>
+  
+  <div class="step">
+    <h3>Step 2: Basic OBS Setup</h3>
+    <ol>
+      <li>Open OBS Studio</li>
+      <li>Run the Auto-Configuration Wizard (Tools → Auto-Configuration Wizard)</li>
+      <li>Choose "Optimize just for recording, I will not be streaming"</li>
+      <li>Set Base Resolution to 1920x1080 (or your preferred resolution)</li>
+      <li>Set FPS to 30</li>
+    </ol>
+  </div>
+  
+  <div class="step">
+    <h3>Step 3: Create Your Scene</h3>
+    <ol>
+      <li>In the Scenes panel, click the + button to create a new scene</li>
+      <li>Name it "Google Meet"</li>
+      <li>Add sources:
+        <ul>
+          <li><strong>Video Capture Device:</strong> Your webcam</li>
+          <li><strong>Audio Input Capture:</strong> Your microphone</li>
+          <li><strong>Browser Source:</strong> For overlays or web content</li>
+          <li><strong>Image:</strong> For backgrounds or logos</li>
+        </ul>
+      </li>
+    </ol>
+  </div>
+  
+  <h2>🎮 Virtual Camera Setup</h2>
+  
+  <div class="step">
+    <h3>Step 4: Enable Virtual Camera</h3>
+    <p><strong>Windows/Linux:</strong></p>
+    <ol>
+      <li>Click "Start Virtual Camera" in the Controls panel</li>
+      <li>The button should change to "Stop Virtual Camera"</li>
+    </ol>
+    
+    <p><strong>macOS:</strong></p>
+    <ol>
+      <li>You may need to install the macOS Virtual Camera plugin separately</li>
+      <li>Download from: <a href="https://obsproject.com/forum/resources/obs-virtual-cam.949/" target="_blank">OBS Virtual Camera Plugin</a></li>
+      <li>After installation, restart OBS</li>
+      <li>Click "Start Virtual Camera"</li>
+    </ol>
+  </div>
+  
+  <div class="info">
+    <strong>Tip:</strong> You can set OBS to automatically start the virtual camera on launch: Settings → General → "Start Virtual Camera" when OBS starts.
+  </div>
+  
+  <h2>🌐 Google Meet Configuration</h2>
+  
+  <div class="step">
+    <h3>Step 5: Select OBS Virtual Camera in Google Meet</h3>
+    <ol>
+      <li>Join or start a Google Meet</li>
+      <li>Click the three dots menu (⋮) in the bottom toolbar</li>
+      <li>Go to Settings → Video</li>
+      <li>In the Camera dropdown, select:
+        <ul>
+          <li><strong>Windows:</strong> "OBS Virtual Camera"</li>
+          <li><strong>macOS:</strong> "OBS Virtual Camera"</li>
+          <li><strong>Linux:</strong> "OBS Camera" or "v4l2loopback"</li>
+        </ul>
+      </li>
+      <li>You should see your OBS scene in the preview</li>
+    </ol>
+  </div>
+  
+  <h2>🎨 Advanced Features</h2>
+  
+  <div class="step">
+    <h3>Virtual Backgrounds</h3>
+    <ol>
+      <li>Add a "Chroma Key" filter to your webcam source</li>
+      <li>Use a green screen or solid color background</li>
+      <li>Add an image or video source behind your webcam</li>
+      <li>Adjust the chroma key settings for best results</li>
+    </ol>
+  </div>
+  
+  <div class="step">
+    <h3>Screen Sharing with Webcam</h3>
+    <ol>
+      <li>Add a "Display Capture" source</li>
+      <li>Position your webcam in a corner</li>
+      <li>Add a border or frame around your webcam</li>
+      <li>Use this scene when presenting</li>
+    </ol>
+  </div>
+  
+  <div class="step">
+    <h3>Audio Processing</h3>
+    <ol>
+      <li>Right-click your Audio Input source</li>
+      <li>Select "Filters"</li>
+      <li>Add filters:
+        <ul>
+          <li><strong>Noise Suppression:</strong> Remove background noise</li>
+          <li><strong>Compressor:</strong> Even out volume levels</li>
+          <li><strong>Gain:</strong> Boost quiet audio</li>
+        </ul>
+      </li>
+    </ol>
+  </div>
+  
+  <h2>🎬 Recording Setup</h2>
+  
+  <div class="step">
+    <h3>Configure Recording Settings</h3>
+    <ol>
+      <li>Go to Settings → Output → Recording</li>
+      <li>Set Recording Path to your desired folder</li>
+      <li>Recording Format: MP4</li>
+      <li>Encoder: Hardware (NVENC/AMD/QuickSync) if available</li>
+      <li>Recording Quality: "High Quality, Medium File Size"</li>
+      <li>Click "Start Recording" to record your meeting</li>
+    </ol>
+  </div>
+  
+  <h2>🤝 ElizaOS Integration</h2>
+  
+  <div class="step">
+    <h3>Using with ElizaOS Google Meet Extension</h3>
+    <p>The ElizaOS extension works seamlessly with OBS:</p>
+    <ol>
+      <li>Set up OBS as described above</li>
+      <li>Start OBS Virtual Camera</li>
+      <li>Select OBS Virtual Camera in Google Meet</li>
+      <li>The extension will handle meeting automation while OBS handles video</li>
+      <li>Audio is captured both by OBS (for recording) and the extension (for transcription)</li>
+    </ol>
+  </div>
+  
+  <div class="info">
+    <strong>Pro Tip:</strong> Create multiple scenes in OBS for different meeting scenarios:
+    <ul>
+      <li>"Casual Meeting" - Just webcam</li>
+      <li>"Presentation" - Screen share with webcam</li>
+      <li>"Professional" - Webcam with branded background</li>
+      <li>"Interview" - Split screen layout</li>
+    </ul>
+  </div>
+  
+  <h2>🚨 Troubleshooting</h2>
+  
+  <div class="warning">
+    <h3>Common Issues:</h3>
+    <ul>
+      <li><strong>Virtual Camera not showing:</strong> Restart OBS and Chrome</li>
+      <li><strong>Black screen:</strong> Check that a scene is selected and has sources</li>
+      <li><strong>No audio:</strong> Audio goes through your regular mic, not OBS (unless using Audio Monitor)</li>
+      <li><strong>Performance issues:</strong> Lower the resolution or FPS in OBS settings</li>
+    </ul>
+  </div>
+  
+  <h2>📚 Additional Resources</h2>
+  
+  <ul>
+    <li><a href="https://obsproject.com/wiki/" target="_blank">OBS Studio Wiki</a></li>
+    <li><a href="https://www.youtube.com/c/OBSProject" target="_blank">OBS YouTube Channel</a></li>
+    <li><a href="https://obsproject.com/forum/" target="_blank">OBS Community Forum</a></li>
+  </ul>
+  
+  <div class="info">
+    <p><strong>Need Help?</strong> Join the ElizaOS Discord community for support and tips!</p>
+  </div>
+</body>
+</html> 

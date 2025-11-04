@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to Spartan Wallet</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
+            color: #ffffff;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .welcome-container {
+            max-width: 600px;
+            text-align: center;
+            background: rgba(36, 36, 36, 0.8);
+            border-radius: 20px;
+            padding: 40px;
+            border: 1px solid #2a2a2a;
+            backdrop-filter: blur(10px);
+        }
+
+        .logo {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #9945ff, #14f195);
+            border-radius: 20px;
+            margin: 0 auto 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            font-weight: 700;
+            color: white;
+        }
+
+        h1 {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 16px;
+            background: linear-gradient(135deg, #9945ff, #14f195);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            font-size: 18px;
+            color: #d1d0d4;
+            margin-bottom: 40px;
+            line-height: 1.6;
+        }
+
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 24px;
+            margin-bottom: 40px;
+        }
+
+        .feature {
+            background: rgba(42, 42, 42, 0.5);
+            border-radius: 12px;
+            padding: 24px;
+            border: 1px solid #3a3a3a;
+            transition: all 0.3s ease;
+        }
+
+        .feature:hover {
+            border-color: #9945ff;
+            transform: translateY(-2px);
+        }
+
+        .feature-icon {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, #9945ff, #14f195);
+            border-radius: 12px;
+            margin: 0 auto 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        .feature h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .feature p {
+            font-size: 14px;
+            color: #8a8a8e;
+            line-height: 1.5;
+        }
+
+        .cta-buttons {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #9945ff, #14f195);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(153, 69, 255, 0.3);
+        }
+
+        .btn-secondary {
+            background: rgba(42, 42, 42, 0.8);
+            color: #d1d0d4;
+            border: 1px solid #3a3a3a;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(58, 58, 58, 0.8);
+            border-color: #9945ff;
+        }
+
+        .footer {
+            margin-top: 40px;
+            padding-top: 24px;
+            border-top: 1px solid #2a2a2a;
+            font-size: 14px;
+            color: #8a8a8e;
+        }
+
+        .footer a {
+            color: #9945ff;
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        @media (max-width: 600px) {
+            .welcome-container {
+                padding: 24px;
+            }
+
+            h1 {
+                font-size: 24px;
+            }
+
+            .subtitle {
+                font-size: 16px;
+            }
+
+            .features {
+                grid-template-columns: 1fr;
+            }
+
+            .cta-buttons {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="welcome-container">
+        <div class="logo">S</div>
+
+        <h1>Welcome to Spartan Wallet</h1>
+        <p class="subtitle">
+            Your resident Solana-based DeFi trading warlord. Store, send, and swap tokens with ease.
+        </p>
+
+        <div class="features">
+            <div class="feature">
+                <div class="feature-icon">⚔️</div>
+                <h3>DeFi Warlord</h3>
+                <p>Your resident Solana-based DeFi trading warlord. Execute trades with tactical precision</p>
+            </div>
+
+            <div class="feature">
+                <div class="feature-icon">🔒</div>
+                <h3>Secure Storage</h3>
+                <p>Your private keys are encrypted and stored locally on your device</p>
+            </div>
+
+            <div class="feature">
+                <div class="feature-icon">⚡</div>
+                <h3>Fast Transactions</h3>
+                <p>Experience lightning-fast transactions on the Solana network</p>
+            </div>
+
+            <div class="feature">
+                <div class="feature-icon">🔄</div>
+                <h3>Easy Swapping</h3>
+                <p>Swap tokens directly within the wallet with competitive rates</p>
+            </div>
+
+            <div class="feature">
+                <div class="feature-icon">🌐</div>
+                <h3>DApp Integration</h3>
+                <p>Connect to thousands of decentralized applications seamlessly</p>
+            </div>
+        </div>
+
+        <div class="cta-buttons">
+            <button class="btn btn-primary" onclick="createWallet()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 5v14M5 12h14" />
+                </svg>
+                Create New Wallet
+            </button>
+
+            <button class="btn btn-secondary" onclick="importWallet()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7,10 12,15 17,10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                Import Existing Wallet
+            </button>
+        </div>
+
+        <div class="footer">
+            <p>
+                By using Spartan Wallet, you agree to our
+                <a href="#" onclick="openTerms()">Terms of Service</a> and
+                <a href="#" onclick="openPrivacy()">Privacy Policy</a>
+            </p>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:2096';
+
+        async function createWallet() {
+            try {
+                // For now, redirect to the main extension
+                window.location.href = 'popup.html';
+            } catch (error) {
+                console.error('Error creating wallet:', error);
+                alert('Create wallet functionality coming soon!');
+            }
+        }
+
+        async function importWallet() {
+            try {
+                // For now, redirect to the main extension
+                window.location.href = 'popup.html';
+            } catch (error) {
+                console.error('Error importing wallet:', error);
+                alert('Import wallet functionality coming soon!');
+            }
+        }
+
+        async function checkApiStatus() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/spartan-defi/status`);
+                const data = await response.json();
+
+                if (data.success) {
+                    console.log('Spartan DeFi API is running:', data.data);
+                } else {
+                    console.warn('API status check failed');
+                }
+            } catch (error) {
+                console.error('API status check failed:', error);
+            }
+        }
+
+        function openTerms() {
+            window.open('https://github.com/elizaOS/spartan', '_blank');
+        }
+
+        function openPrivacy() {
+            window.open('https://github.com/elizaOS/spartan', '_blank');
+        }
+
+        // Check API status on load
+        checkApiStatus();
+
+        // Close welcome page after 30 seconds
+        setTimeout(() => {
+            window.close();
+        }, 30000);
+    </script>
+</body>
+
+</html>

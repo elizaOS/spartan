@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { 
+      margin: 0; 
+      padding: 20px; 
+      background: #1a1a1a; 
+      font-family: Arial, sans-serif; 
+      color: #fff;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .icon-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      margin-top: 20px;
+    }
+    .size-group {
+      background: #2a2a2a;
+      padding: 20px;
+      border-radius: 8px;
+    }
+    .size-title {
+      font-size: 18px;
+      margin-bottom: 15px;
+      color: #0B35F1;
+    }
+    .icon-row {
+      display: flex;
+      align-items: center;
+      margin-bottom: 15px;
+      gap: 15px;
+    }
+    .icon-wrapper {
+      background: #000;
+      padding: 10px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+    .icon-info {
+      flex: 1;
+    }
+    .filename {
+      font-family: monospace;
+      font-size: 12px;
+      color: #FF5800;
+      margin-bottom: 4px;
+    }
+    .download-btn {
+      padding: 6px 12px;
+      background: #0B35F1;
+      color: white;
+      text-decoration: none;
+      border-radius: 4px;
+      font-size: 12px;
+      border: none;
+      cursor: pointer;
+    }
+    .download-btn:hover {
+      background: #0A2FD9;
+    }
+    .instructions {
+      background: #2a2a2a;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      border: 1px solid #3a3a3a;
+    }
+    h1 { 
+      font-size: 24px; 
+      margin: 0 0 10px 0; 
+      color: #fff;
+    }
+    p { margin: 8px 0; }
+    code { 
+      background: #1a1a1a; 
+      padding: 2px 6px; 
+      border-radius: 3px;
+      font-family: monospace;
+      color: #0B35F1;
+    }
+    .error {
+      background: #ff5800;
+      color: white;
+      padding: 20px;
+      border-radius: 8px;
+      margin: 20px 0;
+    }
+    canvas {
+      image-rendering: -webkit-optimize-contrast;
+      image-rendering: crisp-edges;
+    }
+    /* Remove filters from wrapper to see content clearly */
+    .icon-default { }
+    .icon-connected { }
+    .icon-disconnected { }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="instructions">
+      <h1>ElizaOS Extension Icon Generator</h1>
+      <p>Your SVG icon rendered at all required sizes and states.</p>
+      <p><strong>To save icons:</strong> Click the download button for each icon.</p>
+    </div>
+    
+    <div id="content"></div>
+  </div>
+
+  <script>
+    const sizes = [16, 48, 128];
+    const states = [
+      { 
+        name: 'default', 
+        suffix: '', 
+        className: 'icon-default',
+        filter: '' 
+      },
+      { 
+        name: 'connected', 
+        suffix: '-connected', 
+        className: 'icon-connected',
+        filter: 'drop-shadow(0 0 4px #0B35F1) drop-shadow(0 0 8px #0B35F1)' 
+      },
+      { 
+        name: 'disconnected', 
+        suffix: '-disconnected', 
+        className: 'icon-disconnected',
+        filter: 'grayscale(100%) opacity(0.7)' 
+      }
+    ];
+
+    // Load and process the SVG
+    fetch('icon.svg')
+      .then(response => response.text())
+      .then(svgContent => {
+        const content = document.getElementById('content');
+        const iconGrid = document.createElement('div');
+        iconGrid.className = 'icon-grid';
+        
+        sizes.forEach(size => {
+          const sizeGroup = document.createElement('div');
+          sizeGroup.className = 'size-group';
+          
+          const title = document.createElement('h3');
+          title.className = 'size-title';
+          title.textContent = `${size}×${size} Icons`;
+          sizeGroup.appendChild(title);
+          
+          states.forEach(state => {
+            const iconRow = document.createElement('div');
+            iconRow.className = 'icon-row';
+            
+            const iconWrapper = document.createElement('div');
+            iconWrapper.className = `icon-wrapper ${state.className}`;
+            iconWrapper.style.width = `${Math.min(size, 64)}px`;
+            iconWrapper.style.height = `${Math.min(size, 64)}px`;
+            
+            // Create canvas for rendering
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d', { 
+              alpha: true,
+              willReadFrequently: true 
+            });
+            
+            // Parse and modify SVG
+            const parser = new DOMParser();
+            const svgDoc = parser.parseFromString(svgContent, 'image/svg+xml');
+            const svgElement = svgDoc.documentElement;
+            
+            // Get original viewBox or dimensions
+            let viewBox = svgElement.getAttribute('viewBox') || '0 0 401 401';
+            
+            // Update SVG attributes
+            svgElement.setAttribute('width', size);
+            svgElement.setAttribute('height', size);
+            svgElement.setAttribute('viewBox', viewBox);
+            svgElement.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+            
+            // Serialize back to string
+            const serializer = new XMLSerializer();
+            const modifiedSvg = serializer.serializeToString(svgDoc);
+            
+            // Create blob and render
+            const svgBlob = new Blob([modifiedSvg], { type: 'image/svg+xml;charset=utf-8' });
+            const url = URL.createObjectURL(svgBlob);
+            
+            const img = new Image();
+            img.onload = function() {
+              // Apply filter if needed
+              if (state.filter) {
+                ctx.filter = state.filter;
+              }
+              
+              // Clear canvas with transparency
+              ctx.clearRect(0, 0, size, size);
+              
+              // High quality settings
+              ctx.imageSmoothingEnabled = false;
+              
+              // Draw the image
+              ctx.drawImage(img, 0, 0, size, size);
+              
+              // Add to wrapper for display
+              iconWrapper.appendChild(canvas);
+              
+              // Create download functionality
+              canvas.toBlob(function(blob) {
+                const downloadUrl = URL.createObjectURL(blob);
+                const filename = `icon${state.suffix}-${size}.png`;
+                
+                const infoDiv = document.createElement('div');
+                infoDiv.className = 'icon-info';
+                
+                const filenameDiv = document.createElement('div');
+                filenameDiv.className = 'filename';
+                filenameDiv.textContent = filename;
+                
+                const downloadBtn = document.createElement('a');
+                downloadBtn.className = 'download-btn';
+                downloadBtn.href = downloadUrl;
+                downloadBtn.download = filename;
+                downloadBtn.textContent = 'Download';
+                
+                infoDiv.appendChild(filenameDiv);
+                infoDiv.appendChild(downloadBtn);
+                iconRow.appendChild(infoDiv);
+              }, 'image/png');
+              
+              URL.revokeObjectURL(url);
+            };
+            
+            img.onerror = function(e) {
+              console.error('Failed to load SVG:', e);
+              iconWrapper.innerHTML = '<span style="color: red;">Error</span>';
+            };
+            
+            img.src = url;
+            
+            iconRow.insertBefore(iconWrapper, iconRow.firstChild);
+            sizeGroup.appendChild(iconRow);
+          });
+          
+          iconGrid.appendChild(sizeGroup);
+        });
+        
+        content.appendChild(iconGrid);
+      })
+      .catch(error => {
+        document.getElementById('content').innerHTML = `
+          <div class="error">
+            <h2>Error Loading SVG</h2>
+            <p>${error.message}</p>
+            <p>Make sure icon.svg exists in the extension directory.</p>
+          </div>
+        `;
+      });
+  </script>
+</body>
+</html> 
