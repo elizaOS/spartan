@@ -1,0 +1,88 @@
+{
+  "name": "@elizaos/plugin-spartan-defi",
+  "description": "Spartan DeFi plugin for ElizaOS - DeFi token management, swaps, and AI-powered trading insights",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "packageType": "plugin",
+  "platform": "node",
+  "license": "MIT",
+  "author": "elizaOS",
+  "keywords": [
+    "plugin",
+    "elizaos",
+    "defi",
+    "trading",
+    "spartan",
+    "solana"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/elizaos-plugins/plugin-spartan-defi"
+  },
+  "homepage": "https://elizaos.ai",
+  "bugs": {
+    "url": "https://github.com/elizaos-plugins/plugin-spartan-defi/issues"
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    ".npmignore",
+    "package.json",
+    "tsup.config.ts"
+  ],
+  "dependencies": {
+    "@elizaos/core": "^1.3.1",
+    "zod": "^3.23.8",
+    "uuid": "^11.1.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.18",
+    "@types/node": "^24.0.14",
+    "@types/uuid": "^10.0.0",
+    "prettier": "^3.6.2",
+    "tsup": "^8.0.2",
+    "typescript": "5.8.3",
+    "vitest": "^3.2.4"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit",
+    "postpack": "echo 'Successfully built plugin-spartan-defi'",
+    "clean": "rm -rf dist"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "agentConfig": {
+    "pluginType": "elizaos:plugin:1.0.0",
+    "pluginParameters": {
+      "API_BASE_URL": {
+        "type": "string",
+        "description": "Base URL for Spartan DeFi API (default: http://localhost:2096)",
+        "required": false,
+        "default": "http://localhost:2096"
+      },
+      "DEFAULT_WALLET_ADDRESS": {
+        "type": "string",
+        "description": "Default wallet address for demo purposes",
+        "required": false,
+        "default": "BzsJQeZ7cvk3pTHmKeuvdhNDkDxcZ6uCXxW2rjwC7RTq"
+      }
+    }
+  }
+}

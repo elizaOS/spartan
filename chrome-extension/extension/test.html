@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spartan DeFi - Test</title>
+    <link rel="stylesheet" href="popup.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            width: 450px;
+            height: 700px;
+            margin: 0 auto;
+            border: 1px solid #ccc;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Welcome Screen -->
+    <div id="welcomeScreen" class="screen active">
+        <div class="welcome-container">
+            <!-- Header with Logo and Title -->
+            <div class="welcome-header">
+                <div class="logo-wrapper">
+                    <div class="logo-gradient">
+                        <span class="logo-text">S</span>
+                    </div>
+                </div>
+                <h1>
+                    <span class="welcome-text">Welcome to</span>
+                    <span class="brand-text">Spartan Wallet</span>
+                </h1>
+                <p class="tagline">Your resident Solana-based DeFi trading warlord</p>
+                <button id="showDebugBtn" class="debug-toggle-btn" title="Show Debug Info">🐛</button>
+            </div>
+
+            <!-- Authentication Flow -->
+            <div class="auth-flow">
+                <!-- Step 1: Email Authentication -->
+                <div id="emailAuthStep" class="auth-step active">
+                    <div class="auth-step-header">
+                        <div class="step-indicator">
+                            <span class="step-number active">1</span>
+                            <span class="step-label">Email Authentication</span>
+                        </div>
+                    </div>
+
+                    <div class="auth-input-group">
+                        <label for="emailInput">Enter your email to get started</label>
+                        <input type="email" id="emailInput" placeholder="your.email@example.com" required>
+                        <div class="input-error" id="emailError" style="display: none;"></div>
+                        <button id="continueEmailBtn" class="primary-btn gradient-btn">
+                            <span class="btn-text">Continue</span>
+                            <span class="btn-loading" style="display: none;">
+                                <svg class="spinner" viewBox="0 0 24 24">
+                                    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none"
+                                        stroke-dasharray="31.416" stroke-dashoffset="31.416">
+                                        <animate attributeName="stroke-dasharray" dur="2s"
+                                            values="0 31.416;15.708 15.708;0 31.416" repeatCount="indefinite" />
+                                        <animate attributeName="stroke-dashoffset" dur="2s" values="0;-15.708;-31.416"
+                                            repeatCount="indefinite" />
+                                </svg>
+                            </span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Step 1.5: Email Token Verification -->
+                <div id="tokenAuthStep" class="auth-step">
+                    <div class="auth-step-header">
+                        <div class="step-indicator">
+                            <span class="step-number completed">1</span>
+                            <span class="step-connector"></span>
+                            <span class="step-number active">1.5</span>
+                            <span class="step-label">Verify Email</span>
+                        </div>
+                        <button id="backToEmailBtn" class="back-btn" title="Back to email">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M19 12H5M12 19l-7-7 7-7" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div class="auth-input-group">
+                        <div class="token-info">
+                            <p>We've sent a verification token to <strong id="tokenEmailDisplay"></strong></p>
+                            <p>Please check your email and enter the token below:</p>
+                        </div>
+                        <label for="tokenInput">Verification Token</label>
+                        <input type="text" id="tokenInput" placeholder="Enter 6-character token" maxlength="6" required>
+                        <div class="input-error" id="tokenError" style="display: none;"></div>
+                        <button id="verifyTokenBtn" class="primary-btn gradient-btn">
+                            <span class="btn-text">Verify Token</span>
+                            <span class="btn-loading" style="display: none;">
+                                <svg class="spinner" viewBox="0 0 24 24">
+                                    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none"
+                                        stroke-dasharray="31.416" stroke-dashoffset="31.416">
+                                        <animate attributeName="stroke-dasharray" dur="2s"
+                                            values="0 31.416;15.708 15.708;0 31.416" repeatCount="indefinite" />
+                                        <animate attributeName="stroke-dashoffset" dur="2s" values="0;-15.708;-31.416"
+                                            repeatCount="indefinite" />
+                                </svg>
+                            </span>
+                        </button>
+                        <div class="token-actions">
+                            <button id="resendTokenBtn" class="secondary-btn">Resend Token</button>
+                            <button id="changeEmailBtn" class="secondary-btn">Change Email</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 2: Wallet Connection -->
+                <div id="walletAuthStep" class="auth-step">
+                    <div class="auth-step-header">
+                        <div class="step-indicator">
+                            <span class="step-number completed">1</span>
+                            <span class="step-connector completed"></span>
+                            <span class="step-number completed">1.5</span>
+                            <span class="step-connector"></span>
+                            <span class="step-number active">2</span>
+                            <span class="step-label">Connect Wallet</span>
+                        </div>
+                        <button id="backToTokenBtn" class="back-btn" title="Back to token verification">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M19 12H5M12 19l-7-7 7-7" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div class="auth-input-group">
+                        <label for="walletAddressInput">Connect your Solana wallet</label>
+                        <input type="text" id="walletAddressInput" placeholder="Enter your Solana wallet address"
+                            required>
+                        <div class="input-error" id="walletError" style="display: none;"></div>
+                        <button id="connectWalletBtn" class="primary-btn gradient-btn">
+                            <span class="btn-text">Connect Wallet</span>
+                            <span class="btn-loading" style="display: none;">
+                                <svg class="spinner" viewBox="0 0 24 24">
+                                    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none"
+                                        stroke-dasharray="31.416" stroke-dashoffset="31.416">
+                                        <animate attributeName="stroke-dasharray" dur="2s"
+                                            values="0 31.416;15.708 15.708;0 31.416" repeatCount="indefinite" />
+                                        <animate attributeName="stroke-dashoffset" dur="2s" values="0;-15.708;-31.416"
+                                            repeatCount="indefinite" />
+                                </svg>
+                            </span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Registration Required Message -->
+                <div id="registrationRequiredStep" class="auth-step">
+                    <div class="auth-step-header">
+                        <div class="step-indicator">
+                            <span class="step-number">1</span>
+                            <span class="step-label">Registration Required</span>
+                        </div>
+                        <button id="backToEmailFromRegBtn" class="back-btn" title="Back to email">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M19 12H5M12 19l-7-7 7-7" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div class="registration-message">
+                        <div class="registration-icon">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="9" cy="7" r="4"></circle>
+                                <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                            </svg>
+                        </div>
+                        <h3>Account Not Found</h3>
+                        <p>The email <strong id="regEmailDisplay"></strong> is not registered with Spartan DeFi.</p>
+                        <p>Please join our community to get started:</p>
+
+                        <div class="registration-links">
+                            <a href="https://discord.gg/ai16z" target="_blank" class="registration-link discord">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                    <path
+                                        d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515a.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0a12.64 12.64 0 0 0-.617-1.25a.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057a19.9 19.9 0 0 0 5.993 3.03a.078.078 0 0 0 .084-.028a14.09 14.09 0 0 0 1.226-1.994a.076.076 0 0 0-.041-.106a13.107 13.107 0 0 1-1.872-.892a.077.077 0 0 1-.008-.128a10.2 10.2 0 0 0 .372-.292a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127a12.299 12.299 0 0 1-1.873.892a.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028a19.839 19.839 0 0 0 6.002-3.03a.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419c0-1.333.956-2.419 2.157-2.419c1.21 0 2.176 1.096 2.157 2.42c0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419c0-1.333.955-2.419 2.157-2.419c1.21 0 2.176 1.096 2.157 2.42c0 1.333-.946 2.418-2.157 2.418z" />
+                                </svg>
+                                Join Discord
+                            </a>
+                            <a href="https://t.me/spartan_staging_bot" target="_blank"
+                                class="registration-link telegram">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                    <path
+                                        d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12a12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z" />
+                                </svg>
+                                Join Telegram
+                            </a>
+                        </div>
+
+                        <p class="registration-note">After joining, please contact an admin to register your email
+                            address.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Portfolio Section (Hidden until connected) -->
+            <div class="portfolio-section" id="portfolioSection" style="display: none;">
+                <div class="portfolio-header">
+                    <h3>Your Portfolio</h3>
+                    <div class="portfolio-actions">
+                        <button class="eye-btn" id="toggleBalanceBtn">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                <circle cx="12" cy="12" r="3"></circle>
+                            </svg>
+                        </button>
+                        <button class="disconnect-btn" id="disconnectBtn" title="Disconnect Wallet">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                                <polyline points="16,17 21,12 16,7"></polyline>
+                                <line x1="21" y1="12" x2="9" y2="12"></line>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="balance-display">
+                    <div class="total-balance">
+                        <span class="balance-label">Total Value</span>
+                        <span class="balance-amount" id="totalBalance">$0.00</span>
+                    </div>
+                    <div class="balance-change" id="balanceChange">
+                        <span class="change-amount">+$0.00</span>
+                        <span class="change-percent">(0.00%)</span>
+                    </div>
+                </div>
+
+                <div class="token-list" id="tokenList">
+                    <!-- Tokens will be populated here -->
+                </div>
+            </div>
+
+            <!-- Chat Section (Hidden until authenticated) -->
+            <div class="chat-section" id="chatSection" style="display: none;">
+                <div class="chat-header">
+                    <h3>Chat with Spartan</h3>
+                    <span class="chat-status" id="chatStatus">AI Trading Assistant</span>
+                </div>
+
+                <div class="chat-messages" id="chatMessages">
+                    <div class="message system">
+                        <div class="message-content">
+                            <p>👋 Welcome to Spartan DeFi! I'm your AI assistant. Ask me about your portfolio, market
+                                trends, or
+                                trading strategies.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="chat-input-container">
+                    <div class="chat-input-wrapper">
+                        <input type="text" id="chatInput" placeholder="Ask Spartan about DeFi..." maxlength="500">
+                        <button id="sendChatBtn" class="send-btn" disabled>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <line x1="22" y1="2" x2="11" y2="13"></line>
+                                <polygon points="22,2 15,22 11,13 2,9"></polygon>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Debug Section (hidden by default) -->
+            <div id="debugSection"
+                style="display: none; padding: 10px; background: rgba(255,0,0,0.1); border: 1px solid red; margin: 10px;">
+                <h4>Debug Info</h4>
+                <p>Extension Status: <span id="extensionStatus">Loading...</span></p>
+                <p>API Status: <span id="apiStatus">Unknown</span></p>
+                <p>Email: <span id="emailStatus">Not authenticated</span></p>
+                <p>Wallet: <span id="walletStatus">Not connected</span></p>
+                <button id="hideDebugBtn" class="debug-btn">Hide Debug</button>
+            </div>
+
+            <div class="legal-text">
+                <p>By using Spartan Wallet, you agree to our <a href="#" class="legal-link">Terms of Service</a> and <a
+                        href="#" class="legal-link">Privacy Policy</a></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <p id="loadingText">Loading...</p>
+        </div>
+    </div>
+
+    <!-- Error Modal -->
+    <div id="errorModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Error</h3>
+                <button class="close-btn" id="closeErrorModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="errorMessage">An error occurred.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" id="dismissError">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+
+</html>
