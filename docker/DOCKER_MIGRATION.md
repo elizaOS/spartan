@@ -4,7 +4,7 @@ Successfully migrated Docker configuration from `spartan-07-22-neo` to `spartan-
 
 ## Files Copied
 
-### Docker Configuration Files (packages/spartan/)
+### Docker Configuration Files
 ✅ `docker-compose.yml` - Production setup with MySQL 9.1.0, Redis, and Spartan app
 ✅ `docker-compose.dev.yml` - Development setup with hot-reload
 ✅ `Dockerfile` - Production Docker image
@@ -52,13 +52,13 @@ Successfully migrated Docker configuration from `spartan-07-22-neo` to `spartan-
 
 ### Quick Start - Production
 ```bash
-cd /root/spartan-07-31-odi/packages/spartan
+cd spartan
 docker-compose up -d
 ```
 
 ### Quick Start - Development
 ```bash
-cd /root/spartan-07-31-odi/packages/spartan
+cd spartan
 docker-compose -f docker-compose.dev.yml up
 ```
 
@@ -97,22 +97,22 @@ If you encounter issues:
 
 ## Files Structure
 ```
-packages/spartan/
+spartan/
 ├── docker-compose.yml          # Production compose
 ├── docker-compose.dev.yml      # Development compose
-├── Dockerfile                  # Production image
-├── Dockerfile.dev             # Development image
-├── Dockerfile.docs            # Docs image
-├── .dockerignore              # Build exclusions
-├── package.json.docker        # Docker package config
-├── DOCKER.md                  # Full documentation
-├── DOCKER_MIGRATION.md        # This file
-└── mysql/
-    └── init/
-        └── init.sql           # Database initialization
-
-scripts/
-└── docker.sh                  # Helper script (executable)
+├── docker/
+│   ├── Dockerfile              # Production image
+│   ├── Dockerfile.dev          # Development image
+│   ├── Dockerfile.docs         # Docs image
+│   ├── package.json.docker     # Docker package config
+│   ├── DOCKER.md               # Full documentation
+│   ├── README.md               # Quick reference
+│   ├── DOCKER_MIGRATION.md     # This file
+│   └── mysql/
+│       └── init/
+│           └── init.sql        # Database initialization
+└── scripts/
+    └── docker.sh               # Helper script (executable)
 ```
 
 ---
