@@ -1,0 +1,286 @@
+# Spartan Analytics MCP Configuration
+# Provides analytics data including news, sentiment analysis, and market intelligence
+
+name: spartan-analytics-mcp
+description: MCP server for Spartan analytics and market intelligence
+version: 1.0.0
+
+# Server configuration
+server:
+  transport: stdio
+  capabilities:
+    tools: true
+    resources: true
+    prompts: false
+
+# API configuration
+api:
+  base_url: http://localhost:2096
+  rate_limit:
+    requests_per_minute: 120
+    burst: 30
+  timeout: 30000
+  headers:
+    Accept: application/json
+    Content-Type: application/json
+    User-Agent: SpartanMCP/1.0
+
+# Authentication (optional for local services)
+auth:
+  type: bearer
+  key_env: SPARTAN_API_KEY
+  required: false
+
+# Available tools
+tools:
+  - name: spartan_get_news_feed
+    description: Get latest DeFi and crypto news from curated sources
+    input_schema:
+      type: object
+      properties:
+        category:
+          type: string
+          description: News category (defi, nft, market, protocol, security)
+          default: defi
+        limit:
+          type: number
+          description: Number of articles to return
+          default: 10
+        since:
+          type: string
+          description: Get news since timestamp (ISO 8601)
+    endpoint:
+      method: GET
+      path: /api/analytics/news
+      params:
+        category: "{category}"
+        limit: "{limit}"
+        since: "{since}"
+
+  - name: spartan_get_sentiment_analysis
+    description: Get market sentiment analysis for specific tokens or overall market
+    input_schema:
+      type: object
+      properties:
+        token_address:
+          type: string
+          description: Token address (optional, if not provided returns overall market sentiment)
+        timeframe:
+          type: string
+          description: Analysis timeframe (1h, 4h, 24h, 7d, 30d)
+          default: 24h
+    endpoint:
+      method: GET
+      path: /api/analytics/sentiment
+      params:
+        token_address: "{token_address}"
+        timeframe: "{timeframe}"
+
+  - name: spartan_get_whale_activity
+    description: Get whale wallet activity and large transactions
+    input_schema:
+      type: object
+      properties:
+        min_value_usd:
+          type: number
+          description: Minimum transaction value in USD
+          default: 100000
+        token_address:
+          type: string
+          description: Filter by specific token address
+        limit:
+          type: number
+          description: Number of transactions to return
+          default: 20
+    endpoint:
+      method: GET
+      path: /api/analytics/whale-activity
+      params:
+        min_value_usd: "{min_value_usd}"
+        token_address: "{token_address}"
+        limit: "{limit}"
+
+  - name: spartan_get_trending_tokens
+    description: Get trending tokens based on Spartan's analytics
+    input_schema:
+      type: object
+      properties:
+        timeframe:
+          type: string
+          description: Trending timeframe (1h, 6h, 24h, 7d)
+          default: 24h
+        chain:
+          type: string
+          description: Blockchain filter (solana, ethereum, all)
+          default: solana
+        limit:
+          type: number
+          description: Number of tokens to return
+          default: 20
+    endpoint:
+      method: GET
+      path: /api/analytics/trending
+      params:
+        timeframe: "{timeframe}"
+        chain: "{chain}"
+        limit: "{limit}"
+
+  - name: spartan_get_token_analysis
+    description: Get comprehensive token analysis including risks, opportunities, and recommendations
+    input_schema:
+      type: object
+      properties:
+        token_address:
+          type: string
+          description: Token contract address
+        depth:
+          type: string
+          description: Analysis depth (quick, standard, deep)
+          default: standard
+      required:
+        - token_address
+    endpoint:
+      method: POST
+      path: /api/analytics/analyze-token
+      body:
+        token_address: "{token_address}"
+        depth: "{depth}"
+
+  - name: spartan_get_portfolio_analysis
+    description: Analyze a wallet portfolio and provide insights
+    input_schema:
+      type: object
+      properties:
+        wallet_address:
+          type: string
+          description: Wallet address to analyze
+        include_history:
+          type: boolean
+          description: Include historical performance
+          default: true
+      required:
+        - wallet_address
+    endpoint:
+      method: GET
+      path: /api/analytics/portfolio
+      params:
+        wallet_address: "{wallet_address}"
+        include_history: "{include_history}"
+
+  - name: spartan_get_market_overview
+    description: Get comprehensive market overview including metrics, trends, and insights
+    input_schema:
+      type: object
+      properties:
+        chain:
+          type: string
+          description: Blockchain to analyze (solana, ethereum, all)
+          default: solana
+    endpoint:
+      method: GET
+      path: /api/analytics/market-overview
+      params:
+        chain: "{chain}"
+
+  - name: spartan_get_trading_signals
+    description: Get AI-generated trading signals and recommendations
+    input_schema:
+      type: object
+      properties:
+        token_address:
+          type: string
+          description: Token address (optional, if not provided returns top signals)
+        signal_type:
+          type: string
+          description: Signal type (buy, sell, hold, all)
+          default: all
+        confidence_min:
+          type: number
+          description: Minimum confidence score (0-100)
+          default: 70
+    endpoint:
+      method: GET
+      path: /api/analytics/signals
+      params:
+        token_address: "{token_address}"
+        signal_type: "{signal_type}"
+        confidence_min: "{confidence_min}"
+
+  - name: spartan_get_defi_protocols
+    description: Get information about DeFi protocols including TVL, APY, and risks
+    input_schema:
+      type: object
+      properties:
+        chain:
+          type: string
+          description: Blockchain filter
+          default: solana
+        sort_by:
+          type: string
+          description: Sort by (tvl, apy, volume, users)
+          default: tvl
+        limit:
+          type: number
+          default: 20
+    endpoint:
+      method: GET
+      path: /api/analytics/protocols
+      params:
+        chain: "{chain}"
+        sort_by: "{sort_by}"
+        limit: "{limit}"
+
+  - name: spartan_chat
+    description: Chat with Spartan AI for market insights and trading advice
+    input_schema:
+      type: object
+      properties:
+        message:
+          type: string
+          description: User message or question
+        context:
+          type: object
+          description: Optional context (wallet address, tokens of interest, etc.)
+      required:
+        - message
+    endpoint:
+      method: POST
+      path: /api/analytics/chat
+      body:
+        message: "{message}"
+        context: "{context}"
+
+# Resources (for context)
+resources:
+  - uri: spartan://analytics/market-data
+    name: Current Market Data
+    description: Real-time market data cached by Spartan
+    
+  - uri: spartan://analytics/portfolio
+    name: Portfolio Data
+    description: User portfolio information
+    
+  - uri: spartan://analytics/news-cache
+    name: News Cache
+    description: Latest cached news articles
+
+# Error handling
+error_handling:
+  retry_on_failure: true
+  max_retries: 2
+  retry_delay_ms: 1000
+  exponential_backoff: false
+
+# Caching
+cache:
+  enabled: true
+  ttl_seconds: 120
+  max_entries: 500
+
+# Logging
+logging:
+  level: debug
+  format: json
+  include_timestamps: true
+  include_context: true
+

@@ -1,0 +1,77 @@
+{
+  "name": "@spartan/mcp-gateway",
+  "description": "Spartan MCP Gateway - Model Context Protocol integration for DeFi data access",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "spartan-mcp": "./dist/index.js"
+  },
+  "license": "MIT",
+  "author": "Spartan",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "defi",
+    "coingecko",
+    "birdeye",
+    "spartan",
+    "ai",
+    "anthropic"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/spartan/spartan-mcp"
+  },
+  "homepage": "https://spartan.ai",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "configs",
+    "README.md",
+    "package.json"
+  ],
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.1",
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "axios": "^1.7.9",
+    "viem": "^2.21.54",
+    "x402-fetch": "^0.1.0",
+    "yaml": "^2.6.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.18",
+    "@types/node": "^24.0.14",
+    "prettier": "^3.6.2",
+    "tsup": "^8.0.2",
+    "typescript": "5.8.3",
+    "vitest": "^3.2.4"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "example:coingecko": "bun run agents/coingecko-agent.ts",
+    "example:birdeye": "bun run agents/birdeye-agent.ts",
+    "example:analytics": "bun run agents/analytics-agent.ts",
+    "example:charting": "bun run agents/charting-agent.ts"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

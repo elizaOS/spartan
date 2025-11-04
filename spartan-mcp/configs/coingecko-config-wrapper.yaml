@@ -1,0 +1,193 @@
+# CoinGecko MCP Configuration
+# Provides cryptocurrency price and market data from CoinGecko API
+
+name: spartan-coingecko-mcp
+description: MCP server for CoinGecko cryptocurrency data with Spartan integration
+version: 1.0.0
+
+# Server configuration
+server:
+  transport: stdio
+  capabilities:
+    tools: true
+    resources: false
+    prompts: false
+
+# API configuration
+api:
+  base_url: https://api.coingecko.com/api/v3
+  rate_limit:
+    requests_per_minute: 30
+    burst: 10
+  timeout: 10000
+  headers:
+    Accept: application/json
+    User-Agent: SpartanMCP/1.0
+
+# Authentication (optional for CoinGecko Pro)
+auth:
+  type: api_key
+  key_name: x-cg-pro-api-key
+  key_location: header
+  key_env: COINGECKO_API_KEY
+
+# Available tools
+tools:
+  - name: crypto_get_price
+    description: Get current cryptocurrency price in specified currencies
+    input_schema:
+      type: object
+      properties:
+        ids:
+          type: string
+          description: Comma-separated list of coin IDs (e.g., "bitcoin,ethereum,ai16z")
+        vs_currencies:
+          type: string
+          description: Comma-separated list of currencies (e.g., "usd,eur")
+          default: usd
+        include_market_cap:
+          type: boolean
+          description: Include market cap data
+          default: false
+        include_24hr_vol:
+          type: boolean
+          description: Include 24h volume
+          default: false
+        include_24hr_change:
+          type: boolean
+          description: Include 24h price change
+          default: false
+      required:
+        - ids
+    endpoint:
+      method: GET
+      path: /simple/price
+      params:
+        ids: "{ids}"
+        vs_currencies: "{vs_currencies}"
+        include_market_cap: "{include_market_cap}"
+        include_24hr_vol: "{include_24hr_vol}"
+        include_24hr_change: "{include_24hr_change}"
+
+  - name: crypto_search_coins
+    description: Search for cryptocurrencies by name or symbol
+    input_schema:
+      type: object
+      properties:
+        query:
+          type: string
+          description: Search query (coin name or symbol)
+      required:
+        - query
+    endpoint:
+      method: GET
+      path: /search
+      params:
+        query: "{query}"
+
+  - name: crypto_get_coin_data
+    description: Get detailed cryptocurrency data including market data, community stats, and more
+    input_schema:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Coin ID (e.g., "bitcoin", "ai16z")
+        localization:
+          type: boolean
+          description: Include localized data
+          default: false
+        tickers:
+          type: boolean
+          description: Include ticker data
+          default: false
+        market_data:
+          type: boolean
+          description: Include market data
+          default: true
+        community_data:
+          type: boolean
+          description: Include community data
+          default: false
+        developer_data:
+          type: boolean
+          description: Include developer data
+          default: false
+      required:
+        - id
+    endpoint:
+      method: GET
+      path: /coins/{id}
+      params:
+        localization: "{localization}"
+        tickers: "{tickers}"
+        market_data: "{market_data}"
+        community_data: "{community_data}"
+        developer_data: "{developer_data}"
+
+  - name: crypto_get_market_chart
+    description: Get historical market data including price, market cap, and volume
+    input_schema:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Coin ID
+        vs_currency:
+          type: string
+          description: Target currency (e.g., "usd")
+          default: usd
+        days:
+          type: string
+          description: Data range in days (1, 7, 14, 30, 90, 180, 365, max)
+          default: "7"
+        interval:
+          type: string
+          description: Data interval (daily, hourly)
+      required:
+        - id
+    endpoint:
+      method: GET
+      path: /coins/{id}/market_chart
+      params:
+        vs_currency: "{vs_currency}"
+        days: "{days}"
+        interval: "{interval}"
+
+  - name: crypto_get_trending
+    description: Get trending cryptocurrencies on CoinGecko
+    input_schema:
+      type: object
+      properties: {}
+    endpoint:
+      method: GET
+      path: /search/trending
+
+  - name: crypto_get_global_data
+    description: Get global cryptocurrency market data
+    input_schema:
+      type: object
+      properties: {}
+    endpoint:
+      method: GET
+      path: /global
+
+# Error handling
+error_handling:
+  retry_on_failure: true
+  max_retries: 3
+  retry_delay_ms: 1000
+  exponential_backoff: true
+
+# Caching
+cache:
+  enabled: true
+  ttl_seconds: 60
+  max_entries: 1000
+
+# Logging
+logging:
+  level: info
+  format: json
+  include_timestamps: true
+

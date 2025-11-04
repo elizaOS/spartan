@@ -1,0 +1,366 @@
+# Spartan Charting MCP Configuration
+# Provides charting data, technical indicators, and visualization tools
+
+name: spartan-charting-mcp
+description: MCP server for charting and technical analysis with Spartan integration
+version: 1.0.0
+
+# Server configuration
+server:
+  transport: stdio
+  capabilities:
+    tools: true
+    resources: true
+    prompts: true
+
+# API configuration
+api:
+  base_url: http://localhost:2096
+  rate_limit:
+    requests_per_minute: 100
+    burst: 25
+  timeout: 20000
+  headers:
+    Accept: application/json
+    Content-Type: application/json
+    User-Agent: SpartanMCP/1.0
+
+# Authentication (optional)
+auth:
+  type: bearer
+  key_env: SPARTAN_API_KEY
+  required: false
+
+# Available tools
+tools:
+  - name: charting_get_ohlcv
+    description: Get OHLCV data for charting with customizable timeframes
+    input_schema:
+      type: object
+      properties:
+        token_address:
+          type: string
+          description: Token contract address
+        interval:
+          type: string
+          description: Candle interval (1m, 5m, 15m, 1h, 4h, 1d, 1w)
+          default: 1h
+        from_timestamp:
+          type: number
+          description: Start timestamp (Unix seconds)
+        to_timestamp:
+          type: number
+          description: End timestamp (Unix seconds)
+        limit:
+          type: number
+          description: Maximum number of candles
+          default: 500
+      required:
+        - token_address
+    endpoint:
+      method: GET
+      path: /api/charting/ohlcv
+      params:
+        token_address: "{token_address}"
+        interval: "{interval}"
+        from: "{from_timestamp}"
+        to: "{to_timestamp}"
+        limit: "{limit}"
+
+  - name: charting_get_technical_indicators
+    description: Calculate technical indicators (RSI, MACD, EMA, SMA, Bollinger Bands, etc.)
+    input_schema:
+      type: object
+      properties:
+        token_address:
+          type: string
+          description: Token contract address
+        indicators:
+          type: array
+          description: List of indicators to calculate
+          items:
+            type: string
+          default: ["rsi", "macd", "ema20", "sma50"]
+        interval:
+          type: string
+          description: Time interval for calculations
+          default: 1h
+        period:
+          type: number
+          description: Period for indicator calculations
+      required:
+        - token_address
+    endpoint:
+      method: POST
+      path: /api/charting/indicators
+      body:
+        token_address: "{token_address}"
+        indicators: "{indicators}"
+        interval: "{interval}"
+        period: "{period}"
+
+  - name: charting_detect_patterns
+    description: Detect chart patterns (head and shoulders, triangles, support/resistance, etc.)
+    input_schema:
+      type: object
+      properties:
+        token_address:
+          type: string
+          description: Token contract address
+        interval:
+          type: string
+          description: Chart timeframe
+          default: 1h
+        lookback_periods:
+          type: number
+          description: Number of periods to analyze
+          default: 200
+      required:
+        - token_address
+    endpoint:
+      method: GET
+      path: /api/charting/patterns
+      params:
+        token_address: "{token_address}"
+        interval: "{interval}"
+        lookback_periods: "{lookback_periods}"
+
+  - name: charting_get_support_resistance
+    description: Calculate support and resistance levels
+    input_schema:
+      type: object
+      properties:
+        token_address:
+          type: string
+          description: Token contract address
+        interval:
+          type: string
+          description: Chart timeframe
+          default: 1h
+        sensitivity:
+          type: string
+          description: Detection sensitivity (low, medium, high)
+          default: medium
+      required:
+        - token_address
+    endpoint:
+      method: GET
+      path: /api/charting/support-resistance
+      params:
+        token_address: "{token_address}"
+        interval: "{interval}"
+        sensitivity: "{sensitivity}"
+
+  - name: charting_get_volume_profile
+    description: Get volume profile analysis
+    input_schema:
+      type: object
+      properties:
+        token_address:
+          type: string
+          description: Token contract address
+        interval:
+          type: string
+          description: Time interval
+          default: 1h
+        bins:
+          type: number
+          description: Number of price bins for profile
+          default: 50
+      required:
+        - token_address
+    endpoint:
+      method: GET
+      path: /api/charting/volume-profile
+      params:
+        token_address: "{token_address}"
+        interval: "{interval}"
+        bins: "{bins}"
+
+  - name: charting_compare_tokens
+    description: Compare multiple tokens on the same chart
+    input_schema:
+      type: object
+      properties:
+        token_addresses:
+          type: array
+          description: Array of token addresses to compare
+          items:
+            type: string
+        interval:
+          type: string
+          description: Time interval
+          default: 1h
+        normalize:
+          type: boolean
+          description: Normalize prices for comparison
+          default: true
+        from_timestamp:
+          type: number
+          description: Start timestamp
+      required:
+        - token_addresses
+    endpoint:
+      method: POST
+      path: /api/charting/compare
+      body:
+        token_addresses: "{token_addresses}"
+        interval: "{interval}"
+        normalize: "{normalize}"
+        from_timestamp: "{from_timestamp}"
+
+  - name: charting_get_fibonacci_levels
+    description: Calculate Fibonacci retracement and extension levels
+    input_schema:
+      type: object
+      properties:
+        token_address:
+          type: string
+          description: Token contract address
+        high_timestamp:
+          type: number
+          description: Timestamp of swing high
+        low_timestamp:
+          type: number
+          description: Timestamp of swing low
+        direction:
+          type: string
+          description: Trend direction (up, down)
+          default: up
+      required:
+        - token_address
+        - high_timestamp
+        - low_timestamp
+    endpoint:
+      method: POST
+      path: /api/charting/fibonacci
+      body:
+        token_address: "{token_address}"
+        high_timestamp: "{high_timestamp}"
+        low_timestamp: "{low_timestamp}"
+        direction: "{direction}"
+
+  - name: charting_export_chart
+    description: Export chart as image or data file
+    input_schema:
+      type: object
+      properties:
+        token_address:
+          type: string
+          description: Token contract address
+        interval:
+          type: string
+          description: Chart timeframe
+          default: 1h
+        format:
+          type: string
+          description: Export format (png, svg, json, csv)
+          default: png
+        width:
+          type: number
+          description: Chart width in pixels
+          default: 1200
+        height:
+          type: number
+          description: Chart height in pixels
+          default: 600
+        indicators:
+          type: array
+          description: Indicators to include
+          items:
+            type: string
+      required:
+        - token_address
+    endpoint:
+      method: POST
+      path: /api/charting/export
+      body:
+        token_address: "{token_address}"
+        interval: "{interval}"
+        format: "{format}"
+        width: "{width}"
+        height: "{height}"
+        indicators: "{indicators}"
+
+  - name: charting_get_correlation
+    description: Calculate price correlation between tokens
+    input_schema:
+      type: object
+      properties:
+        token_addresses:
+          type: array
+          description: Array of token addresses
+          items:
+            type: string
+        interval:
+          type: string
+          description: Time interval
+          default: 1h
+        lookback_periods:
+          type: number
+          description: Number of periods for correlation
+          default: 100
+      required:
+        - token_addresses
+    endpoint:
+      method: POST
+      path: /api/charting/correlation
+      body:
+        token_addresses: "{token_addresses}"
+        interval: "{interval}"
+        lookback_periods: "{lookback_periods}"
+
+# Resources
+resources:
+  - uri: spartan://charting/saved-charts
+    name: Saved Charts
+    description: User's saved chart configurations
+    
+  - uri: spartan://charting/watchlist
+    name: Watchlist
+    description: Tokens in user's watchlist with charts
+    
+  - uri: spartan://charting/indicators-library
+    name: Indicators Library
+    description: Available technical indicators
+
+# Prompts
+prompts:
+  - name: analyze_chart
+    description: Analyze a chart and provide technical analysis
+    arguments:
+      - name: token_address
+        description: Token to analyze
+        required: true
+      - name: interval
+        description: Chart timeframe
+        required: false
+    
+  - name: compare_tokens
+    description: Compare multiple tokens and provide insights
+    arguments:
+      - name: token_addresses
+        description: Tokens to compare
+        required: true
+
+# Error handling
+error_handling:
+  retry_on_failure: true
+  max_retries: 2
+  retry_delay_ms: 1500
+  exponential_backoff: true
+
+# Caching
+cache:
+  enabled: true
+  ttl_seconds: 60
+  max_entries: 1000
+  cache_key_prefix: "charting:"
+
+# Logging
+logging:
+  level: info
+  format: json
+  include_timestamps: true
+  include_performance_metrics: true
+
