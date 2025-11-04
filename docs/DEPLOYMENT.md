@@ -48,7 +48,7 @@ Complete guide for deploying Spartan in development, staging, and production env
 ### 1. Clone Repository
 
 ```bash
-git clone https://github.com/your-org/spartan.git
+git clone https://github.com/elizaOS/spartan.git
 cd spartan
 ```
 
@@ -149,7 +149,7 @@ sudo npm install -g pm2
 ```bash
 # Clone repository
 cd /opt
-sudo git clone https://github.com/your-org/spartan.git
+sudo git clone https://github.com/elizaOS/spartan.git
 cd spartan
 
 # Install dependencies

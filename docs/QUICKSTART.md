@@ -19,7 +19,7 @@ Get Spartan up and running in 10 minutes.
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/spartan.git
+git clone https://github.com/elizaOS/spartan.git
 cd spartan
 
 # Create .env file with your API keys
@@ -43,7 +43,7 @@ Skip to [Step 5: Try It Out](#step-5-try-it-out)
 npm install -g @elizaos/cli
 
 # Clone the repository
-git clone https://github.com/your-org/spartan.git
+git clone https://github.com/elizaOS/spartan.git
 cd spartan
 
 # Install dependencies
