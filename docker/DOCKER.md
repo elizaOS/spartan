@@ -18,7 +18,7 @@ This directory contains Docker configuration files for running the Spartan proje
 ### Production Mode
 
 ```bash
-# From packages/spartan directory
+# From spartan root directory
 docker-compose up -d
 ```
 
@@ -30,7 +30,7 @@ This will start:
 ### Development Mode
 
 ```bash
-# From packages/spartan directory
+# From spartan root directory
 docker-compose -f docker-compose.dev.yml up
 ```
 
@@ -60,7 +60,7 @@ This enables hot-reload for development.
 
 The production compose file includes hardcoded environment variables. For your own deployment:
 
-1. Create a `.env` file in the `packages/spartan` directory
+1. Create a `.env` file in the spartan root directory
 2. Update `docker-compose.yml` to use environment variables instead of hardcoded values
 3. Reference the `.env` file in your docker-compose configuration
 

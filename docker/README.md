@@ -20,11 +20,11 @@ docker/
 
 ## Quick Start
 
-All Docker Compose commands should be run from the **parent directory** (`packages/spartan/`), not from this directory:
+All Docker Compose commands should be run from the **spartan root directory**, not from this docker directory:
 
 ```bash
-# Navigate to packages/spartan (parent directory)
-cd /root/spartan-07-31-odi/packages/spartan
+# Navigate to spartan directory
+cd spartan
 
 # Production mode
 docker-compose up -d
