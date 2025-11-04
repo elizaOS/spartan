@@ -125,10 +125,18 @@ export async function interface_positions_ByAccountIdPosIds(
 
 // does these positions exist?
 
+type ListPositionsOptions = {
+  token?: string;        // Filter by token contract address
+  chain?: string;        // Filter by chain (defaults to 'solana' if not specified)
+  openOnly?: boolean;    // Only return open positions (not closed)
+  closedOnly?: boolean;  // Only return closed positions
+  publicKey?: string;    // Filter by wallet public key
+}
+
 // list
 // open position filter? chain filter?
 export async function listPositions(
-  runtime: IAgentRuntime, options = {}
+  runtime: IAgentRuntime, options: ListPositionsOptions = {}
 ): Promise<{ position: any, entityId: UUID, mw: any }[]> {
   //const userIds = await interface_users_list(runtime)
   //const emails = await interface_users_ByIds(runtime, users)
@@ -137,13 +145,29 @@ export async function listPositions(
   const metaWallets = await intWalletService.getMetaWallets()
   //console.log('listPositions - metaWallets', metaWallets)
   const positions: { position: any, entityId: UUID, mw: any }[] = []
+  
+  // Default to solana if chain is specified
+  const chains = options.chain ? [options.chain] : Object.keys(metaWallets[0]?.keypairs || { solana: true })
+  
   for(const mw of metaWallets) {
     //console.log('listPositions - mw', mw)
-    if (mw.keypairs.solana.positions?.length) {
-      //console.log('listPositions - solana positions', mw.keypairs.solana.positions.length)
-      // filter open positions?
-      for(const p of mw.keypairs.solana.positions) {
-        positions.push({ position: p, entityId: mw.entityId, mw })
+    for (const chain of chains) {
+      if (mw.keypairs[chain]?.positions?.length) {
+        //console.log('listPositions - ' + chain + ' positions', mw.keypairs[chain].positions.length)
+        // Apply filters
+        for(const p of mw.keypairs[chain].positions) {
+          // Filter by token if specified
+          if (options.token && p.token !== options.token) continue
+          
+          // Filter by open/closed status
+          if (options.openOnly && p.close) continue
+          if (options.closedOnly && !p.close) continue
+          
+          // Filter by public key if specified
+          if (options.publicKey && p.publicKey !== options.publicKey) continue
+          
+          positions.push({ position: p, entityId: mw.entityId, mw })
+        }
       }
     }
   }
@@ -245,10 +269,10 @@ export async function updatePosition(runtime: IAgentRuntime, accountId: UUID, po
   const pos = posRes.pos
   const wallet = mw.keypairs[pos.chain]
   if (wallet.positions === undefined) wallet.positions = []
-  // another fucking search!! but localized to a single user
-  const idx = wallet.positions.indexOf(pos)
+  // Search by position ID instead of reference equality
+  const idx = wallet.positions.findIndex(p => p.id === pos.id)
   if (idx === -1) {
-    console.warn('updatePosition - cant find pos', pos, 'in', wallet.positions)
+    console.warn('updatePosition - cant find pos', pos.id, 'in wallet', wallet.publicKey, 'with', wallet.positions.length, 'positions')
     return false
   }
   // integrate changed data
