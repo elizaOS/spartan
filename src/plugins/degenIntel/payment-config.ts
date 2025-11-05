@@ -49,9 +49,9 @@ export function toX402Network(network: Network): X402ScanNetwork {
  * Uses existing environment variables from your project configuration
  */
 export const PAYMENT_ADDRESSES: Record<Network, string> = {
-    BASE: process.env.BASE_PUBLIC_KEY || process.env.PAYMENT_WALLET_BASE,
-    SOLANA: process.env.SOLANA_PUBLIC_KEY || process.env.PAYMENT_WALLET_SOLANA,
-    POLYGON: process.env.POLYGON_PUBLIC_KEY || process.env.PAYMENT_WALLET_POLYGON,
+    BASE: process.env.BASE_PUBLIC_KEY || process.env.PAYMENT_WALLET_BASE || '0x066E94e1200aa765d0A6392777D543Aa6Dea606C',
+    SOLANA: process.env.SOLANA_PUBLIC_KEY || process.env.PAYMENT_WALLET_SOLANA || '3nMBmufBUBVnk28sTp3NsrSJsdVGTyLZYmsqpMFaUT9J',
+    POLYGON: process.env.POLYGON_PUBLIC_KEY || process.env.PAYMENT_WALLET_POLYGON || '',
 };
 
 /**
@@ -160,29 +160,96 @@ export function getNetworkAssets(network: Network): string[] {
 export const PAYMENT_RECEIVER_ADDRESS = PAYMENT_ADDRESSES[DEFAULT_NETWORK];
 
 /**
- * Payment configuration interface - should be defined on each route
- * Example route definition:
- * {
- *   type: 'GET',
- *   path: '/api/example',
- *   public: true,
- *   x402: true,
- *   price: '$0.10',
- *   supportedNetworks: ['BASE', 'POLYGON', 'SOLANA'],
- *   config: {
- *     description: 'Example endpoint',
- *     facilitatorEndpoint: 'https://facilitator.example.com',
- *     queryParams: {
- *       'symbol': { type: 'string', required: true, description: 'Token symbol' }
- *     }
- *   }
- * }
+ * Named payment config definition - stores individual fields, CAIP-19 constructed on-demand
  */
-export interface RoutePaymentConfig {
-    description?: string;
-    facilitatorEndpoint?: string; // For EVM networks like Ethereum
-    queryParams?: Record<string, any>; // Query parameter schema for x402scan
-    bodyFields?: Record<string, any>; // Body field schema for x402scan
+export interface PaymentConfigDefinition {
+    network: Network;
+    assetNamespace: string;      // e.g., "erc20", "spl-token", "slip44"
+    assetReference: string;       // e.g., contract address or token mint
+    paymentAddress: string;       // Recipient address
+    symbol: string;               // Display symbol (USDC, ETH, etc.)
+    chainId?: string;             // Optional chain ID for CAIP-2 (e.g., "8453" for Base)
+}
+
+/**
+ * Payment configuration registry - named configs for easy reference
+ */
+export const PAYMENT_CONFIGS: Record<string, PaymentConfigDefinition> = {
+    'base_usdc': {
+        network: 'BASE',
+        assetNamespace: 'erc20',
+        assetReference: BASE_TOKENS.USDC.address,
+        paymentAddress: PAYMENT_ADDRESSES['BASE'],
+        symbol: 'USDC',
+        chainId: '8453'
+    },
+    'solana_usdc': {
+        network: 'SOLANA',
+        assetNamespace: 'spl-token',
+        assetReference: SOLANA_TOKENS.USDC.address,
+        paymentAddress: PAYMENT_ADDRESSES['SOLANA'],
+        symbol: 'USDC'
+    },
+    'polygon_usdc': {
+        network: 'POLYGON',
+        assetNamespace: 'erc20',
+        assetReference: POLYGON_TOKENS.USDC.address,
+        paymentAddress: PAYMENT_ADDRESSES['POLYGON'],
+        symbol: 'USDC',
+        chainId: '137'
+    }
+};
+
+/**
+ * Construct CAIP-19 asset ID from payment config fields
+ */
+export function getCAIP19FromConfig(config: PaymentConfigDefinition): string {
+    // Build CAIP-2 chain ID: namespace:reference
+    const chainNamespace = config.network === 'SOLANA' ? 'solana' : 'eip155';
+    const chainReference = config.chainId || 
+        (config.network === 'BASE' ? '8453' : 
+         config.network === 'POLYGON' ? '137' : '1');
+    const chainId = `${chainNamespace}:${chainReference}`;
+    
+    // Build asset part: namespace:reference
+    const assetId = `${config.assetNamespace}:${config.assetReference}`;
+    
+    // Full CAIP-19: chain_id/asset_namespace:asset_reference
+    return `${chainId}/${assetId}`;
+}
+
+/**
+ * Get payment config by name
+ */
+export function getPaymentConfig(name: string): PaymentConfigDefinition {
+    const config = PAYMENT_CONFIGS[name];
+    if (!config) {
+        throw new Error(`Unknown payment config '${name}'. Valid configs: ${Object.keys(PAYMENT_CONFIGS).join(', ')}`);
+    }
+    return config;
+}
+
+/**
+ * Validate payment config name
+ */
+export function validatePaymentConfigName(name: string): boolean {
+    return name in PAYMENT_CONFIGS;
+}
+
+/**
+ * x402 configuration for routes
+ */
+export interface X402Config {
+    priceInCents: number;
+    paymentConfigs?: string[];  // Named configs, defaults to ['base_usdc']
+    
+    // Future pricing features (not implemented yet, but API ready):
+    // pricing?: {
+    //   coupons?: { code: string; discountPercent: number }[];
+    //   timeBased?: { startTime: Date; endTime: Date; priceInCents: number }[];
+    //   quantityDiscount?: { minQuantity: number; priceInCents: number }[];
+    //   loyaltyReward?: { userTier: string; discountPercent: number }[];
+    // }
 }
 
 /**

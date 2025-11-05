@@ -1,13 +1,15 @@
 import type { IAgentRuntime, Plugin } from '@elizaos/core';
+//import { logger } from '@elizaos/core';
 import routes from './apis';
 import { registerTasks } from './tasks';
-import { logger } from '@elizaos/core';
 
+// Providers
+import { tokenResearchProvider } from './providers/act_token_research';
 import { sentimentProvider } from './providers/sentiment';
-//import { cmcMarketProvider } from './providers/cmcMarket';
-//import { birdeyeTrendingProvider } from './providers/birdeyeTrending';
-//import { birdeyeTradePortfolioProvider } from './providers/birdeyeWallet';
 // INTEL_SYNC_WALLET provider? or solana handles this?
+
+// Evaluators
+import { tokenSnifferEvaluator } from './evaluators/evl_token_sniffer';
 
 // Services
 import { TradeChainService } from './services/srv_chain';
@@ -20,8 +22,9 @@ export const degenIntelPlugin: Plugin = {
   name: 'spartan-intel',
   description: 'Spartan Intel plugin',
   routes,
-  providers: [],
+  providers: [tokenResearchProvider],
   services: [TradeChainService, TradeDataProviderService, TradeStrategyService, TradeLpService],
+  evaluators: [tokenSnifferEvaluator],
   tests: [
     {
       name: 'test suite for intel',
@@ -29,53 +32,26 @@ export const degenIntelPlugin: Plugin = {
         {
           name: 'test for intel',
           fn: async (runtime: IAgentRuntime) => {
-            logger.info('test in intel working');
+            runtime.logger.info('test in intel working');
           },
         },
       ],
     },
   ],
   init: async (_, runtime: IAgentRuntime) => {
-    console.log('intel init');
-    new Promise(async resolve => {
-      resolve()
-      // db needs some time...
-      setTimeout(async () => {
+    runtime.logger.log('intel init');
+
+    const taskReadyPromise = new Promise(resolve => {
+      runtime.initPromise.then(async () => {
         await registerTasks(runtime);
-        console.log('intel init - tasks registered');
-      }, 60 * 1000)
-
+        runtime.logger.log('intel init - tasks registered');
+        resolve(undefined);
+      });
       const plugins = runtime.plugins.map((p) => p.name);
-      let notUsed = true;
-
-      // let the plugins handle this
-      /*
-      // check for cmc key, if have then register provider
-      if (runtime.getSetting('COINMARKETCAP_API_KEY')) {
-        runtime.registerProvider(cmcMarketProvider);
-        notUsed = false;
-      }
-
-      // check for birdeeye key, if have then register provider
-      if (runtime.getSetting('BIRDEYE_API_KEY')) {
-        runtime.registerProvider(birdeyeTrendingProvider);
-        runtime.registerProvider(birdeyeTradePortfolioProvider);
-        notUsed = false;
-      }
-      */
-
       // twitter for sentiment
       if (plugins.indexOf('twitter') !== -1) {
         runtime.registerProvider(sentimentProvider);
-        notUsed = false;
       }
-
-      if (notUsed) {
-        logger.warn(
-          'degen-intel plugin is included but not providing any value (COINMARKETCAP_API_KEY/BIRDEYE_API_KEY or twitter are suggested)'
-        );
-      }
-      console.log('degenIntel done')
-    })
+    });
   },
 };

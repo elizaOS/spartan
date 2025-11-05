@@ -118,8 +118,8 @@ export default class TwitterParser {
     const lookUpDate =
       sentiments.length > 0
         ? sentiments.sort(
-            (a, b) => new Date(b.timeslot).getTime() - new Date(a.timeslot).getTime()
-          )[0].timeslot
+          (a, b) => new Date(b.timeslot).getTime() - new Date(a.timeslot).getTime()
+        )[0].timeslot
         : null;
 
     const start = new Date(lookUpDate || '2025-01-01T00:00:00.000Z');
@@ -152,9 +152,14 @@ export default class TwitterParser {
           (s) => new Date(s.timeslot).getTime() === timeslotDate.getTime()
         );
         if (!exists) {
+          const now = new Date().toISOString();
           timeSlots.push({
             timeslot,
+            createdAt: now,
+            text: '',
             processed: false,
+            updatedAt: now,
+            occuringTokens: [],
           });
         }
       }
@@ -211,9 +216,9 @@ export default class TwitterParser {
     const tweets = memories
       .filter(
         (memory): memory is Memory & { content: TwitterContent } =>
-          memory.content.source === 'twitter'
+          memory.content.source === 'twitter' && memory.createdAt !== undefined
       )
-      .sort((a, b) => b.createdAt - a.createdAt);
+      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
     if (!tweets || tweets.length === 0) {
       logger.info(`No tweets to process for timeslot ${timeslot.toISOString()}`);
@@ -243,17 +248,23 @@ export default class TwitterParser {
     });
 
     // Parse the JSON response
-    const json = JSON.parse(response || '{}');
+    let json: { text?: string; occuringTokens?: Array<{ token: string; sentiment: number; reason: string; }> } = {};
+    try {
+      json = JSON.parse(response || '{}');
+    } catch (error) {
+      logger.error('Failed to parse JSON response from model:', error instanceof Error ? error.message : String(error));
+      json = {};
+    }
 
     // Update sentiment with analysis results
     const updatedSentiments = sentiments.map((s) =>
       s.timeslot === unprocessedSentiment.timeslot
         ? {
-            ...s,
-            text: json.text,
-            occuringTokens: json.occuringTokens,
-            processed: true,
-          }
+          ...s,
+          text: json.text || '',
+          occuringTokens: json.occuringTokens || [],
+          processed: true,
+        }
         : s
     );
     await this.runtime.setCache<Sentiment[]>('sentiments', updatedSentiments);

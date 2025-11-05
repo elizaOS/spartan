@@ -23,7 +23,7 @@ import type { IToken } from '../types';
  * @returns {Object} Object containing data, values, and text related to actions
  */
 export const birdeyeTradePortfolioProvider: Provider = {
-  name: 'INTEL_TRADE_PORTFOLIO',
+  name: 'TRADER_TRADE_PORTFOLIO',
   description: 'A list of your trades',
   dynamic: true,
   //position: -1,

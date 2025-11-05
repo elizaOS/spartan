@@ -16,6 +16,7 @@ import {
 
 interface TwitterService extends Service {
   getClientKey(clientId: UUID, agentId: UUID): string;
+  getClient(clientId: string, agentId: UUID): any;
   clients: Map<string, any>;
 }
 
@@ -164,7 +165,7 @@ export default class Twitter {
         logger.info(`Raw tweet sync [username: ${u}] synced ${syncCount} new tweets`);
         await new Promise((resolve) => setTimeout(resolve, 10_000)); // 10s delay
       } catch (error) {
-        logger.error('Error syncing tweets:', error);
+        logger.error('Error syncing tweets:', error instanceof Error ? error.message : String(error));
         await new Promise((resolve) => setTimeout(resolve, 10_000)); // 10s delay
       }
     }

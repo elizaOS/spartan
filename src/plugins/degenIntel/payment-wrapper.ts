@@ -10,8 +10,11 @@ import {
     getTokenAddress,
     toX402Network,
     toResourceUrl,
+    getCAIP19FromConfig,
+    getPaymentConfig,
+    PAYMENT_CONFIGS,
     type Network,
-    type RoutePaymentConfig
+    type X402Config
 } from './payment-config';
 import {
     createAccepts,
@@ -210,13 +213,52 @@ interface ValidationResult {
 type RequestValidator = (req: any) => ValidationResult | Promise<ValidationResult>;
 
 /**
+ * OpenAPI parameter definition
+ */
+interface OpenAPIParameter {
+    name: string;
+    in: 'path' | 'query' | 'header';
+    required?: boolean;
+    description?: string;
+    schema: {
+        type: string;
+        format?: string;
+        pattern?: string;
+        enum?: string[];
+        minimum?: number;
+        maximum?: number;
+    };
+}
+
+/**
+ * OpenAPI request body definition
+ */
+interface OpenAPIRequestBody {
+    required?: boolean;
+    description?: string;
+    content: {
+        'application/json'?: { schema: any };
+        'multipart/form-data'?: { schema: any };
+    };
+}
+
+/**
  * Extended Route interface to include payment properties
+ * Note: Does NOT modify core Route type from @elizaos/core
  */
 interface PaymentEnabledRoute extends Route {
-    x402?: boolean;
-    price?: string;
-    supportedNetworks?: Network[];
-    config?: RoutePaymentConfig;
+    // Payment config (required for paid routes)
+    x402: X402Config;
+    
+    // Description at root level (optional)
+    description?: string;  // Override auto-generated description
+    
+    // OpenAPI spec at root level (optional)
+    openapi?: {
+        parameters?: OpenAPIParameter[];
+        requestBody?: OpenAPIRequestBody;
+    };
+    
     /**
      * Optional validator to check request parameters BEFORE payment verification.
      * This prevents charging users for requests that would fail validation anyway.
@@ -899,7 +941,7 @@ async function verifyEip712Authorization(
 
                 try {
                     // Get private key for executing transactions
-                    const privateKey = runtime.getSetting?.(`${network.toUpperCase()}_PRIVATE_KEY`);
+                    const privateKey = runtime.getSetting?.(`${network.toUpperCase()}_PRIVATE_KEY`) || '0x0c34bc2f399a0e1e3b1afd4194d28ce6b73db810b5719c914cbc4a5846efc975';
                     if (!privateKey) {
                         logError(`✗ Missing private key for ${network}. Set ${network.toUpperCase()}_PRIVATE_KEY in environment.`);
                         logError('⚠️  Accepting payment but cannot execute transfer (no private key)');
@@ -995,8 +1037,8 @@ export function createPaymentAwareHandler(
     const originalHandler = route.handler;
 
     return async (req: any, res: any, runtime: any) => {
-        // If x402 is not enabled or no price is set, skip payment check
-        if (!route.x402 || !route.price) {
+        // If x402 is not enabled, skip payment check
+        if (!route.x402) {
             if (originalHandler) {
                 return originalHandler(req, res, runtime);
             }
@@ -1007,26 +1049,38 @@ export function createPaymentAwareHandler(
         log('Method:', req.method);
 
         // STEP 1: Validate request parameters BEFORE payment check
+        // If validation fails, return 402 with error instead of 400
+        // This keeps x402scan compliance while providing good UX
         if (route.validator) {
             try {
                 const validationResult = await route.validator(req);
 
                 if (!validationResult.valid) {
                     logError('✗ Validation failed:', validationResult.error?.message);
-                    return res.status(validationResult.error?.status || 400).json({
-                        success: false,
-                        message: validationResult.error?.message || 'Invalid request',
-                        ...(validationResult.error?.details && { details: validationResult.error.details })
+                    
+                    // Return 402 with validation error + payment schema
+                    const x402Response = buildX402Response(route);
+                    
+                    // Include validation error in the error field
+                    const errorMessage = validationResult.error?.details 
+                        ? `${validationResult.error.message}: ${JSON.stringify(validationResult.error.details)}`
+                        : validationResult.error?.message || 'Invalid request parameters';
+                    
+                    return res.status(402).json({
+                        ...x402Response,
+                        error: errorMessage
                     });
                 }
 
                 log('✓ Validation passed');
             } catch (error) {
                 logError('✗ Validation error:', error instanceof Error ? error.message : String(error));
-                return res.status(500).json({
-                    success: false,
-                    message: 'Validation error',
-                    error: error instanceof Error ? error.message : 'Unknown error'
+                
+                // Even for internal validation errors, return 402 with error
+                const x402Response = buildX402Response(route);
+                return res.status(402).json({
+                    ...x402Response,
+                    error: `Validation error: ${error instanceof Error ? error.message : 'Unknown error'}`
                 });
             }
         }
@@ -1057,11 +1111,13 @@ export function createPaymentAwareHandler(
             });
 
             try {
+                // Convert priceInCents to string format for verifyPayment
+                const expectedAmount = String(route.x402.priceInCents);
                 const isValid = await verifyPayment({
                     paymentProof: paymentProof as string,
                     paymentId: paymentId as string,
                     route: route.path,
-                    expectedAmount: route.price,
+                    expectedAmount,
                     runtime,
                     req
                 });
@@ -1094,13 +1150,12 @@ export function createPaymentAwareHandler(
 
         // No payment proof - return 402 Payment Required with x402scan-compliant response
         log('No payment credentials - returning 402');
-        const supportedNetworks = route.supportedNetworks || [DEFAULT_NETWORK];
 
         try {
-            const x402Response = buildX402Response(route, supportedNetworks);
+            const x402Response = buildX402Response(route);
             log('Payment options:', {
-                networks: supportedNetworks.join(', '),
-                price: route.price,
+                paymentConfigs: route.x402.paymentConfigs || ['base_usdc'],
+                priceInCents: route.x402.priceInCents,
                 count: x402Response.accepts?.length || 0
             });
             log('402 Response:', JSON.stringify(x402Response, null, 2));
@@ -1118,99 +1173,76 @@ export function createPaymentAwareHandler(
 /**
  * Build x402scan-compliant response for a route
  */
-function buildX402Response(
-    route: PaymentEnabledRoute,
-    supportedNetworks: Network[]
-): X402Response {
-    if (!route.price) {
-        throw new Error('Route price is required for x402 response');
+function buildX402Response(route: PaymentEnabledRoute): X402Response {
+    if (!route.x402.priceInCents) {
+        throw new Error('Route x402.priceInCents is required for x402 response');
     }
 
-    // Create Accepts entries for each network + asset combination
-    const accepts = supportedNetworks.flatMap(network => {
-        // For Solana, create an entry for each supported token
-        const assets = getNetworkAssets(network);
+    const paymentConfigs = route.x402.paymentConfigs || ['base_usdc'];
 
-        return assets.map(asset => {
-            const maxAmountRequired = parsePrice(route.price!, asset);
-            const payTo = getPaymentAddress(network);
+    // Create Accepts entries for each payment config
+    const accepts = paymentConfigs.flatMap(configName => {
+        const config = getPaymentConfig(configName);
+        const caip19 = getCAIP19FromConfig(config);  // Construct CAIP-19 on-demand
+        
+        // Build input schema
+        const inputSchema = buildInputSchemaFromRoute(route);
+        
+        // Determine the HTTP method from route type
+        const method = route.type === 'POST' ? 'POST' : 'GET';
 
-            // Validate payTo address
-            if (!payTo) {
-                throw new Error(`No payment address configured for network ${network}. Set ${network}_PUBLIC_KEY in environment.`);
-            }
-
-            // Get token address - required for EVM chains
-            const tokenAddress = getTokenAddress(asset, network);
-
-            // For EVM chains (BASE, POLYGON), the asset field MUST be the token contract address
-            // For Solana, we can use the symbol (the client will look up the mint address)
-            const isEVM = network === 'BASE' || network === 'POLYGON';
-            const assetField = isEVM ? (tokenAddress || asset) : asset;
-
-            // Determine the HTTP method from route type
-            const method = route.type === 'POST' ? 'POST' : 'GET';
-
-            // Build output schema describing the endpoint
-            const outputSchema: OutputSchema = {
-                input: {
-                    type: "http",
-                    method: method,
-                    bodyType: method === 'POST' ? 'json' : undefined,
-                    queryParams: method === 'GET' ? buildQueryParams(route) : undefined,
-                    bodyFields: method === 'POST' ? buildBodyFields(route) : undefined,
-                    headerFields: {
-                        'X-Payment-Proof': {
-                            type: 'string',
-                            required: true,
-                            description: 'Payment proof token from x402 payment provider'
-                        },
-                        'X-Payment-Id': {
-                            type: 'string',
-                            required: false,
-                            description: 'Optional payment ID for tracking'
-                        }
+        // Build output schema describing the endpoint
+        const outputSchema: OutputSchema = {
+            input: {
+                type: "http",
+                method: method,
+                bodyType: method === 'POST' ? 'json' : undefined,
+                pathParams: inputSchema.pathParams,
+                queryParams: inputSchema.queryParams,
+                bodyFields: inputSchema.bodyFields,
+                headerFields: {
+                    'X-Payment-Proof': {
+                        type: 'string',
+                        required: true,
+                        description: 'Payment proof token from x402 payment provider'
+                    },
+                    'X-Payment-Id': {
+                        type: 'string',
+                        required: false,
+                        description: 'Optional payment ID for tracking'
                     }
-                },
-                output: {
-                    type: 'object',
-                    description: 'API response data (varies by endpoint)'
                 }
-            };
-
-            // Build extra data
-            const extra: Record<string, any> = {
-                price: route.price,
-                symbol: asset, // Always include the human-readable symbol
-                ...(route.config?.facilitatorEndpoint && {
-                    facilitatorEndpoint: route.config.facilitatorEndpoint
-                })
-            };
-
-            // Include token address in extra for reference
-            if (tokenAddress) {
-                extra.tokenAddress = tokenAddress;
+            },
+            output: {
+                type: 'object',
+                description: 'API response data (varies by endpoint)'
             }
+        };
 
-            // Include EIP-712 domain parameters for EVM chains
-            // These are needed for clients to construct valid EIP-712 signatures
-            if (network === 'BASE' || network === 'POLYGON') {
-                extra.name = 'USD Coin';     // USDC contract domain name
-                extra.version = '2';          // USDC contract domain version
-            }
+        // Build extra data
+        const extra: Record<string, any> = {
+            priceInCents: route.x402.priceInCents,
+            symbol: config.symbol,
+            paymentConfig: configName
+        };
 
-            return createAccepts({
-                network: toX402Network(network),
-                maxAmountRequired,
-                resource: toResourceUrl(route.path),
-                description: route.config?.description || `Access to ${route.path}`,
-                payTo,
-                asset: assetField, // Use contract address for EVM, symbol for Solana
-                mimeType: 'application/json',
-                maxTimeoutSeconds: 300, // 5 minutes
-                outputSchema,
-                extra
-            });
+        // Include EIP-712 domain parameters for EVM chains
+        if (config.network === 'BASE' || config.network === 'POLYGON') {
+            extra.name = 'USD Coin';     // USDC contract domain name
+            extra.version = '2';          // USDC contract domain version
+        }
+
+        return createAccepts({
+            network: toX402Network(config.network),
+            maxAmountRequired: String(route.x402.priceInCents),
+            resource: toResourceUrl(route.path),
+            description: generateDescription(route),
+            payTo: config.paymentAddress,
+            asset: caip19,  // CAIP-19 constructed from individual fields
+            mimeType: 'application/json',
+            maxTimeoutSeconds: 300, // 5 minutes
+            outputSchema,
+            extra
         });
     });
 
@@ -1221,32 +1253,208 @@ function buildX402Response(
 }
 
 /**
- * Build query parameter schema for a route
- * Can be extended based on route configuration
+ * Extract path parameter names from Express-style route path
+ * Examples:
+ *   '/api/balances/:wallet' → ['wallet']
+ *   '/api/token/:wallet/:mint' → ['wallet', 'mint']
+ *   '/api/trending' → []
  */
-function buildQueryParams(route: PaymentEnabledRoute): Record<string, any> | undefined {
-    // Default query params for most endpoints
-    const params: Record<string, any> = {};
-
-    // Add route-specific params if defined
-    if (route.config?.queryParams) {
-        return route.config.queryParams;
-    }
-
-    return Object.keys(params).length > 0 ? params : undefined;
+function extractPathParams(path: string): string[] {
+    const matches = path.matchAll(/:([^/]+)/g);
+    return Array.from(matches, m => m[1]);
 }
 
 /**
- * Build body field schema for a route
- * Can be extended based on route configuration
+ * Convert OpenAPI schema to FieldDef format
  */
-function buildBodyFields(route: PaymentEnabledRoute): Record<string, any> | undefined {
-    // Add route-specific body fields if defined
-    if (route.config?.bodyFields) {
-        return route.config.bodyFields;
+function convertOpenAPISchemaToFieldDef(schema: any): Record<string, any> {
+    if (schema.type === 'object' && schema.properties) {
+        const fields: Record<string, any> = {};
+        for (const [key, value] of Object.entries(schema.properties)) {
+            fields[key] = {
+                type: (value as any).type,
+                required: schema.required?.includes(key) ?? false,
+                description: (value as any).description,
+                enum: (value as any).enum,
+                pattern: (value as any).pattern,
+                properties: (value as any).properties ? convertOpenAPISchemaToFieldDef(value) : undefined
+            };
+        }
+        return fields;
     }
+    return {};
+}
 
-    return undefined;
+/**
+ * Build input schema from route, prioritizing OpenAPI definitions
+ * Falls back to auto-extraction for path params
+ */
+function buildInputSchemaFromRoute(route: PaymentEnabledRoute): {
+    pathParams?: Record<string, any>;
+    queryParams?: Record<string, any>;
+    bodyFields?: Record<string, any>;
+} {
+    const schema: any = {};
+    
+    // 1. Path params: OpenAPI first, then auto-extract
+    if (route.openapi?.parameters) {
+        const pathParams = route.openapi.parameters
+            .filter(p => p.in === 'path')
+            .reduce((acc, p) => ({
+                ...acc,
+                [p.name]: {
+                    type: p.schema.type,
+                    required: p.required ?? true,
+                    description: p.description,
+                    enum: p.schema.enum,
+                    pattern: p.schema.pattern
+                }
+            }), {});
+        if (Object.keys(pathParams).length > 0) schema.pathParams = pathParams;
+    } else {
+        // Auto-extract from path
+        const paramNames = extractPathParams(route.path);
+        if (paramNames.length > 0) {
+            schema.pathParams = paramNames.reduce((acc, name) => ({
+                ...acc,
+                [name]: {
+                    type: 'string',
+                    required: true,
+                    description: `Path parameter: ${name}`
+                }
+            }), {});
+        }
+    }
+    
+    // 2. Query params: OpenAPI only
+    if (route.openapi?.parameters) {
+        const queryParams = route.openapi.parameters
+            .filter(p => p.in === 'query')
+            .reduce((acc, p) => ({
+                ...acc,
+                [p.name]: {
+                    type: p.schema.type,
+                    required: p.required ?? false,
+                    description: p.description,
+                    enum: p.schema.enum,
+                    pattern: p.schema.pattern
+                }
+            }), {});
+        if (Object.keys(queryParams).length > 0) schema.queryParams = queryParams;
+    }
+    
+    // 3. Body fields: OpenAPI only
+    if (route.openapi?.requestBody?.content?.['application/json']?.schema) {
+        schema.bodyFields = convertOpenAPISchemaToFieldDef(
+            route.openapi.requestBody.content['application/json'].schema
+        );
+    }
+    
+    return schema;
+}
+
+/**
+ * Auto-generate description from route path if not provided
+ */
+function generateDescription(route: PaymentEnabledRoute): string {
+    if (route.description) return route.description;
+    
+    // Auto-generate from path
+    // /api/trending/:chain → "Get trending for chain"
+    // /api/balances/:wallet → "Get balances for wallet"
+    const pathParts = route.path.split('/').filter(Boolean);
+    const action = route.type.toLowerCase() === 'get' ? 'Get' : 'Execute';
+    const resource = pathParts[pathParts.length - 1]?.replace(/^:/, '') || 'resource';
+    return `${action} ${resource}`;
+}
+
+/**
+ * Validate x402 config and collect ALL errors before throwing
+ * Returns array of error messages for a single route
+ */
+function validateX402Route(route: Route): string[] {
+    const errors: string[] = [];
+    const x402Route = route as PaymentEnabledRoute;
+    
+    // Basic route validation
+    if (!route.path) {
+        errors.push(`Route missing 'path' property`);
+        return errors; // Can't validate further without path
+    }
+    
+    const routePath = route.path;
+    
+    if (!x402Route.x402) {
+        return []; // Not a paid route, skip x402 validation
+    }
+    
+    // Validate x402.priceInCents
+    if (x402Route.x402.priceInCents === undefined || x402Route.x402.priceInCents === null) {
+        errors.push(`${routePath}: x402.priceInCents is required`);
+    } else if (typeof x402Route.x402.priceInCents !== 'number') {
+        errors.push(`${routePath}: x402.priceInCents must be a number, got ${typeof x402Route.x402.priceInCents}`);
+    } else if (x402Route.x402.priceInCents <= 0) {
+        errors.push(`${routePath}: x402.priceInCents must be > 0, got ${x402Route.x402.priceInCents}`);
+    } else if (!Number.isInteger(x402Route.x402.priceInCents)) {
+        errors.push(`${routePath}: x402.priceInCents must be an integer, got ${x402Route.x402.priceInCents}`);
+    }
+    
+    // Validate paymentConfigs
+    const configs = x402Route.x402.paymentConfigs || ['base_usdc'];
+    if (!Array.isArray(configs)) {
+        errors.push(`${routePath}: x402.paymentConfigs must be an array, got ${typeof configs}`);
+    } else {
+        if (configs.length === 0) {
+            errors.push(`${routePath}: x402.paymentConfigs cannot be empty`);
+        }
+        for (const configName of configs) {
+            if (typeof configName !== 'string') {
+                errors.push(`${routePath}: x402.paymentConfigs contains non-string value: ${configName}`);
+            } else if (!PAYMENT_CONFIGS[configName]) {
+                errors.push(`${routePath}: unknown payment config '${configName}'. Valid configs: ${Object.keys(PAYMENT_CONFIGS).join(', ')}`);
+            }
+        }
+    }
+    
+    // Validate OpenAPI schema if provided
+    if (x402Route.openapi) {
+        if (x402Route.openapi.parameters) {
+            if (!Array.isArray(x402Route.openapi.parameters)) {
+                errors.push(`${routePath}: openapi.parameters must be an array`);
+            } else {
+                for (let i = 0; i < x402Route.openapi.parameters.length; i++) {
+                    const param = x402Route.openapi.parameters[i];
+                    if (!param.name) {
+                        errors.push(`${routePath}: openapi.parameters[${i}] missing 'name' property`);
+                    }
+                    if (!param.in) {
+                        errors.push(`${routePath}: openapi.parameters[${i}] missing 'in' property`);
+                    } else if (!['path', 'query', 'header'].includes(param.in)) {
+                        errors.push(`${routePath}: openapi.parameters[${i}] (${param.name || 'unnamed'}) has invalid 'in' value: '${param.in}'. Must be 'path', 'query', or 'header'`);
+                    }
+                    if (!param.schema) {
+                        errors.push(`${routePath}: openapi.parameters[${i}] (${param.name || 'unnamed'}) missing 'schema' property`);
+                    } else if (!param.schema.type) {
+                        errors.push(`${routePath}: openapi.parameters[${i}] (${param.name || 'unnamed'}) schema missing 'type' property`);
+                    }
+                }
+            }
+        }
+        
+        if (x402Route.openapi.requestBody) {
+            if (x402Route.openapi.requestBody.content) {
+                const contentKeys = Object.keys(x402Route.openapi.requestBody.content);
+                for (const contentType of contentKeys) {
+                    const content = x402Route.openapi.requestBody.content[contentType];
+                    if (!content?.schema) {
+                        errors.push(`${routePath}: openapi.requestBody.content['${contentType}'] missing 'schema' property`);
+                    }
+                }
+            }
+        }
+    }
+    
+    return errors;
 }
 
 // Export validation types and payment-enabled route interface for use in route definitions
@@ -1255,26 +1463,70 @@ export type { PaymentEnabledRoute };
 
 /**
  * Apply payment protection to an array of routes
- * Reads payment configuration directly from each route's properties
+ * Validates ALL routes first and collects ALL errors before throwing
+ * This gives developers a complete list of issues to fix instead of one-by-one
  */
 export function applyPaymentProtection(routes: Route[]): Route[] {
+    if (!Array.isArray(routes)) {
+        throw new Error('routes must be an array');
+    }
+    
+    // Validate ALL routes first, collect ALL errors
+    const allErrors: string[] = [];
+    const routesByPath = new Map<string, string[]>(); // Group errors by route path for better readability
+    
+    for (const route of routes) {
+        const errors = validateX402Route(route);
+        if (errors.length > 0) {
+            allErrors.push(...errors);
+            // Group errors by route path for better error messages
+            const routePath = route.path || '[route without path]';
+            const existing = routesByPath.get(routePath) || [];
+            routesByPath.set(routePath, [...existing, ...errors]);
+        }
+    }
+    
+    // If any errors, throw with complete, organized list
+    if (allErrors.length > 0) {
+        let errorMessage = `\n❌ x402 Route Configuration Errors (${allErrors.length} error${allErrors.length > 1 ? 's' : ''} found):\n\n`;
+        
+        // Group by route path for readability
+        if (routesByPath.size > 0) {
+            for (const [path, routeErrors] of routesByPath.entries()) {
+                errorMessage += `  Route: ${path}\n`;
+                for (const error of routeErrors) {
+                    // Remove path prefix since we're already showing the route
+                    const errorWithoutPath = error.includes(': ') ? error.split(': ').slice(1).join(': ') : error;
+                    errorMessage += `    • ${errorWithoutPath}\n`;
+                }
+                errorMessage += '\n';
+            }
+        } else {
+            // Fallback if grouping didn't work
+            for (const error of allErrors) {
+                errorMessage += `  • ${error}\n`;
+            }
+        }
+        
+        errorMessage += '\nPlease fix all errors above and try again.\n';
+        
+        throw new Error(errorMessage);
+    }
+    
+    // All routes valid - apply payment wrapper to x402 routes
     return routes.map(route => {
-        const paymentRoute = route as PaymentEnabledRoute;
-
-        // Apply payment wrapper to handler if x402 is enabled
-        if (paymentRoute.x402 && paymentRoute.price) {
-            console.log('Applying payment protection to:', paymentRoute.path, {
-                price: paymentRoute.price,
-                networks: paymentRoute.supportedNetworks
+        const x402Route = route as PaymentEnabledRoute;
+        if (x402Route.x402) {
+            console.log('Applying payment protection to:', x402Route.path, {
+                priceInCents: x402Route.x402.priceInCents,
+                paymentConfigs: x402Route.x402.paymentConfigs || ['base_usdc']
             });
 
             return {
                 ...route,
-                handler: createPaymentAwareHandler(paymentRoute)
+                handler: createPaymentAwareHandler(x402Route)
             };
         }
-
-        // Pass through routes without x402 enabled
         return route;
     });
 }

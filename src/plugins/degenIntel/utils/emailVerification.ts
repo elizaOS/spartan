@@ -31,7 +31,7 @@ export async function verifyUserRegistration(runtime: IAgentRuntime, email: stri
 
         return { isRegistered: false };
     } catch (error) {
-        logger.error('Error verifying user registration:', error);
+        logger.error('Error verifying user registration:', error as any);
         return { isRegistered: false };
     }
 }
@@ -76,7 +76,7 @@ export async function sendVerificationEmail(email: string, token: string): Promi
         logger.info('Verification email sent:', info.envelope);
         return true;
     } catch (error) {
-        logger.error('Error sending verification email:', error);
+        logger.error('Error sending verification email:', error as any);
         return false;
     }
 }
@@ -121,7 +121,7 @@ export async function createOrUpdateVerificationToken(
 
         return { success: true, token };
     } catch (error) {
-        logger.error('Error creating verification token:', error);
+        logger.error('Error creating verification token:', error as any);
         return { success: false, error: 'Failed to create verification token' };
     }
 }
@@ -179,7 +179,7 @@ export async function verifyEmailToken(
 
         return { success: true, authToken };
     } catch (error) {
-        logger.error('Error verifying email token:', error);
+        logger.error('Error verifying email token:', error as any);
         return { success: false, error: 'Failed to verify token' };
     }
 } 

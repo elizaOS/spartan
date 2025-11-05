@@ -23,6 +23,7 @@ export type OutputSchema = {
         type: "http";
         method: "GET" | "POST";
         bodyType?: "json" | "form-data" | "multipart-form-data" | "text" | "binary";
+        pathParams?: Record<string, FieldDef>;
         queryParams?: Record<string, FieldDef>;
         bodyFields?: Record<string, FieldDef>;
         headerFields?: Record<string, FieldDef>;

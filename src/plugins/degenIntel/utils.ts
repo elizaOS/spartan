@@ -45,7 +45,7 @@ export async function sendVerificationEmail(email: string, token: string): Promi
     logger.info('Verification email sent:', info.envelope);
     return true;
   } catch (error) {
-    logger.error('Error sending verification email:', error);
+    logger.error('Error sending verification email:', error as any);
     return false;
   }
 }
@@ -111,7 +111,7 @@ export async function verifyUserRegistration(runtime: IAgentRuntime, email: stri
 
     return { isRegistered: false };
   } catch (error) {
-    logger.error('Error verifying user registration:', error);
+    logger.error('Error verifying user registration:', error as any);
     return { isRegistered: false };
   }
 }
@@ -158,7 +158,7 @@ export async function createOrUpdateVerificationToken(
 
     return { success: true, token };
   } catch (error) {
-    logger.error('Error creating verification token:', error);
+    logger.error('Error creating verification token:', error as any);
     return { success: false, error: 'Failed to create verification token' };
   }
 }
@@ -215,7 +215,7 @@ export async function verifyEmailToken(
 
     return { success: true, authToken };
   } catch (error) {
-    logger.error('Error verifying email token:', error);
+    logger.error('Error verifying email token:', error as any);
     return { success: false, error: 'Failed to verify token' };
   }
 }
@@ -248,7 +248,7 @@ export async function validateAuthToken(
 
     return { valid: true, userEntityId };
   } catch (error) {
-    logger.error('Error validating auth token:', error);
+    logger.error('Error validating auth token:', error as any);
     return { valid: false, error: 'Failed to validate auth token' };
   }
 }
@@ -454,7 +454,7 @@ export async function getTokenBalanceFromServices(runtime: IAgentRuntime, wallet
 
 export async function getSwapQuoteFromServices(runtime: IAgentRuntime, params: any) {
   try {
-    const jupiterApiUrl = runtime.getSetting("JUPITER_API_URL") || "https://quote-api.jup.ag/v6";
+    const jupiterApiUrl = (runtime.getSetting("JUPITER_API_URL") as string) || "https://quote-api.jup.ag/v6";
 
     const solanaService = runtime.getService('chain_solana') as any;
     if (!solanaService) {
@@ -540,7 +540,7 @@ export async function chatWithSpartanAI(runtime: IAgentRuntime, message: string,
 async function createOrGetSession(runtime: IAgentRuntime, userId: string): Promise<string> {
   try {
     // Try to create a new session
-    const response = await fetch(`${runtime.getSetting('API_BASE_URL') || 'http://206.81.100.168:3000'}/api/messaging/sessions`, {
+    const response = await fetch(`${(runtime.getSetting('API_BASE_URL') as string) || 'http://206.81.100.168:3000'}/api/messaging/sessions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -574,7 +574,7 @@ async function sendSessionMessage(runtime: IAgentRuntime, sessionId: string, mes
     const fullMessage = contextString ? `${contextString}\n\nUser: ${message}` : message;
 
     const response = await fetch(
-      `${runtime.getSetting('API_BASE_URL') || 'http://206.81.100.168:3000'}/api/messaging/sessions/${sessionId}/messages`,
+      `${(runtime.getSetting('API_BASE_URL') as string) || 'http://206.81.100.168:3000'}/api/messaging/sessions/${sessionId}/messages`,
       {
         method: 'POST',
         headers: {
@@ -713,7 +713,7 @@ export async function buildChatContextFromServices(runtime: IAgentRuntime) {
     };
 
   } catch (error) {
-    logger.warn("Failed to build chat context from services:", error);
+    logger.warn("Failed to build chat context from services:", error as any);
   }
 
   return context;
