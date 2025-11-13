@@ -8,6 +8,7 @@ import {
   logger,
   parseJSONObjectFromText,
   createUniqueUuid,
+  type ServiceTypeName,
 } from '@elizaos/core';
 //import { interface_users_ByIds } from './interfaces/int_users'
 //import { interface_accounts_ByIds } from './interfaces/int_accounts'
@@ -439,30 +440,65 @@ export function extractBase64Strings(input: string): string[] {
   });
 }
 
+type SolanaLikeService = {
+  getTokenAccountsByKeypair: (walletAddress: PublicKey) => Promise<TokenAccount[]>;
+  parseTokenAccounts: (heldTokens: TokenAccount[]) => Promise<Record<string, ParsedTokenAccount>>;
+};
+
+const SOLANA_SERVICE_NAME = 'chain_solana' as ServiceTypeName;
+
 export async function walletContainsMinimum(runtime: IAgentRuntime, pubKey: string, ca: string, amount: number): Promise<boolean | null> {
   // usually validate on getting shapes for setstrategy
   //console.trace('walletContainsMinimum')
-  console.log('walletContainsMinimum', pubKey)
+  console.log('walletContainsMinimum', pubKey);
   try {
-    const solanaService = runtime.getService('chain_solana') as any;
-    const pubKeyObj = new PublicKey(pubKey)
-    const heldTokens = await solanaService.getTokenAccountsByKeypair(pubKeyObj)
-    const tokens = await solanaService.parseTokenAccounts(heldTokens)
-    //if (!tokens.length) return false
-    const t = tokens[ca]
-    if (!t) {
-      console.warn('no', ca, 'held in', pubKey, tokens)
-      return false
+    let solanaService = runtime.getService(SOLANA_SERVICE_NAME) as SolanaLikeService | null;
+
+    if (!solanaService) {
+      try {
+        await runtime.getServiceLoadPromise(SOLANA_SERVICE_NAME);
+        solanaService = runtime.getService(SOLANA_SERVICE_NAME) as SolanaLikeService | null;
+      } catch (loadError) {
+        runtime.logger.warn({ pubKey, cause: loadError instanceof Error ? loadError.message : String(loadError) }, 'Unable to load chain_solana service');
+        return null;
+      }
     }
-    const bal = parseFloat(t.balanceUi)
+
+    if (!solanaService) {
+      runtime.logger.warn({ pubKey }, 'Solana service unavailable for walletContainsMinimum');
+      return null;
+    }
+
+    const pubKeyObj = new PublicKey(pubKey);
+    const heldTokens = await solanaService.getTokenAccountsByKeypair(pubKeyObj);
+
+    if (!heldTokens || heldTokens.length === 0) {
+      runtime.logger.debug({ pubKey }, 'No token accounts returned from Solana service');
+      return false;
+    }
+
+    const tokens = await solanaService.parseTokenAccounts(heldTokens);
+    const tokenEntry = tokens[ca];
+
+    if (!tokenEntry) {
+      console.warn('no', ca, 'held in', pubKey, tokens);
+      return false;
+    }
+
+    const bal = typeof tokenEntry.balanceUi === 'number' ? tokenEntry.balanceUi : Number(tokenEntry.balanceUi ?? 0);
+    if (Number.isNaN(bal)) {
+      runtime.logger.warn({ pubKey, ca }, 'Invalid balance value returned from Solana service');
+      return null;
+    }
+
     if (bal < amount) {
-      console.log('wallet only has', bal)
-      return false
+      console.log('wallet only has', bal);
+      return false;
     }
-    return true
+    return true;
   } catch (e) {
-    console.error('err', e)
-    return null
+    console.error('err', e);
+    return null;
   }
 }
 
