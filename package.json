@@ -48,6 +48,7 @@
     "@elizaos/plugin-evm": "workspace:*",
     "@elizaos/plugin-farcaster": "workspace:*",
     "@elizaos/plugin-groq": "latest",
+    "@elizaos/plugin-jupiter": "workspace:*",
     "@elizaos/plugin-knowledge": "workspace:*",
     "@elizaos/plugin-local-ai": "latest",
     "@elizaos/plugin-memory": "^1.0.2",
