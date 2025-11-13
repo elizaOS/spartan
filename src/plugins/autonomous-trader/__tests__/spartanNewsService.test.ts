@@ -80,6 +80,72 @@ describe('SpartanNewsService', () => {
     expect(tableName).toBe('documents');
     expect(memoryArg.content?.metadata?.type).toBe('spartan-news');
   });
+
+  it('supports both v2 and legacy cache formats', async () => {
+    // Test v2 format (used by strategy service)
+    const getCacheMock = vi.fn().mockImplementation(async (key: string) => {
+      if (key === 'tokens_v2_solana') {
+        return {
+          data: sampleTokens,
+          setAt: Date.now(),
+        };
+      }
+      return null;
+    });
+
+    runtime = createMockRuntime({
+      getCache: getCacheMock,
+      getSetting: vi.fn().mockReturnValue(undefined),
+      getService: vi.fn().mockReturnValue({
+        getTokenInfo: vi.fn().mockResolvedValue({ priceChange24h: 5 }),
+        getTokenMarketData: vi.fn().mockResolvedValue({ price: 180, volume24h: 1000000 }),
+        getTokenSymbol: vi.fn().mockResolvedValue('SOL'),
+      }),
+    });
+
+    // Use the base SpartanNewsService to test cache behavior
+    const service = new SpartanNewsService(runtime);
+    const article = await service.generateArticle({
+      timeFrame: '24h',
+      category: 'trending',
+      limit: 3,
+    });
+
+    expect(article).not.toBeNull();
+    expect(getCacheMock).toHaveBeenCalledWith('tokens_v2_solana');
+
+    // Test legacy format fallback
+    const getCacheMockLegacy = vi.fn().mockImplementation(async (key: string) => {
+      if (key === 'tokens_v2_solana') {
+        return null; // v2 not available
+      }
+      if (key === 'tokens_solana') {
+        return sampleTokens; // legacy format
+      }
+      return null;
+    });
+
+    runtime = createMockRuntime({
+      getCache: getCacheMockLegacy,
+      getSetting: vi.fn().mockReturnValue(undefined),
+      getService: vi.fn().mockReturnValue({
+        getTokenInfo: vi.fn().mockResolvedValue({ priceChange24h: 5 }),
+        getTokenMarketData: vi.fn().mockResolvedValue({ price: 180, volume24h: 1000000 }),
+        getTokenSymbol: vi.fn().mockResolvedValue('SOL'),
+      }),
+    });
+
+    const serviceLegacy = new SpartanNewsService(runtime);
+    const articleLegacy = await serviceLegacy.generateArticle({
+      timeFrame: '24h',
+      category: 'trending',
+      limit: 3,
+    });
+
+    expect(articleLegacy).not.toBeNull();
+    expect(getCacheMockLegacy).toHaveBeenCalledWith('tokens_v2_solana');
+    expect(getCacheMockLegacy).toHaveBeenCalledWith('tokens_solana');
+  });
 });
 
 
