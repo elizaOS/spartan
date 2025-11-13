@@ -69,9 +69,36 @@ type ServiceWithRegistry = {
   service: Service;
 };
 
+export type ChainAddressExtractionToken = {
+  address: string;
+  type?: string;
+};
+
+interface AddressExtractionOptions {
+  includeChains?: string[];
+  checkCurve?: boolean;
+  includeTypes?: boolean;
+  filterTokenOnly?: boolean;
+}
+
+interface AddressExtractionOptionsNormalized {
+  includeChains: Set<string>;
+  checkCurve: boolean;
+  includeTypes: boolean;
+  filterTokenOnly: boolean;
+}
+
+export type ChainAddressExtractionResult = {
+  chain: string;
+  addresses: string[];
+  addressesByType: Record<string, string[]>;
+  tokens: ChainAddressExtractionToken[];
+};
+
 export class TradeChainService extends Service {
   private isRunning = false;
   private registry: Record<number, RegistryEntry> = {};
+  private readonly tokenTypeMatch = ['token', 'mint', 'coin'];
 
   static serviceType = 'INTEL_CHAIN';
   capabilityDescription = 'The agent is able to trade with blockchains';
@@ -81,6 +108,243 @@ export class TradeChainService extends Service {
   constructor(public runtime: IAgentRuntime) {
     super(runtime); // sets this.runtime
     this.registry = {};
+  }
+
+  private normalizeChain(chain?: string): string {
+    return (chain || 'unknown').toLowerCase();
+  }
+
+  private normalizeExtractionOptions(
+    raw: AddressExtractionOptions = {}
+  ): AddressExtractionOptionsNormalized {
+    const includeChains = Array.isArray(raw.includeChains)
+      ? new Set(raw.includeChains.map((chain) => chain.toLowerCase()))
+      : null;
+
+    const filterTokenOnly = raw.filterTokenOnly ?? false;
+    const includeTypes = raw.includeTypes ?? filterTokenOnly;
+
+    return {
+      includeChains: includeChains ?? new Set(Object.values(ELIZAOS_SUPPORTED_CHAINS)),
+      checkCurve: Boolean(raw.checkCurve),
+      includeTypes,
+      filterTokenOnly,
+    };
+  }
+
+  private isTokenType(type?: string): boolean {
+    if (typeof type !== 'string') {
+      return false;
+    }
+    const normalized = type.toLowerCase();
+    return this.tokenTypeMatch.some((candidate) => normalized.includes(candidate));
+  }
+
+  private getTypeKey(type?: string): string {
+    if (!type || !type.trim()) {
+      return '__unknown';
+    }
+    return type.trim().toLowerCase();
+  }
+
+  private async resolveAddressTypes(
+    chainService: IChainService,
+    addresses: string[],
+    chainName: string
+  ): Promise<Record<string, string>> {
+    let addressTypes: Record<string, string> = {};
+
+    if (typeof chainService.getAddressesTypes === 'function') {
+      try {
+        const result = await chainService.getAddressesTypes(addresses);
+        if (result && typeof result === 'object') {
+          addressTypes = result;
+        }
+      } catch (error) {
+        logger.debug(
+          `TradeChainService: getAddressesTypes failed for ${chainName}: ${String(error)}`
+        );
+      }
+    }
+
+    if (
+      (!addressTypes || Object.keys(addressTypes).length === 0) &&
+      typeof (chainService as any).getAddressType === 'function'
+    ) {
+      const fallbackTypes: Record<string, string> = {};
+      await Promise.all(
+        addresses.map(async (address) => {
+          try {
+            const type = await (chainService as any).getAddressType(address);
+            if (type) {
+              fallbackTypes[address] = type;
+            }
+          } catch (error) {
+            logger.debug(
+              `TradeChainService: getAddressType failed for ${address} on ${chainName}: ${String(error)}`
+            );
+          }
+        })
+      );
+
+      if (Object.keys(fallbackTypes).length > 0) {
+        addressTypes = fallbackTypes;
+      }
+    }
+
+    return addressTypes;
+  }
+
+  private async detectAddressesForChain(
+    entry: ServiceWithRegistry,
+    text: string,
+    options: AddressExtractionOptionsNormalized
+  ): Promise<ChainAddressExtractionResult> {
+    const chain = this.normalizeChain(entry.registry?.chain);
+    const chainService = entry.service as IChainService;
+    const detectFn = (chainService as any).detectPubkeysFromString;
+
+    if (!options.includeChains.has(chain)) {
+      return { chain, addresses: [], addressesByType: {}, tokens: [] };
+    }
+
+    if (typeof detectFn !== 'function') {
+      logger.debug(`TradeChainService: ${chain} does not support detectPubkeysFromString`);
+      return { chain, addresses: [], addressesByType: {}, tokens: [] };
+    }
+
+    let addresses: unknown;
+    try {
+      addresses = await detectFn.call(chainService, text, options.checkCurve);
+    } catch (error) {
+      logger.debug(
+        `TradeChainService: detectPubkeysFromString failed for ${chain}: ${String(error)}`
+      );
+      return { chain, addresses: [], addressesByType: {}, tokens: [] };
+    }
+
+    const addressList = Array.isArray(addresses)
+      ? addresses.filter((addr): addr is string => typeof addr === 'string' && addr.length > 0)
+      : [];
+
+    if (addressList.length === 0) {
+      return { chain, addresses: [], addressesByType: {}, tokens: [] };
+    }
+
+    let addressTypes: Record<string, string> = {};
+    if (options.includeTypes) {
+      addressTypes = await this.resolveAddressTypes(chainService, addressList, chain);
+    }
+
+    const addressesByType: Record<string, string[]> = {};
+    const appendToType = (typeKey: string, address: string) => {
+      if (!addressesByType[typeKey]) {
+        addressesByType[typeKey] = [];
+      }
+      if (!addressesByType[typeKey].includes(address)) {
+        addressesByType[typeKey].push(address);
+      }
+    };
+
+    if (options.includeTypes) {
+      addressList.forEach((address) => {
+        const typeKey = this.getTypeKey(addressTypes[address]);
+        appendToType(typeKey, address);
+      });
+      if (!addressesByType['__all']) {
+        addressesByType['__all'] = [...addressList];
+      }
+    } else {
+      addressList.forEach((address) => appendToType('__all', address));
+    }
+
+    const tokens = options.filterTokenOnly
+      ? addressList
+        .filter((address) => this.isTokenType(addressTypes?.[address]))
+        .map((address) => ({ address, type: addressTypes[address] }))
+      : [];
+
+    return {
+      chain,
+      addresses: addressList,
+      addressesByType,
+      tokens,
+    };
+  }
+
+  async extractAddresses(
+    text: string,
+    rawOptions: AddressExtractionOptions = {}
+  ): Promise<ChainAddressExtractionResult[]> {
+    const options = this.normalizeExtractionOptions(rawOptions);
+    const services = this.forEachRegWithReg('service');
+
+    const results = await Promise.all(
+      services.map((entry) => this.detectAddressesForChain(entry, text, options))
+    );
+
+    return this.mergeExtractionResults(results, options);
+  }
+
+  private mergeExtractionResults(
+    results: ChainAddressExtractionResult[],
+    options: AddressExtractionOptionsNormalized
+  ): ChainAddressExtractionResult[] {
+    const aggregated = new Map<
+      string,
+      {
+        addresses: Set<string>;
+        types: Map<string, Set<string>>;
+        tokens: Map<string, ChainAddressExtractionToken>;
+      }
+    >();
+
+    for (const result of results) {
+      if (!options.includeChains.has(result.chain)) continue;
+
+      if (!aggregated.has(result.chain)) {
+        aggregated.set(result.chain, {
+          addresses: new Set(),
+          types: new Map(),
+          tokens: new Map(),
+        });
+      }
+
+      const entry = aggregated.get(result.chain)!;
+      result.addresses.forEach((address) => entry.addresses.add(address));
+
+      Object.entries(result.addressesByType).forEach(([typeKey, addresses]) => {
+        const normalizedType =
+          options.includeTypes && typeKey !== '__all' ? typeKey : '__all';
+        if (!entry.types.has(normalizedType)) {
+          entry.types.set(normalizedType, new Set());
+        }
+        const typeSet = entry.types.get(normalizedType)!;
+        addresses.forEach((address) => typeSet.add(address));
+      });
+
+      if (options.filterTokenOnly) {
+        result.tokens.forEach((token) => entry.tokens.set(token.address, token));
+      }
+    }
+
+    return Array.from(aggregated.entries()).map(([chain, data]) => {
+      const addressesByType: Record<string, string[]> = {};
+      data.types.forEach((set, typeKey) => {
+        addressesByType[typeKey] = Array.from(set);
+      });
+
+      if (!addressesByType['__all']) {
+        addressesByType['__all'] = Array.from(data.addresses);
+      }
+
+      return {
+        chain,
+        addresses: Array.from(data.addresses),
+        addressesByType,
+        tokens: options.filterTokenOnly ? Array.from(data.tokens.values()) : [],
+      };
+    });
   }
 
   /**
@@ -209,25 +473,41 @@ export class TradeChainService extends Service {
   // probably don't want checkcurve here, it's a solana thing
   // options for caching?
   async detectAddressesFromString(string: string, checkCurve = false) {
-    // include which chain
-    const services = this.forEachRegWithReg('service')
-    return await Promise.all(services.map(async i => {
-      // i.registry.name i.registry.chain
-      // birdeye?
-      if (!(i.service as any).detectPubkeysFromString) {
-        console.log(i.registry.chain, 'doesnt support detectPubkeysFromString')
-        return {
-          chain: i.registry.chain,
-          addresses: [],
-        }
-      }
-      const result = (i.service as any).detectPubkeysFromString(string, checkCurve)
-      return {
-        chain: i.registry.chain,
-        addresses: result,
-      }
-    }))
-    // but maybe the same address is available on many chains if they use the same hash/curve
+    const results = await this.extractAddresses(string, {
+      checkCurve,
+      includeTypes: false,
+      filterTokenOnly: false,
+    });
+
+    return results.map((result) => ({
+      chain: result.chain,
+      addresses: result.addresses,
+    }));
+  }
+
+  async detectTokenContractsFromString(
+    text: string,
+    options: { checkCurve?: boolean } = {}
+  ): Promise<
+    Array<{
+      chain: string;
+      addresses: string[];
+      addressesByType: Record<string, string[]>;
+      tokens: Array<{ address: string; type?: string }>;
+    }>
+  > {
+    const results = await this.extractAddresses(text, {
+      checkCurve: options.checkCurve,
+      includeTypes: true,
+      filterTokenOnly: true,
+    });
+
+    return results.map((result) => ({
+      chain: result.chain,
+      addresses: result.addresses,
+      addressesByType: result.addressesByType,
+      tokens: result.tokens,
+    }));
   }
 
   async detectPubkeysFromString(string: string) {
