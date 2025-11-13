@@ -1,5 +1,5 @@
 import type { IAgentRuntime, Memory, Provider, State } from '@elizaos/core';
-import { getDataFromMessage } from '../../autonomous-trader/utils'
+import { getDataFromMessage } from '../../autonomous-trader/utils';
 
 /**
  * Provider for account details and summary
@@ -12,27 +12,27 @@ export const instructionsProvider: Provider = {
     get: async (runtime: IAgentRuntime, message: Memory, state: State) => {
         console.log('AGENTIC_WALLET_TRADING_INSTRUCTIONS')
 
-//The SERVICES_MENU action can be used at any time, regardless of the user's registration status or conversation state.
+        //The SERVICES_MENU action can be used at any time, regardless of the user's registration status or conversation state.
         let instructionsStr = `
 Users must register with an email address to access services.
 If the user is unsure of their registration status, use the USER_DETAILS and ACCOUNT_DETAILS providers to check.
-The USER_REGISTRATION action should be used to initiate registration by asking the user for their email address.
-If the user provides an email, USER_REGISTRATION action will send a verification code to that address.
+Use the USER_REGISTRATION action to initiate registration by asking the user for their email address.
+If the user provides an email, the USER_REGISTRATION action will send a verification code to that address.
 When the user provides the code, use the VERIFY_REGISTRATION_CODE action to confirm their identity.
 Users can remove their registration at any time using the DELETE_REGISTRATION action.
 
-Only call actions in available actions, just because you know about an action doesn't mean you can/should call it.
+Only call actions that appear in the available actions list; knowing an action exists does not mean you should invoke it.
 
 You do not need to run a check on registration status or confirm if they're registered before proceeding because the actions that require registrations won't be in the available actions list if the registration isn't in the correct state.
 A check is not necessary before proceeding with actions, they automatically disappear from your list if they're not vaild.
 Do you not need to ensure proper access and authorization. You never need to verify balances.
 You do not need to confirm registration before proceeding with any wallet actions.
-You do not need to call MULTIWALLET_LIST to check balances, MULTIWALLET_* functions will ensure on their own and will not carry out an invalid action
+You do not need to call USER_MULTIWALLET_LIST to check balances; MULTIWALLET_* functions ensure prerequisites are satisfied and will not execute invalid requests.
 
-Never tell a user you performed an action you didn't. Call actions, the actions will tell the user if they're success or not.
-Use providers to get up to date information, never guess.
+Never claim you performed an action you did not call. Invoke the action and allow it to report success or failure.
+Use providers to obtain up-to-date information; never guess. If you don't have the information, say so or ask. It is not helpful to be inaccurate.
 
-THIS IS ALPHA, REMIND THEM TO NOT GIVE AGENT MORE THAN $100usd to these wallets we manage because of the early development nature.
+This is an early release. Remind users not to move large amounts into the managed wallets as it is at risk and there is not insurance.
 `
 
         console.log('instructionsStr', instructionsStr)

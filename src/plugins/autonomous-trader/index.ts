@@ -1,63 +1,46 @@
-import type { Plugin, IAgentRuntime } from '@elizaos/core';
+import type { Plugin, IAgentRuntime, ServiceTypeName } from '@elizaos/core';
 
 import { verifyHolder } from "./actions/act_holder_verify";
-//import { verifyDiscord } from "./actions/act_discord_verify";
-// FIXME: remove/change holder address
-
-// convert to providers
-//import { servicesMenu } from "./actions/act_menu";
-//import { actionFrequentlyAsked } from "./actions/act_faq";
-//import { actionLinks } from "./actions/act_links";
-//import spartanNews from "./actions/act_spartan_news";
-
-// odi utility
-//import { devFix } from "./actions/devfix";
+import spartanNews from "./actions/act_spartan_news";
 
 // account provider had this
 import { holderProvider } from "./providers/holder";
 import { instructionsProvider } from "./providers/instructions";
-//import { newsProvider } from "./providers/spartan_news";
 import { linksProvider } from "./providers/links";
+import { newsProvider } from "./providers/spartan_news";
+import { SpartanNewsService } from "./services/spartanNewsService";
+import { newsRoutes } from "./routes/news";
 
 export const autonomousTraderPlugin: Plugin = {
   name: 'autonomous-trader',
   description: 'Spartan Autonomous trading agent plugin',
   evaluators: [],
-  // newsProvider,
-  providers: [instructionsProvider, holderProvider, linksProvider],
-  // spartanNews
+  providers: [instructionsProvider, holderProvider, linksProvider, newsProvider],
   actions: [
     verifyHolder,
-    //verifyDiscord
+    spartanNews,
   ],
-  services: [],
-  init: async (_, runtime: IAgentRuntime) => {
-    //console.log('autonomous-trader init');
+  services: [SpartanNewsService],
+  routes: newsRoutes,
+  init: async (_config, runtime: IAgentRuntime) => {
+    const fifteenMinutes = 15 * 60 * 1000;
 
-    /*
-    //
-    // MARK: tasks init
-    //
-
-    const worldId = runtime.agentId; // this is global data for the agent
-    // wait for this.adapter is available
-    const taskReadyPromise = new Promise(resolve => {
-      runtime.initPromise.then(async () => {
-
-        // first, get all tasks with all tags and delete them
-        const tasks = await runtime.getTasks({
-          tags: ['queue', 'repeat', 'autonomous-trader'],
-        });
-        for (const task of tasks) {
-          if (task.id) {
-            await runtime.deleteTask(task.id);
-          }
+    runtime
+      .getServiceLoadPromise(SpartanNewsService.serviceType as ServiceTypeName)
+      .then(async () => {
+        const service = runtime.getService(
+          SpartanNewsService.serviceType as ServiceTypeName,
+        ) as SpartanNewsService | undefined;
+        if (!service) {
+          runtime.logger.warn('[autonomous-trader] SpartanNewsService unavailable during init');
+          return;
         }
-        resolve(void 0)
+        await service.ensureNewsTask(fifteenMinutes);
       })
-    })
-    */
-  }
+      .catch((error) => {
+        runtime.logger.error('[autonomous-trader] Failed to schedule Spartan news task', error);
+      });
+  },
 };
 
 export default autonomousTraderPlugin;

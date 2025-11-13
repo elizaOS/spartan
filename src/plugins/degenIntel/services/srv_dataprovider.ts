@@ -123,7 +123,8 @@ export class TradeDataProviderService extends Service {
 
     // need to get autotrader service
 
-    const positions = await this.positionIntService?.list()
+    // Only get open positions to reduce list size
+    const positions = await this.positionIntService?.list({ openOnly: true })
     if (!positions) {
       console.log('DP:checkPositions - no positions available');
       return;
@@ -133,7 +134,7 @@ export class TradeDataProviderService extends Service {
     const ca2Positions: Record<string, any[]> = {}
     const solanaWallets: Record<string, boolean> = {}
     let openPositions = 0
-    console.log('DP:checkPositions - reviewing', positions.length, 'positions');
+    console.log('DP:checkPositions - reviewing', positions.length, 'open positions');
     for (const p of positions) {
       const ca = p.position.token
 
@@ -145,9 +146,6 @@ export class TradeDataProviderService extends Service {
       ) {
         continue
       }
-
-      // don't need to care about closed positions atm
-      if (p.position.close) continue
 
       const amt = Math.round(p.position.tokenAmount || (p.position.entryPrice * p.position.amount))
       if (!amt) {
@@ -200,9 +198,21 @@ export class TradeDataProviderService extends Service {
 
     // we're going to be tracking less tokens than the number of wallets we have
     for (const ca of tokens) {
-      const mintObj = new PublicKey(ca)
-      const decimals = await this.solanaService.getDecimal(mintObj)
-      const tokenBalances = await this.solanaService.getTokenBalanceForWallets(mintObj, Object.keys(solanaWallets))
+      // Use chain service's unified interface with CAIP format
+      const caipAssetId = `solana:mainnet/spl-token:${ca}`
+      const walletAddresses = Object.keys(solanaWallets)
+
+      // Get balances through chain service
+      const balances = await this.chainService.getBalances(walletAddresses, [caipAssetId])
+
+      // Convert balance results to a map for easy lookup
+      const tokenBalances: Record<string, number> = {}
+      for (const balance of balances) {
+        if (balance.caipAssetId === caipAssetId) {
+          tokenBalances[balance.address] = balance.balance
+        }
+      }
+
       //console.log(ca, 'tokenBalances', tokenBalances)
       // adjust positions accordingly to balances
       const positions = ca2Positions[ca]
@@ -211,10 +221,13 @@ export class TradeDataProviderService extends Service {
         // find wallet
         const wa = p.position.publicKey
         // how much are we supposed to be holding...
-        // tokenBalances is going to be in UI scale
+        // tokenBalances is already in UI scale from chain service
         //console.log(wa, 'p', p.position)
 
-        const actualUi = tokenBalances[wa]
+        const actualUi = tokenBalances[wa] || 0
+        // Get decimals from balance metadata if available, or fetch separately
+        const balanceInfo = balances.find(b => b.address === wa && b.caipAssetId === caipAssetId)
+        const decimals = balanceInfo?.decimals || 9 // fallback to 9 if not available
         const claimUi = p.position.tokenAmount / (10 ** decimals)
         if (claimUi > actualUi) {
           console.log('Oh', wa, 'is supposed to have at least', claimUi, 'but we have', actualUi, 'closing position')
@@ -576,7 +589,8 @@ export class TradeDataProviderService extends Service {
     const results = await Promise.all(services.map((service: any) => service.getTrendingTokens(chains, { notOlderThan: inMs10Mins })))
     const result = results[0] // only need one
 
-    console.log('getTrendingWSupply result', result)
+    // result.solana[]
+    //console.log('getTrendingWSupply result', result)
     // loop on results and check?
     // INTEL_CHAINS get supply?
     //const supplies = await this.chainService.getSupply(ChainsWCAs)

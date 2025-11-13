@@ -24,24 +24,87 @@ export const walletImportAction: Action = {
   validate: async (runtime: IAgentRuntime, message: Memory) => {
     //console.log('WALLET_IMPORT validate')
 
+    runtime.logger.debug(
+      `WALLET_IMPORT validate start messageId=${message.id ?? 'unknown'} roomId=${message.roomId}`
+    );
+
     const traderChainService = runtime.getService('INTEL_CHAIN') as any;
-    if (!traderChainService) return false
+    if (!traderChainService) {
+      runtime.logger.debug('WALLET_IMPORT validate skipped: INTEL_CHAIN service missing');
+      return false;
+    }
     const traderStrategyService = runtime.getService('TRADER_STRATEGY') as any;
-    if (!traderStrategyService) return false
+    if (!traderStrategyService) {
+      runtime.logger.debug('WALLET_IMPORT validate skipped: TRADER_STRATEGY service missing');
+      return false;
+    }
     const intAccountService = runtime.getService('AUTONOMOUS_TRADER_INTERFACE_ACCOUNTS') as any;
-    if (!intAccountService) return false
+    if (!intAccountService) {
+      runtime.logger.debug('WALLET_IMPORT validate skipped: AUTONOMOUS_TRADER_INTERFACE_ACCOUNTS service missing');
+      return false;
+    }
 
     if (!await HasEntityIdFromMessage(runtime, message)) {
-      console.log('WALLET_IMPORT validate - author not found')
-      return false
+      runtime.logger.debug(
+        `WALLET_IMPORT validate skipped: author entity not found messageId=${message.id ?? 'unknown'}`
+      );
+      return false;
     }
 
     const solanaService = runtime.getService('chain_solana') as any;
-    const keys = solanaService.detectPrivateKeysFromString(message.content.text)
-    if (!keys.length) return false;
+    if (!solanaService) {
+      runtime.logger.debug('WALLET_IMPORT validate skipped: chain_solana service missing');
+      return false;
+    }
 
-    const account = await getAccountFromMessage(runtime, message)
-    if (!account) return false; // require account
+    const messageText = message.content.text ?? '';
+    runtime.logger.debug(
+      `WALLET_IMPORT validate analyzing message text length=${messageText.length} sample=${messageText.slice(0, 80)}`
+    );
+
+    let detectedKeysByChain: Array<{ chain: string; keys: any[] }> = [];
+    try {
+      detectedKeysByChain = await traderChainService.detectPrivateKeysFromString(messageText);
+      runtime.logger.debug(
+        `WALLET_IMPORT validate chain detection results chains=${detectedKeysByChain.length}`
+      );
+    } catch (error) {
+      const err = error as Error;
+      runtime.logger.error(
+        `WALLET_IMPORT validate failed to run chain detection: ${err.message}`
+      );
+    }
+
+    const solanaDetected = detectedKeysByChain.find(
+      result => result.chain?.toLowerCase() === 'solana'
+    );
+    const solanaKeys = solanaDetected?.keys ?? [];
+
+    if (!solanaKeys.length) {
+      runtime.logger.debug('WALLET_IMPORT validate falling back to direct Solana detection');
+      const keys = solanaService.detectPrivateKeysFromString(messageText);
+      runtime.logger.debug(`WALLET_IMPORT validate solana fallback detected keys count=${keys.length}`);
+      if (!keys.length) {
+        runtime.logger.debug('WALLET_IMPORT validate skipped: no private keys detected');
+        return false;
+      }
+    } else {
+      runtime.logger.debug(
+        `WALLET_IMPORT validate solana keys detected via chain service count=${solanaKeys.length}`
+      );
+    }
+
+    const account = await getAccountFromMessage(runtime, message);
+    if (!account) {
+      runtime.logger.debug(
+        `WALLET_IMPORT validate skipped: account not resolved messageId=${message.id ?? 'unknown'}`
+      );
+      return false; // require account
+    }
+
+    runtime.logger.debug(
+      `WALLET_IMPORT validate passed messageId=${message.id ?? 'unknown'} accountId=${account?.entityId ?? 'unknown'}`
+    );
 
     return true
   },
@@ -85,9 +148,41 @@ export const walletImportAction: Action = {
     console.log('chains', chains)
 
     const solanaService = runtime.getService('chain_solana') as any;
-    const keys = solanaService.detectPrivateKeysFromString(message.content.text)
-    console.log('keys', keys)
-    const keypair = Keypair.fromSecretKey(keys[0].bytes);
+    const messageText = message.content.text ?? '';
+    let detectedKeysByChain: Array<{ chain: string; keys: any[] }> = [];
+    try {
+      detectedKeysByChain = await traderChainService.detectPrivateKeysFromString(messageText);
+      runtime.logger.debug(
+        `WALLET_IMPORT handler chain detection results chains=${detectedKeysByChain.length}`
+      );
+    } catch (error) {
+      const err = error as Error;
+      runtime.logger.error(
+        `WALLET_IMPORT handler failed to run chain detection: ${err.message}`
+      );
+    }
+
+    const solanaDetected = detectedKeysByChain.find(
+      result => result.chain?.toLowerCase() === 'solana'
+    );
+
+    let solanaKey = solanaDetected?.keys?.[0];
+    if (!solanaKey) {
+      const fallbackKeys = solanaService.detectPrivateKeysFromString(messageText);
+      runtime.logger.debug(
+        `WALLET_IMPORT handler solana fallback detected keys count=${fallbackKeys.length}`
+      );
+      solanaKey = fallbackKeys[0];
+    } else {
+      runtime.logger.debug('WALLET_IMPORT handler using solana key detected via chain service');
+    }
+
+    if (!solanaKey?.bytes) {
+      runtime.logger.warn('WALLET_IMPORT handler unable to resolve Solana private key bytes');
+      return;
+    }
+
+    const keypair = Keypair.fromSecretKey(solanaKey.bytes);
     //console.log('privateKeyB58', keypair)
     // keys[{ format, match, bytes }]
 
