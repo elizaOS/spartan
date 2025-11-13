@@ -408,9 +408,17 @@ export const initCharacter = async ({
     }
 
     const logData = params.metadata
-    //const first = message.content.source + '_' + message.content.channelType + '/'
+
+    if (!logData.channelType || !logData.source) {
+      console.log(
+        'incomplete metadata in RUN_ENDED (missing channelType or source)',
+        params.messageId,
+        params.roomId
+      )
+      return
+    }
+
     const isDM = logData.channelType.toUpperCase() === 'DM'
-    // sanitizeChatNameToFilename
     const first = sanitizeChatNameToFilename(logData.source + '_' + logData.channelType) + '/'
     const roomName = logData.roomName
     //const entityName =
