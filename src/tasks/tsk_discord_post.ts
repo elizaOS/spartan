@@ -1,8 +1,14 @@
 // parseJSONObjectFromText
-import { asUUID, createUniqueUuid, ModelType, composePromptFromState } from '@elizaos/core';
-import type { IAgentRuntime, UUID, Memory, Content } from '@elizaos/core';
-import { DISCORD_SERVICE_NAME, DiscordService, type IDiscordService } from '@elizaos/plugin-discord';
+import { asUUID, IAgentRuntime, createUniqueUuid, ModelType, composePromptFromState } from '@elizaos/core';
+
 import { v4 } from 'uuid';
+
+// Discord service types - defined locally since not exported from plugin
+interface IDiscordService {
+  client?: any;
+  clientReadyPromise: Promise<void>;
+  handleSendMessage(runtime: IAgentRuntime, target: any, content: Content): Promise<void>;
+}
 
 export const generateNewPost = async (runtime: IAgentRuntime) => {
   //console.log('generateNewPost')
@@ -68,7 +74,7 @@ export const generateNewPost = async (runtime: IAgentRuntime) => {
     // Return minimal state if composition fails
     return {
       agentId:
-      runtime.agentId,
+        runtime.agentId,
       recentMemories: [],
       values: {},
       data: {},
@@ -83,14 +89,15 @@ export const generateNewPost = async (runtime: IAgentRuntime) => {
   const schema = [
     // continue convo or make new one?
     // market coin, get chat going, token talk, trade talk, or spartan product marketing, test hypo?
-    { field: 'idea',        description: 'the concept of the next post for ' + runtime.character.name + ' without drafting exact prose.' },
-    { field: 'thought',     description: 'a short reasoning why this idea' },
+    { field: 'idea', description: 'the concept of the next post for ' + runtime.character.name + ' without drafting exact prose.' },
+    { field: 'thought', description: 'a short reasoning why this idea' },
     { field: 'interactive', description: 'how this idea creates replies' },
-    { field: 'goal',        description: 'goal with this concept' },
-    { field: 'providers',   description: 'a comma-separated list of the providers that ' + runtime.character.name + ' will use to provide the correct information to support post idea and acting (NEVER use "IGNORE" as a provider - use specific provider names like ATTACHMENTS, ENTITIES, FACTS, KNOWLEDGE, etc.)' },
-    { field: 'length',      description: 'how long should this post be, measured in tokens. Number only' },
+    { field: 'goal', description: 'goal with this concept' },
+    { field: 'providers', description: 'a comma-separated list of the providers that ' + runtime.character.name + ' will use to provide the correct information to support post idea and acting (NEVER use "IGNORE" as a provider - use specific provider names like ATTACHMENTS, ENTITIES, FACTS, KNOWLEDGE, etc.)' },
+    { field: 'length', description: 'how long should this post be, measured in tokens. Number only' },
   ]
-  const postPlanHandlerPrompt = composePromptFromState({ state,
+  const postPlanHandlerPrompt = composePromptFromState({
+    state,
     template: `<task>
   Generate a social media post plan for the character {{agentName}}.
   CRITICAL: Generate an post concept that YOU'd be into, not a generic motivational poster or LinkedIn influencer.
@@ -159,13 +166,13 @@ First, think about what you want to do next and plan your actions. Then, write t
   // Generate post content using the runtime's model
 
   // Create a prompt for post generation
-      // - Length: 2000 characters (keep it punchy)
+  // - Length: 2000 characters (keep it punchy)
 
-      // don't like messageExamples
-      // style.post?
-      //state.text +
-      /*
-      const postPrompt = `\nYou are ${runtime.character.name}.
+  // don't like messageExamples
+  // style.post?
+  //state.text +
+  /*
+  const postPrompt = `\nYou are ${runtime.character.name}.
 ${runtime.character.bio}
 
 CRITICAL: Generate a post that sounds like YOU, not a generic motivational poster or LinkedIn influencer.
@@ -175,7 +182,7 @@ AIM TO CREATE INTERACTION around this idea: ${responseContent.idea}
 ${runtime.character.messageExamples && runtime.character.messageExamples.length > 0 ? `
 Example posts that capture your voice:
 ${runtime.character.messageExamples.map((example: any) =>
-  Array.isArray(example) ? example[1]?.content?.text || '' : example
+Array.isArray(example) ? example[1]?.content?.text || '' : example
 ).filter(Boolean).slice(0, 5).join('\n')}
 ` : ''}
 
@@ -191,17 +198,17 @@ Style guidelines:
 Your interests: ${runtime.character.topics?.join(", ") || "technology, crypto, AI"}
 
 ${runtime.character.style ? `Your style: ${
-  typeof runtime.character.style === 'object'
-    ? runtime.character.style.all?.join(', ') || JSON.stringify(runtime.character.style)
-    : runtime.character.style
+typeof runtime.character.style === 'object'
+? runtime.character.style.all?.join(', ') || JSON.stringify(runtime.character.style)
+: runtime.character.style
 }` : ''}
 
 Recent context:
 ${
-  state.recentMemories
-    ?.slice(0, 3)
-    .map((m: Memory) => m.content.text)
-    .join("\n") || "No recent context"
+state.recentMemories
+?.slice(0, 3)
+.map((m: Memory) => m.content.text)
+.join("\n") || "No recent context"
 }
 
 <providers>
@@ -210,23 +217,23 @@ ${
 
 Generate a single post that sounds like YOU would actually write it (do not start it with REPLY):`;
 
-  //if (process.env.LOG_LEVEL !== 'debug') console.log('discord postPrompt', postPrompt)
+//if (process.env.LOG_LEVEL !== 'debug') console.log('discord postPrompt', postPrompt)
 
-  // Use the runtime's model to generate post content
-  const finalPrompt = composePromptFromState({ state, template: postPrompt })
-  const generatedContent = await runtime.useModel(
-    ModelType.TEXT_LARGE,
-    {
-      system: runtime.character.system, // include the system prompt
-      prompt: finalPrompt,
-      maxOutputTokens: responseContent.length,
-      // can only pass temperature or topP
-      //temperature: 0.9, // Increased for more creativity
-      topP: 0.7,
-      //maxTokens: 2000,
-    },
-  );
-  */
+// Use the runtime's model to generate post content
+const finalPrompt = composePromptFromState({ state, template: postPrompt })
+const generatedContent = await runtime.useModel(
+ModelType.TEXT_LARGE,
+{
+  system: runtime.character.system, // include the system prompt
+  prompt: finalPrompt,
+  maxOutputTokens: responseContent.length,
+  // can only pass temperature or topP
+  //temperature: 0.9, // Increased for more creativity
+  topP: 0.7,
+  //maxTokens: 2000,
+},
+);
+*/
 
   /*
   const schema = [
@@ -246,7 +253,8 @@ Generate a single post that sounds like YOU would actually write it (do not star
   )
   */
 
-  const postHandlerPrompt = composePromptFromState({ state,
+  const postHandlerPrompt = composePromptFromState({
+    state,
     template: `<task>
 You are ${runtime.character.name}.
 ${runtime.character.bio}
@@ -259,8 +267,8 @@ AIM TO CREATE INTERACTION around this idea: ${responseContent.idea}
 ${runtime.character.messageExamples && runtime.character.messageExamples.length > 0 ? `
 Example posts that capture your voice:
 ${runtime.character.messageExamples.map((example: any) =>
-  Array.isArray(example) ? example[1]?.content?.text || '' : example
-).filter(Boolean).slice(0, 5).join('\n')}
+      Array.isArray(example) ? example[1]?.content?.text || '' : example
+    ).filter(Boolean).slice(0, 5).join('\n')}
 ` : ''}
 
 Style guidelines:
@@ -274,19 +282,17 @@ Style guidelines:
 
 Your interests: ${runtime.character.topics?.join(", ") || "technology, crypto, AI"}
 
-${runtime.character.style ? `Your style: ${
-  typeof runtime.character.style === 'object'
-    ? runtime.character.style.all?.join(', ') || JSON.stringify(runtime.character.style)
-    : runtime.character.style
-}` : ''}
+${runtime.character.style ? `Your style: ${typeof runtime.character.style === 'object'
+        ? runtime.character.style.all?.join(', ') || JSON.stringify(runtime.character.style)
+        : runtime.character.style
+        }` : ''}
 
 Recent context:
-${
-  state.recentMemories
-    ?.slice(0, 3)
-    .map((m: Memory) => m.content.text)
-    .join("\n") || "No recent context"
-}
+${state.recentMemories
+        ?.slice(0, 3)
+        .map((m: Memory) => m.content.text)
+        .join("\n") || "No recent context"
+      }
 
 <providers>
 {{providers}}
@@ -298,7 +304,7 @@ Generate a single post that sounds like YOU would actually write it
   });
 
   const postSchema = [
-    { require: true, field: 'post',    description: 'the post to make' },
+    { require: true, field: 'post', description: 'the post to make' },
     { field: 'thought', description: 'a short reasoning how this implements the idea' },
     //{ field: 'bool_include_image', description: 'true or false, should include an AI generative image' },
     //{ field: 'image_prompt', description: 'Write a clear, concise, and visually descriptive prompt that should be used to generate an image representing a visualization for the post.' },
@@ -320,14 +326,14 @@ Generate a single post that sounds like YOU would actually write it
     //this.isPosting = false; // Reset flag
     return false;
   }
-/*
-    { field: 'thought',     description: 'a short reasoning why this idea' },
-    { field: 'interactive', description: 'how this idea creates replies' },
-    { field: 'goal',        description: 'goal with this concept' },
-    { field: 'providers',   description: 'a comma-separated list of the providers that ' + runtime.character.name + ' will use to provide the correct information to support post idea and acting (NEVER use "IGNORE" as a provider - use specific provider names like ATTACHMENTS, ENTITIES, FACTS, KNOWLEDGE, etc.)' },
-    { field: 'length',      description: 'how long should this post be, measured in tokens. Number only' },
-  ]
-*/
+  /*
+      { field: 'thought',     description: 'a short reasoning why this idea' },
+      { field: 'interactive', description: 'how this idea creates replies' },
+      { field: 'goal',        description: 'goal with this concept' },
+      { field: 'providers',   description: 'a comma-separated list of the providers that ' + runtime.character.name + ' will use to provide the correct information to support post idea and acting (NEVER use "IGNORE" as a provider - use specific provider names like ATTACHMENTS, ENTITIES, FACTS, KNOWLEDGE, etc.)' },
+      { field: 'length',      description: 'how long should this post be, measured in tokens. Number only' },
+    ]
+  */
   const postText = generatedContent.post.trim() + `
 > IDEA: ${responseContent.idea}
 
@@ -385,7 +391,7 @@ Generate a single post that sounds like YOU would actually write it
   }
   await runtime.createMemory(memory, 'messages');
 
-  for(const cid of postChannelIds) {
+  for (const cid of postChannelIds) {
     //const targetChannel = await this.client.channels.fetch(cid);
     const target = {
       source: 'discord',
