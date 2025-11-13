@@ -4,6 +4,7 @@ import {
   logger,
   createUniqueUuid,
   asUUID,
+  ChannelType,
   type IAgentRuntime,
   type Memory,
   type ServiceTypeName,
@@ -259,8 +260,27 @@ export class SpartanNewsService extends Service {
   protected async fetchTrendingTokens(limit: number): Promise<TrendingToken[]> {
     const tokens: TrendingToken[] = [];
     try {
-      const cachedTokens = (await this.runtime.getCache<TrendingToken[]>('tokens_solana')) || [];
-      const candidateAddresses = cachedTokens.map((token) => token.address);
+      // Try v2 cache format first (used by strategy service)
+      const v2Wrapper = await this.runtime.getCache<any>('tokens_v2_solana');
+      let cachedTokens: any[] = [];
+
+      if (v2Wrapper && v2Wrapper.data && Array.isArray(v2Wrapper.data)) {
+        cachedTokens = v2Wrapper.data;
+        logger.debug('[SpartanNewsService] Using tokens from v2 cache format');
+      } else {
+        // Fall back to legacy cache format
+        const legacyTokens = await this.runtime.getCache<any[]>('tokens_solana');
+        if (legacyTokens && Array.isArray(legacyTokens)) {
+          cachedTokens = legacyTokens;
+          logger.debug('[SpartanNewsService] Using tokens from legacy cache format');
+        }
+      }
+
+      if (!cachedTokens.length) {
+        logger.warn('[SpartanNewsService] No tokens found in either cache format (tokens_v2_solana or tokens_solana)');
+      }
+
+      const candidateAddresses = cachedTokens.map((token) => token.address).filter(Boolean);
 
       const dataProvider = this.runtime.getService('INTEL_DATAPROVIDER') as any;
       const birdeyeService = this.runtime.getService('birdeye' as ServiceTypeName) as any;
@@ -277,34 +297,56 @@ export class SpartanNewsService extends Service {
         ? candidateAddresses.slice(0, limit * 2)
         : [];
 
-      for (const address of targetAddresses) {
-        try {
-          const [intelInfo, birdeyeInfo, symbol] = await Promise.all([
-            dataProvider.getTokenInfo('solana', address),
-            birdeyeService.getTokenMarketData(address),
-            solanaService.getTokenSymbol(new PublicKey(address)),
-          ]);
-
-          if (birdeyeInfo?.price && birdeyeInfo?.volume24h) {
-            tokens.push({
-              address,
-              symbol: symbol || intelInfo?.symbol || address.slice(0, 8),
-              price: birdeyeInfo.price,
-              volume24h: birdeyeInfo.volume24h || 0,
-              priceChange24h: intelInfo?.priceChange24h || 0,
-            });
-          }
-        } catch (error) {
-          logger.debug(
-            `[SpartanNewsService] Failed to fetch market data for token ${address}`,
-            error,
-          );
-        }
+      if (!targetAddresses.length) {
+        logger.warn('[SpartanNewsService] No target addresses to fetch');
+        return [];
       }
 
-      return tokens
+      // Batch fetch all token data with single API calls per service
+      try {
+        const chainAndAddresses = targetAddresses.map(address => ({ chain: 'solana', address }));
+
+        const [intelInfos, birdeyeInfos, symbolsMap] = await Promise.all([
+          dataProvider.getTokensInfo(chainAndAddresses),
+          birdeyeService.getTokensMarketData('solana', targetAddresses),
+          solanaService.getTokensSymbols(targetAddresses),
+        ]);
+
+        // Process results and build tokens array
+        for (const address of targetAddresses) {
+          try {
+            // Extract data from batch results
+            const intelResults = Array.isArray(intelInfos) ? intelInfos.flat() : [];
+            const intelInfo = intelResults.find((info: any) => info?.address === address);
+            const birdeyeInfo = birdeyeInfos?.[address];
+            const symbol = symbolsMap?.[address];
+
+            if (birdeyeInfo?.priceUsd && birdeyeInfo?.volume24h) {
+              tokens.push({
+                address,
+                symbol: symbol || intelInfo?.symbol || address.slice(0, 8),
+                price: birdeyeInfo.priceUsd,
+                volume24h: birdeyeInfo.volume24h || 0,
+                priceChange24h: intelInfo?.priceChange24h || birdeyeInfo.priceChange24h || 0,
+              });
+            }
+          } catch (error) {
+            logger.debug(
+              `[SpartanNewsService] Failed to process data for token ${address}`,
+              error,
+            );
+          }
+        }
+      } catch (error) {
+        logger.error('[SpartanNewsService] Failed to batch fetch token data', error);
+      }
+
+      const sortedTokens = tokens
         .sort((a, b) => (b.volume24h || 0) - (a.volume24h || 0))
         .slice(0, limit);
+
+      logger.debug(`[SpartanNewsService] Fetched ${sortedTokens.length} trending tokens`);
+      return sortedTokens;
     } catch (error) {
       logger.error('[SpartanNewsService] Error while fetching trending tokens', error);
       return [];
@@ -582,8 +624,8 @@ export class SpartanNewsService extends Service {
 
     const headlineToken = topToken
       ? `${topToken.symbol} ${topToken.priceChange24h >= 0 ? '+' : ''}${topToken.priceChange24h.toFixed(
-          2,
-        )}%`
+        2,
+      )}%`
       : 'No dominant token';
 
     return `${headlineToken} • ${direction} • Focus: ${category}`;
@@ -629,8 +671,16 @@ export class SpartanNewsService extends Service {
   }
 
   private async storeArticle(article: SpartanNewsArticle): Promise<void> {
-    const memory = this.articleToMemory(article);
-    await this.runtime.createMemory(memory, NEWS_MEMORY_TABLE);
+    try {
+      const memory = this.articleToMemory(article);
+      await this.runtime.createMemory(memory, NEWS_MEMORY_TABLE);
+    } catch (error) {
+      logger.error('Error creating memory:', {
+        error: error instanceof Error ? error.message : String(error),
+        memoryId: article.id,
+      });
+      throw error;
+    }
   }
 
   private articleToMemory(article: SpartanNewsArticle): Memory {
@@ -713,6 +763,36 @@ export class SpartanNewsService extends Service {
   private async initialize(): Promise<void> {
     try {
       await this.runtime.initPromise;
+
+      // Ensure the world and room exist in the database
+      const worldId = this.getNewsWorldId();
+      const roomId = this.getNewsRoomId();
+
+      await this.runtime.ensureWorldExists({
+        id: worldId,
+        name: 'Spartan News World',
+        agentId: this.runtime.agentId,
+        serverId: 'spartan-news-server',
+        metadata: {
+          description: 'World for Spartan news articles and market recon',
+        },
+      });
+
+      await this.runtime.ensureRoomExists({
+        id: roomId,
+        name: 'Spartan News Room',
+        agentId: this.runtime.agentId,
+        source: 'spartan-news',
+        type: ChannelType.SELF,
+        channelId: roomId,
+        serverId: 'spartan-news-server',
+        worldId: worldId,
+        metadata: {
+          description: 'Room for storing Spartan news articles',
+        },
+      });
+
+      logger.info('[SpartanNewsService] World and room initialized successfully');
     } catch (error) {
       logger.error('[SpartanNewsService] Failed during initialization', error);
       throw error;
