@@ -36,7 +36,8 @@ export const chartingRoutes: Route[] = [
         }
 
         // Get OHLCV data from Birdeye
-        const historicalData = await birdeyeProvider.getOHLCVData(token_address, 'solana', interval);
+        //const historicalData = await birdeyeProvider.getOHLCVData(token_address, 'solana', interval); cursor changed this to fix types
+        const historicalData = await birdeyeProvider.getHistoricalData(token_address, 'solana', interval);
 
         // Format OHLCV data
         const candles = historicalData.map(item => ({
