@@ -589,7 +589,8 @@ export class TradeDataProviderService extends Service {
     const results = await Promise.all(services.map((service: any) => service.getTrendingTokens(chains, { notOlderThan: inMs10Mins })))
     const result = results[0] // only need one
 
-    console.log('getTrendingWSupply result', result)
+    // result.solana[]
+    //console.log('getTrendingWSupply result', result)
     // loop on results and check?
     // INTEL_CHAINS get supply?
     //const supplies = await this.chainService.getSupply(ChainsWCAs)
