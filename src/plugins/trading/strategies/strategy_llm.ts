@@ -149,11 +149,50 @@ export async function llmStrategy(runtime: IAgentRuntime) {
     */
     // just use first data provider result
     //console.log('LLM trading strategy, got trending', results);
+
+    // Safety check: ensure results[0] exists
+    if (!results || !results[0]) {
+      runtime.logger.warn(
+        `LLM trading strategy: No trending results available (hasResults: ${!!results}, length: ${results?.length})`
+      );
+      return false;
+    }
+
     const chains = Object.keys(results[0])
     //console.log('LLM trading strategy, got trending', results[0].solana.data.length);
-    runtime.logger.info('LLM trading strategy, got trending')
-    for(const c of chains) {
-      runtime.logger.info(c + ' has ' + results[0][c].data.length + ' trending tokens')
+    runtime.logger.info(`LLM trading strategy, got trending for ${chains.length} chains`)
+
+    // Process each chain's trending data
+    const chainDataMap: Record<string, any[]> = {};
+
+    for (const c of chains) {
+      const chainData = results[0][c];
+
+      // Dynamically detect the data structure
+      let tokensArray: any[] | null = null;
+
+      if (Array.isArray(chainData)) {
+        // Direct array
+        tokensArray = chainData;
+      } else if (chainData?.data && Array.isArray(chainData.data)) {
+        // Nested in .data property
+        tokensArray = chainData.data;
+      } else if (chainData) {
+        // Try to find an array property (cache might wrap it differently)
+        for (const key of Object.keys(chainData)) {
+          if (Array.isArray(chainData[key])) {
+            tokensArray = chainData[key];
+            break;
+          }
+        }
+      }
+
+      if (tokensArray) {
+        chainDataMap[c] = tokensArray;
+        runtime.logger.info(`${c} has ${tokensArray.length} trending tokens`)
+      } else {
+        runtime.logger.warn(`${c} trending data not found or in unexpected format`)
+      }
     }
     // update our cache?
 
@@ -164,7 +203,7 @@ export async function llmStrategy(runtime: IAgentRuntime) {
     }
     try {
       await generateBuySignal(runtime, service, hndl);
-    } catch(e) {
+    } catch (e) {
       console.error('generateBuySignal err', e)
     }
     console.log('interested_trending - generateBuySignal done')
@@ -199,24 +238,24 @@ async function generateBuyPrompt(runtime) {
   }
   */
 
-/*
-8|odi-dev  | test {
-8|odi-dev  |   name: "Tetsuo Coin",
-8|odi-dev  |   rank: 8,
-8|odi-dev  |   chain: "solana",
-8|odi-dev  |   price: 0.003242539775876592,
-8|odi-dev  |   symbol: "TETSUO",
-8|odi-dev  |   address: "8i51XNNpGaKaj4G4nDdmQh95v4FKAxw8mhtaRoKd9tE8",
-8|odi-dev  |   logoURI: "https://ipfs.io/ipfs/QmVLxzvFArbYSqUCvWBG6ur3yxmWzVxzu3k9NP6WFFNr56",
-8|odi-dev  |   decimals: 6,
-8|odi-dev  |   provider: "birdeye",
-8|odi-dev  |   liquidity: 724013.15738663,
-8|odi-dev  |   marketcap: 0,
-8|odi-dev  |   last_updated: "2025-07-14T20:31:37.000Z",
-8|odi-dev  |   volume24hUSD: 4446524.830313826,
-8|odi-dev  |   price24hChangePercent: 57.556499266748204,
-8|odi-dev  | }
-*/
+  /*
+  8|odi-dev  | test {
+  8|odi-dev  |   name: "Tetsuo Coin",
+  8|odi-dev  |   rank: 8,
+  8|odi-dev  |   chain: "solana",
+  8|odi-dev  |   price: 0.003242539775876592,
+  8|odi-dev  |   symbol: "TETSUO",
+  8|odi-dev  |   address: "8i51XNNpGaKaj4G4nDdmQh95v4FKAxw8mhtaRoKd9tE8",
+  8|odi-dev  |   logoURI: "https://ipfs.io/ipfs/QmVLxzvFArbYSqUCvWBG6ur3yxmWzVxzu3k9NP6WFFNr56",
+  8|odi-dev  |   decimals: 6,
+  8|odi-dev  |   provider: "birdeye",
+  8|odi-dev  |   liquidity: 724013.15738663,
+  8|odi-dev  |   marketcap: 0,
+  8|odi-dev  |   last_updated: "2025-07-14T20:31:37.000Z",
+  8|odi-dev  |   volume24hUSD: 4446524.830313826,
+  8|odi-dev  |   price24hChangePercent: 57.556499266748204,
+  8|odi-dev  | }
+  */
   // ask chain service about what chains
   const chainService = await acquireService(runtime, 'INTEL_CHAIN', 'llm trading strategy');
   const services = chainService.forEachRegWithReg('service')
@@ -266,7 +305,7 @@ async function generateBuyPrompt(runtime) {
       const supplyData = supplies[token.address]
       const supply = supplyData.human
       const mcap = supply.multipliedBy(token.price)
-      index2Lookup[index] = {...token, marketcap: mcap, supply }
+      index2Lookup[index] = { ...token, marketcap: mcap, supply }
       //console.log('Hum supply', supply.toFormat(), 'price', token.price, 'mcap', mcap.toFormat(2))
       //console.log('Mac supply', supply, 'price', token.price, 'mcap', mcap.toFixed(0))
       tokens += [index, token.price.toFixed(4), mcap.toFixed(0), token.volume24hUSD.toFixed(0), token.price24hChangePercent.toFixed(2), token.liquidity.toFixed(2)].join(',') + '\n'
@@ -290,7 +329,7 @@ async function generateBuyPrompt(runtime) {
   // these are you previous picks and why you picked them
   let picksStr = ''
   // csv format? nah the because is just english
-  for(const m of memories) {
+  for (const m of memories) {
     const c = m.content
     // content.text / content.thought
     // extract ca from Text
@@ -329,27 +368,27 @@ async function generateBuyPrompt(runtime) {
   //console.log('picksStr', picksStr)
 
 
-/*
-8|odi-dev  | memories [
-8|odi-dev  |   {
-8|odi-dev  |     id: "6ee794c8-834a-4bbd-b988-ba8da0d90761",
-8|odi-dev  |     entityId: "479233fd-b0e7-0f50-9d88-d4c9ea5b0de0",
-8|odi-dev  |     agentId: "479233fd-b0e7-0f50-9d88-d4c9ea5b0de0",
-8|odi-dev  |     roomId: "d279bb87-a478-0c9a-a9d1-d63d4fa797fc",
-8|odi-dev  |     createdAt: 1753759000,
-8|odi-dev  |     content: {
-8|odi-dev  |       text: "I picked 6jiL8tdTT28hkkGt8CMJT1tzdt6RJE9rWZmwdtjXbonk on solana",
-8|odi-dev  |       thought: "Token shows extraordinary momentum with 109,727% 24h change and healthy liquidity ratio. Volume/MC ratio is excellent, suggesting genuine trading interest rather than manipulation. Price action suggests early stage of a potential move with room to grow while maintaining risk management.",
-8|odi-dev  |       metadata: [Object ...],
-8|odi-dev  |     },
-8|odi-dev  |     unique: true,
-8|odi-dev  |     metadata: {
-8|odi-dev  |       type: "custom",
-8|odi-dev  |     },
-8|odi-dev  |     embedding: [],
-8|odi-dev  |   }
-8|odi-dev  | ]
-*/
+  /*
+  8|odi-dev  | memories [
+  8|odi-dev  |   {
+  8|odi-dev  |     id: "6ee794c8-834a-4bbd-b988-ba8da0d90761",
+  8|odi-dev  |     entityId: "479233fd-b0e7-0f50-9d88-d4c9ea5b0de0",
+  8|odi-dev  |     agentId: "479233fd-b0e7-0f50-9d88-d4c9ea5b0de0",
+  8|odi-dev  |     roomId: "d279bb87-a478-0c9a-a9d1-d63d4fa797fc",
+  8|odi-dev  |     createdAt: 1753759000,
+  8|odi-dev  |     content: {
+  8|odi-dev  |       text: "I picked 6jiL8tdTT28hkkGt8CMJT1tzdt6RJE9rWZmwdtjXbonk on solana",
+  8|odi-dev  |       thought: "Token shows extraordinary momentum with 109,727% 24h change and healthy liquidity ratio. Volume/MC ratio is excellent, suggesting genuine trading interest rather than manipulation. Price action suggests early stage of a potential move with room to grow while maintaining risk management.",
+  8|odi-dev  |       metadata: [Object ...],
+  8|odi-dev  |     },
+  8|odi-dev  |     unique: true,
+  8|odi-dev  |     metadata: {
+  8|odi-dev  |       type: "custom",
+  8|odi-dev  |     },
+  8|odi-dev  |     embedding: [],
+  8|odi-dev  |   }
+  8|odi-dev  | ]
+  */
   // need to decode CA into index...
 
   const prompt = buyTemplate
@@ -359,7 +398,7 @@ async function generateBuyPrompt(runtime) {
   //console.log('llm_start prompt', prompt)
 
   //if (runtime.generateObject) {
-    const shortPrompt = `You are a degenSpartan a tradfi/cryptocurrency INTJ analyst/trader.
+  const shortPrompt = `You are a degenSpartan a tradfi/cryptocurrency INTJ analyst/trader.
 Task: decide whether to issue a buy signal based on trending tokens.
 First analyze market context and token fundamentals, then give a rating before providing final recommendations.
 Please determine how good of an opportunity this is (how rare and how much potential).
@@ -381,7 +420,7 @@ Include all relative contextual information in all reasoning and conditions fiel
 If you’re not sufficiently confident that a purchase opportunity exists, possible because we already have a position, you must explicitly state that you have low conviction and return nulls or zeros for all recommendation fields.
 `.replace('{{trending_tokens}}', tokens).replace('{{previousPicks}}', picksStr)
 
-    //return shortPrompt
+  //return shortPrompt
   //}
   //return prompt
   return {
@@ -722,55 +761,55 @@ async function generateBuySignal(runtime, strategyService, hndl, retries = gener
   }
 
   // how are we going to handle this...
-/*
-  // birdeye check
-  const services = infoService.forEachReg('lookupService')
-  const results2 = await Promise.all(services.map(service => service.getTokenSecurityData(
-    response.recommend_buy_chain.toLowerCase(), response.recommend_buy_address
-  )))
-  //console.log('results2', results2)
-  const beData = results2[0].data // only birdeye atm
-  console.log('beData', beData)
-*/
-/*
-8|odi-dev  | beData {
-8|odi-dev  |   creatorAddress: "WLHv2UAZm6z4KyaaELi5pjdbJh6RESMva1Rnn8pJVVh",
-8|odi-dev  |   creatorOwnerAddress: null,
-8|odi-dev  |   ownerAddress: null,
-8|odi-dev  |   ownerOfOwnerAddress: null,
-8|odi-dev  |   creationTx: "3NiduXS8EurBSBoVbhQPPryRDkmpFc5cPo9nUSSo28AnU3YCLxw6PUza3rH7Tgr9JAWbLksdhVpuda8GgK7LSJWs",
-8|odi-dev  |   creationTime: 1752796215,
-8|odi-dev  |   creationSlot: 354003274,
-8|odi-dev  |   mintTx: "3NiduXS8EurBSBoVbhQPPryRDkmpFc5cPo9nUSSo28AnU3YCLxw6PUza3rH7Tgr9JAWbLksdhVpuda8GgK7LSJWs",
-8|odi-dev  |   mintTime: 1752796215,
-8|odi-dev  |   mintSlot: 354003274,
-8|odi-dev  |   creatorBalance: 0,
-8|odi-dev  |   ownerBalance: null,
-8|odi-dev  |   ownerPercentage: null,
-8|odi-dev  |   creatorPercentage: 0,
-8|odi-dev  |   metaplexUpdateAuthority: "WLHv2UAZm6z4KyaaELi5pjdbJh6RESMva1Rnn8pJVVh",
-8|odi-dev  |   metaplexOwnerUpdateAuthority: null,
-8|odi-dev  |   metaplexUpdateAuthorityBalance: 0,
-8|odi-dev  |   metaplexUpdateAuthorityPercent: 0,
-8|odi-dev  |   mutableMetadata: false,
-8|odi-dev  |   top10HolderBalance: 167499420.936036,
-8|odi-dev  |   top10HolderPercent: 0.16750025870700158,
-8|odi-dev  |   top10UserBalance: 167499420.936036,
-8|odi-dev  |   top10UserPercent: 0.16750025870700158,
-8|odi-dev  |   isTrueToken: null,
-8|odi-dev  |   fakeToken: null,
-8|odi-dev  |   totalSupply: 999994998.39002,
-8|odi-dev  |   preMarketHolder: [],
-8|odi-dev  |   lockInfo: null,
-8|odi-dev  |   freezeable: null,
-8|odi-dev  |   freezeAuthority: null,
-8|odi-dev  |   transferFeeEnable: null,
-8|odi-dev  |   transferFeeData: null,
-8|odi-dev  |   isToken2022: false,
-8|odi-dev  |   nonTransferable: null,
-8|odi-dev  |   jupStrictList: false,
-8|odi-dev  | }
-*/
+  /*
+    // birdeye check
+    const services = infoService.forEachReg('lookupService')
+    const results2 = await Promise.all(services.map(service => service.getTokenSecurityData(
+      response.recommend_buy_chain.toLowerCase(), response.recommend_buy_address
+    )))
+    //console.log('results2', results2)
+    const beData = results2[0].data // only birdeye atm
+    console.log('beData', beData)
+  */
+  /*
+  8|odi-dev  | beData {
+  8|odi-dev  |   creatorAddress: "WLHv2UAZm6z4KyaaELi5pjdbJh6RESMva1Rnn8pJVVh",
+  8|odi-dev  |   creatorOwnerAddress: null,
+  8|odi-dev  |   ownerAddress: null,
+  8|odi-dev  |   ownerOfOwnerAddress: null,
+  8|odi-dev  |   creationTx: "3NiduXS8EurBSBoVbhQPPryRDkmpFc5cPo9nUSSo28AnU3YCLxw6PUza3rH7Tgr9JAWbLksdhVpuda8GgK7LSJWs",
+  8|odi-dev  |   creationTime: 1752796215,
+  8|odi-dev  |   creationSlot: 354003274,
+  8|odi-dev  |   mintTx: "3NiduXS8EurBSBoVbhQPPryRDkmpFc5cPo9nUSSo28AnU3YCLxw6PUza3rH7Tgr9JAWbLksdhVpuda8GgK7LSJWs",
+  8|odi-dev  |   mintTime: 1752796215,
+  8|odi-dev  |   mintSlot: 354003274,
+  8|odi-dev  |   creatorBalance: 0,
+  8|odi-dev  |   ownerBalance: null,
+  8|odi-dev  |   ownerPercentage: null,
+  8|odi-dev  |   creatorPercentage: 0,
+  8|odi-dev  |   metaplexUpdateAuthority: "WLHv2UAZm6z4KyaaELi5pjdbJh6RESMva1Rnn8pJVVh",
+  8|odi-dev  |   metaplexOwnerUpdateAuthority: null,
+  8|odi-dev  |   metaplexUpdateAuthorityBalance: 0,
+  8|odi-dev  |   metaplexUpdateAuthorityPercent: 0,
+  8|odi-dev  |   mutableMetadata: false,
+  8|odi-dev  |   top10HolderBalance: 167499420.936036,
+  8|odi-dev  |   top10HolderPercent: 0.16750025870700158,
+  8|odi-dev  |   top10UserBalance: 167499420.936036,
+  8|odi-dev  |   top10UserPercent: 0.16750025870700158,
+  8|odi-dev  |   isTrueToken: null,
+  8|odi-dev  |   fakeToken: null,
+  8|odi-dev  |   totalSupply: 999994998.39002,
+  8|odi-dev  |   preMarketHolder: [],
+  8|odi-dev  |   lockInfo: null,
+  8|odi-dev  |   freezeable: null,
+  8|odi-dev  |   freezeAuthority: null,
+  8|odi-dev  |   transferFeeEnable: null,
+  8|odi-dev  |   transferFeeData: null,
+  8|odi-dev  |   isToken2022: false,
+  8|odi-dev  |   nonTransferable: null,
+  8|odi-dev  |   jupStrictList: false,
+  8|odi-dev  | }
+  */
   // maybe fakeToken is a good one to check
 
 
@@ -791,11 +830,11 @@ async function generateBuySignal(runtime, strategyService, hndl, retries = gener
         // remember this is a bad token?
         return false
       } else
-      if (rugCache === 'norug') {
-        checkRug = false
-      } else {
-        console.log('unknown rugCache value', rugCache)
-      }
+        if (rugCache === 'norug') {
+          checkRug = false
+        } else {
+          console.log('unknown rugCache value', rugCache)
+        }
     }
 
     if (checkRug) {
@@ -915,7 +954,7 @@ async function generateBuySignal(runtime, strategyService, hndl, retries = gener
   const balances = await solanaService.getBalancesByAddrs(allPubkeys)
 
   // for each pubkey get balances
-  for(const w of wallets) {
+  for (const w of wallets) {
     //console.log('w', w)
     if (!w?.publicKey) {
       console.warn('skipping', w, 'no publicKey')
