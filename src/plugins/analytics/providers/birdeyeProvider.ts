@@ -368,7 +368,9 @@ export class BirdeyeProvider {
      */
     private async setCachedData(key: string, data: any, ttlSeconds: number): Promise<void> {
         try {
-            await this.runtime.setCache(key, data, ttlSeconds);
+            // Note: setCache no longer supports TTL parameter in ElizaOS 1.0.0
+            // Cache expiration should be handled at the database adapter level
+            await this.runtime.setCache(key, data);
         } catch (error) {
             console.error('Failed to cache data:', error);
         }
