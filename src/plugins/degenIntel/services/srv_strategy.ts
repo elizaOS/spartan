@@ -1,7 +1,8 @@
 import { Service, logger, ServiceTypeName } from '@elizaos/core';
 import type { IAgentRuntime } from '@elizaos/core';
-import { acquireService } from '../../autonomous-trader/utils';
+import { acquireService, getCacheTimed } from '../../autonomous-trader/utils';
 import type { Position } from '../../trading/types';
+import type { IToken } from '../types';
 
 interface Strategy {
   name: string;
@@ -135,6 +136,121 @@ export class TradeStrategyService extends Service {
   }
 
   /**
+   * Get the base pair (native token) address for each blockchain
+   * This is used to determine which token to swap from on each chain
+   */
+  getBasePairForChain(chain: string): string {
+    const basePairs: Record<string, string> = {
+      'solana': 'So11111111111111111111111111111111111111112', // SOL
+      'ethereum': '0x0000000000000000000000000000000000000000', // ETH (native)
+      'base': '0x0000000000000000000000000000000000000000', // ETH on Base
+      'arbitrum': '0x0000000000000000000000000000000000000000', // ETH on Arbitrum
+      'optimism': '0x0000000000000000000000000000000000000000', // ETH on Optimism
+      'polygon': '0x0000000000000000000000000000000000000001', // MATIC (note: different address)
+      'avalanche': '0x0000000000000000000000000000000000000000', // AVAX
+      'bsc': '0x0000000000000000000000000000000000000000', // BNB
+      // Add more chains as needed
+    }
+
+    const normalizedChain = chain.toLowerCase()
+    return basePairs[normalizedChain] || basePairs['solana']
+  }
+
+  /**
+   * Get the native token symbol for each blockchain
+   */
+  getNativeTokenSymbol(chain: string): string {
+    const nativeSymbols: Record<string, string> = {
+      'solana': 'SOL',
+      'ethereum': 'ETH',
+      'base': 'ETH',
+      'arbitrum': 'ETH',
+      'optimism': 'ETH',
+      'polygon': 'MATIC',
+      'avalanche': 'AVAX',
+      'bsc': 'BNB',
+    }
+
+    const normalizedChain = chain.toLowerCase()
+    return nativeSymbols[normalizedChain] || 'NATIVE'
+  }
+
+  /**
+   * Get the minimum balance required for transactions on each chain
+   * This is to ensure wallets have enough for gas fees
+   */
+  getMinimumBalanceForChain(chain: string): number {
+    const minimumBalances: Record<string, number> = {
+      'solana': 0.005, // ~$1 worth at typical SOL prices
+      'ethereum': 0.001, // ~$3-4 at typical ETH prices
+      'base': 0.001,
+      'arbitrum': 0.001,
+      'optimism': 0.001,
+      'polygon': 0.01, // MATIC is cheaper
+      'avalanche': 0.01,
+      'bsc': 0.001,
+    }
+
+    const normalizedChain = chain.toLowerCase()
+    return minimumBalances[normalizedChain] || 0.005
+  }
+
+  /**
+   * Get all trending tokens from all available chains
+   * This collects and flattens trending tokens across all supported blockchains
+   * @param filterRugged - Whether to filter out tokens marked as rugs (default: true)
+   * @returns Array of tokens from all chains
+   */
+  async getAllTrendingTokens(filterRugged: boolean = true): Promise<IToken[]> {
+    // Get all available chains
+    const services = this.chainService.forEachRegWithReg('service')
+    const chains = [...new Set(services.map((i: any) => i.registry.chainType).filter((s: any) => !!s))]
+    logger.info(`Getting trending tokens from chains: ${chains.join(', ')}`)
+
+    // Get trending tokens with supply info for all chains
+    await this.infoService.getTrendingWSupply(chains)
+
+    // Flatten all tokens from all chains into a single array
+    const allTokens: IToken[] = []
+
+    for (const chain of chains) {
+      const chainStr = String(chain)
+      const cacheKey = `tokens_v2_${chainStr}`
+      const wrapper = await this.runtime.getCache(cacheKey) as any || null
+
+      if (!wrapper || !wrapper.data) {
+        logger.warn(`No trending tokens found for chain: ${chainStr}`)
+        continue
+      }
+
+      const trendingData = wrapper.data as IToken[]
+      logger.info(`Found ${trendingData.length} tokens on ${chainStr}`)
+
+      // Add chain-specific tokens to our master list
+      for (const token of trendingData) {
+        // Optionally filter out rugged tokens
+        if (filterRugged) {
+          const rugKey = `rugcheck_${chainStr}_${token.address}`
+          const rugCache = await getCacheTimed(this.runtime, rugKey, { notOlderThan: 6 * 60 * 60 * 1000 })
+
+          if (rugCache && rugCache === 'rug') {
+            logger.debug(`Omitting ${token.address} on ${chainStr} (marked as rug)`)
+            continue
+          }
+        }
+
+        allTokens.push({
+          ...token,
+          chain: chainStr // ensure chain is set
+        })
+      }
+    }
+
+    logger.info(`Total tokens available across all chains: ${allTokens.length}`)
+    return allTokens
+  }
+
+  /**
    * Start the scenario service with the given runtime.
    * @param {IAgentRuntime} runtime - The agent runtime
    * @returns {Promise<ScenarioService>} - The started scenario service
@@ -163,38 +279,49 @@ export class TradeStrategyService extends Service {
       this.runtime.logger.warn('Trading strategy service is already running');
       return;
     }
+    this.runtime.logger.info('Starting strategy trading service...');
+    this.isRunning = true;
 
-    this.chainService = this.runtime.getService('INTEL_CHAIN');
-    while (!this.chainService) {
-      console.log('waiting for Trading chain service...');
-      this.chainService = this.runtime.getService('INTEL_CHAIN');
-      if (!this.chainService) {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-      } else {
-        console.log('Acquired trading chain service...');
+    void (async () => {
+      try {
+        const [chainReady, infoReady] = await Promise.allSettled([
+          this.runtime.getServiceLoadPromise('INTEL_CHAIN' as ServiceTypeName),
+          this.runtime.getServiceLoadPromise('INTEL_DATAPROVIDER' as ServiceTypeName),
+        ]);
+
+        if (chainReady.status === 'fulfilled') {
+          this.chainService = this.runtime.getService('INTEL_CHAIN');
+        } else {
+          this.runtime.logger.warn({
+            error: chainReady.reason instanceof Error ? chainReady.reason.message : String(chainReady.reason),
+            service: 'INTEL_CHAIN',
+          }, 'Failed to resolve INTEL_CHAIN service for strategy runtime');
+        }
+
+        if (infoReady.status === 'fulfilled') {
+          this.infoService = this.runtime.getService('INTEL_DATAPROVIDER');
+        } else {
+          this.runtime.logger.warn({
+            error: infoReady.reason instanceof Error ? infoReady.reason.message : String(infoReady.reason),
+            service: 'INTEL_DATAPROVIDER',
+          }, 'Failed to resolve INTEL_DATAPROVIDER service for strategy runtime');
+        }
+
+        if (this.chainService && this.infoService) {
+          this.runtime.logger.info('Trading strategy dependencies acquired');
+        } else {
+          this.runtime.logger.warn(
+            'Trading strategy service is running without required dependencies; functionality will be limited'
+          );
+        }
+      } catch (error) {
+        this.runtime.logger.error(
+          'Error starting trading strategy service:',
+          error instanceof Error ? error.message : String(error)
+        );
+        this.isRunning = false;
       }
-    }
-
-    this.infoService = this.runtime.getService('INTEL_DATAPROVIDER');
-    while (!this.infoService) {
-      console.log('waiting for strategy service...');
-      this.infoService = this.runtime.getService('INTEL_DATAPROVIDER');
-      if (!this.infoService) {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-      } else {
-        console.log('Acquired strategy service...');
-      }
-    }
-
-    try {
-      this.runtime.logger.info('Starting strategy trading service...');
-
-      this.isRunning = true;
-      this.runtime.logger.info('Trading strategy service started successfully');
-    } catch (error) {
-      this.runtime.logger.error('Error starting trading strategy service:', error instanceof Error ? error.message : String(error));
-      throw error;
-    }
+    })();
   }
 
   async stop(): Promise<void> {
